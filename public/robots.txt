@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://navgrow.org/sitemap.xml
+
+# Block sensitive paths (none currently)
+Disallow: /api/
