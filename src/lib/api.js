@@ -50,11 +50,14 @@ api.interceptors.response.use(
 
 // ── Auth API ──────────────────────────────────────────────────────────────────
 export const authApi = {
-  login:    (email, password)   => api.post('/auth/login',    { email, password }),
-  register: (data)              => api.post('/auth/register',  data),
-  refresh:  (refreshToken)      => api.post('/auth/refresh',   null, { params: { refreshToken } }),
-  forgotPw: (email)             => api.post('/auth/forgot-password', null, { params: { email } }),
-  resetPw:  (token, password)   => api.post('/auth/reset-password', { token, newPassword: password }),
+  login:          (email, password)       => api.post('/auth/login',    { email, password }),
+  loginWithPhone: (phone, password)       => api.post('/auth/login',    { phone, password }),
+  register:       (data)                  => api.post('/auth/register',  data),
+  refresh:        (refreshToken)          => api.post('/auth/refresh',   null, { params: { refreshToken } }),
+  forgotPw:       (email)                 => api.post('/auth/forgot-password', null, { params: { email } }),
+  resetPw:        (token, password)       => api.post('/auth/reset-password', { token, newPassword: password }),
+  sendOtp:        (phone)                 => api.post('/auth/send-otp',  null, { params: { phone } }),
+  verifyOtp:      (phone, otp)            => api.post('/auth/verify-otp', { phone, otp }),
 };
 
 // ── Products API ──────────────────────────────────────────────────────────────
@@ -181,4 +184,9 @@ export default api;
 export const chatApi = {
   send:     (messages) => api.post('/chat', { messages }),
   starters: ()         => api.get('/chat/starters'),
+};
+
+// ── Debounce utility ─────────────────────────────────────────────────────────
+export const debounce = (fn, ms = 300) => {
+  let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 };

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import useSeo from '@/hooks/useSeo';
 import { Shield, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion } from 'framer-motion';
 import PageHero from '@/components/PageHero';
@@ -19,6 +20,7 @@ const sections = [
 ];
 
 const Acc = ({ s }) => {
+  useSeo({ title: "Privacy Policy | Navgrow Engineering", description: "Privacy policy for Navgrow Engineering Service Pvt. Ltd. — how we collect, use, and protect your personal data.", path: "/privacy" });
   const [o, setO] = useState(false);
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}

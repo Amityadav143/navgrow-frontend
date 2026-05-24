@@ -27,10 +27,15 @@ const NotFoundPage       = React.lazy(() => import('@/pages/NotFoundPage'));
 
 // Admin pages
 const AdminHome          = React.lazy(() => import('@/pages/admin/AdminDashboard'));
+const AdminSettings      = React.lazy(() => import('@/pages/admin/AdminSettings'));
 const AdminOrders        = React.lazy(() => import('@/pages/admin/AdminOrders'));
 const AdminProducts      = React.lazy(() => import('@/pages/admin/AdminProducts'));
 const AdminContacts      = React.lazy(() => import('@/pages/admin/AdminContacts'));
 const AdminQuotes        = React.lazy(() => import('@/pages/admin/AdminQuotes'));
+const AdminNews          = React.lazy(() => import('@/pages/admin/AdminNews'));
+const AdminCoupons       = React.lazy(() => import('@/pages/admin/AdminCoupons'));
+const EditorLayout       = React.lazy(() => import('@/pages/editor/EditorLayout'));
+const NewsDetailPage     = React.lazy(() => import('@/pages/NewsDetailPage'));
 
 const PageLoader = () => (
   <div style={{
@@ -167,7 +172,13 @@ function App() {
           <Route path="products"element={<W><AdminProducts /></W>} />
           <Route path="contacts"element={<W><AdminContacts /></W>} />
           <Route path="quotes"  element={<W><AdminQuotes /></W>} />
+          <Route path="news"    element={<W><AdminNews /></W>} />
+          <Route path="coupons" element={<W><AdminCoupons /></W>} />
+          <Route path="settings" element={<W><AdminSettings /></W>} />
         </Route>
+
+        {/* ── Editor routes ── */}
+        <Route path="/editor" element={<W><EditorLayout /></W>} />
 
         {/* ── Public routes (main layout) ── */}
         <Route path="/" element={<MainLayout />}>
@@ -181,6 +192,7 @@ function App() {
           <Route path="wishlist"      element={<W><WishlistPage /></W>} />
           <Route path="careers"       element={<W><CareersPage /></W>} />
           <Route path="news"          element={<W><NewsPage /></W>} />
+          <Route path="news/:slug"     element={<W><NewsDetailPage /></W>} />
           <Route path="gallery"       element={<W><GalleryPage /></W>} />
           <Route path="quote-calculator" element={<W><QuoteCalculatorPage /></W>} />
           <Route path="track-order"   element={<W><OrderTrackPage /></W>} />

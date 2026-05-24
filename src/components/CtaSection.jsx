@@ -31,7 +31,7 @@ const CtaSection = () => (
               Ready to Build Something <span className="gradient-text-gold">Exceptional?</span>
             </h2>
             <p className="text-blue-100 text-lg leading-relaxed">
-              Partner with Navgrow Engineering Service Pvt. Ltd. for reliable, high-quality railway and government contract solutions. Let's discuss your project today.
+              Partner with Navgrow Engineering — your trusted contractor for railway infrastructure, industrial projects, civil works, and government contracts across India. Let's discuss your project today.
             </p>
           </div>
 

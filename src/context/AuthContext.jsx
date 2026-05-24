@@ -9,7 +9,8 @@ const USER_KEY    = 'ng_user';
 
 export const AuthProvider = ({ children }) => {
   const [user,    setUser]    = useState(() => {
-    try { return JSON.parse(localStorage.getItem(USER_KEY)) || null; } catch { return null; }
+    try { return JSON.parse(localStorage.getItem(USER_KEY)) || null; }
+    catch (err) { console.warn('[AuthContext] Failed to parse stored user:', err); return null; }
   });
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState(null);
@@ -31,10 +32,12 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem(REFRESH_KEY, data.refreshToken);
 
       const userData = {
-        email:  data.email,
-        roles:  data.roles,
-        isAdmin: data.roles?.some(r => r.authority === 'ROLE_ADMIN'),
+        email:    data.email,
+        fullName: data.fullName || data.name || '',
+        roles:    data.roles,
+        isAdmin:   data.roles?.some(r => r.authority === 'ROLE_ADMIN'),
         isManager: data.roles?.some(r => r.authority === 'ROLE_MANAGER'),
+        isEditor:  data.roles?.some(r => r.authority === 'ROLE_EDITOR'),
       };
       localStorage.setItem(USER_KEY, JSON.stringify(userData));
       setUser(userData);
@@ -102,10 +105,11 @@ export const AuthProvider = ({ children }) => {
   const isLoggedIn = !!user;
   const isAdmin    = user?.isAdmin   || false;
   const isManager  = user?.isManager || user?.isAdmin || false;
+  const isEditor   = user?.isEditor  || user?.isAdmin || user?.isManager || false;
 
   return (
     <AuthContext.Provider value={{
-      user, loading, error, isLoggedIn, isAdmin, isManager,
+      user, loading, error, isLoggedIn, isAdmin, isManager, isEditor,
       login, register, logout, forgotPassword, resetPassword,
       clearError: () => setError(null),
     }}>

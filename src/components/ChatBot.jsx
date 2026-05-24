@@ -38,34 +38,39 @@ const WELCOME = {
 };
 
 const STARTERS = [
-  { e:"🔧", label:"Services",       text:"What engineering services do you offer?" },
-  { e:"🛒", label:"Products",       text:"What safety products do you sell?" },
-  { e:"📋", label:"Get a Quote",    text:"How do I get a quote for a project?" },
-  { e:"📦", label:"Track Order",    text:"How do I track my order?" },
-  { e:"💼", label:"Open Jobs",      text:"What jobs are currently open?" },
-  { e:"📞", label:"Contact",        text:"What are your contact details?" },
+  { e:"🔧", label:"Our Services",        text:"What types of engineering projects does Navgrow handle?" },
+  { e:"🛒", label:"Shop Products",       text:"What products do you sell and what are the prices?" },
+  { e:"📋", label:"Get a Quote",         text:"How do I get a project quote? What details do you need?" },
+  { e:"📦", label:"Track My Order",      text:"How do I track my order from Navgrow?" },
+  { e:"💼", label:"Join Our Team",       text:"What job openings do you have right now?" },
+  { e:"📞", label:"Contact Details",     text:"How can I reach Navgrow quickly?" },
   { e:"🏆", label:"Certifications", text:"What certifications does Navgrow hold?" },
-  { e:"🎟", label:"Discounts",      text:"Are there any discount codes available?" },
+  { e:"🚂", label:"Railway Projects",    text:"Do you work with Indian Railways? What's your experience?" },
+  { e:"🏭", label:"Industrial Services", text:"Do you serve manufacturing and industrial clients too?" },
+  { e:"🎟", label:"Offers & Discounts",  text:"Are there any discount codes or ongoing offers?" },
 ];
 
 const FOLLOW_UPS = {
-  shop:    ["What are your bestselling products?","Do you offer bulk discounts?","What is your return policy?"],
-  service: ["What is the project cost range?","How long does a project take?","Are you empanelled with Indian Railways?"],
-  career:  ["How do I apply?","What qualifications are required?","Is relocation required?"],
-  quote:   ["What details do I need to provide?","How soon do you respond?","Can I call to discuss?"],
-  track:   ["What is my order number format?","What is the delivery time?","Can I change delivery address?"],
-  contact: ["What are your business hours?","Can I visit your office?","Is WhatsApp support available?"],
-  payment: ["What payment methods do you accept?","Is GST invoice provided?","Is payment secure?"],
+  shop:    ["Show me bestselling products","How do I place a bulk order?","What is the return & refund policy?","Is GST invoice provided?"],
+  service: ["What is the typical project timeline?","Do you work outside railway sector?","How do I get a formal quotation?","Can you handle pan-India projects?"],
+  career:  ["How do I submit my CV?","What are the salary ranges?","Is the job on-site or remote?","What growth opportunities are available?"],
+  quote:   ["What information do I need to share?","Can I get a quote over WhatsApp?","How detailed is the final quotation?","What are the payment terms?"],
+  track:   ["Where do I find my order number?","What is the estimated delivery date?","Can I reschedule delivery?","Who is the courier partner?"],
+  contact: ["What are your working hours?","Do you have an office I can visit?","Can I book a site visit?","Is emergency support available?"],
+  payment: ["Do you accept UPI and cards?","Is payment refundable if I cancel?","Do you offer credit/BNPL?","Is my payment data secure?"],
+  railway: ["What Indian Railways zones do you serve?","Are you RDSO approved?","Can you handle loco modification?","Do you bid on Railway tenders?"],
+  maintenance: ["What does an AMC include?","How fast is emergency response?","Do you offer 24/7 breakdown support?","What's the process to get an AMC?"],
 };
 
 const PAGE_TIPS = {
-  "/shop":             "🛒 Browsing our shop! I can help you find the right product.",
-  "/quote-calculator": "📋 Working on a quote? Ask me about pricing or scope.",
-  "/careers":          "💼 Interested in joining us? Ask me about any open role.",
-  "/contact":          "📞 Need to reach us? I can help or give you direct contacts.",
-  "/track-order":      "📦 Tracking an order? Share the order number and I\'ll guide you.",
-  "/services":         "🔧 Exploring our services? Ask me anything about what we offer.",
-  "/projects":         "🏗 Looking at our portfolio? Ask about any specific project.",
+  "/shop":             "🛒 Browsing our shop! Ask me about specs, bulk pricing, or product suitability for your site.",
+  "/quote-calculator": "📋 Need a project quote? I can also give you a rough ballpark before you fill the form.",
+  "/careers":          "💼 Considering Navgrow? Ask me what it's like to work here or what skills we look for.",
+  "/contact":          "📞 Fastest reply: WhatsApp us at +91 89270 70972. I can also draft your message for you!",
+  "/track-order":      "📦 To track an order, you need the order number from your confirmation email (NGO-YYYYMMDD-XXXX).",
+  "/services":         "🔧 Want to know which service fits your project? Describe your need and I'll recommend the right one.",
+  "/projects":         "🏗 Want to see if we've done similar work to yours? Describe your project and I'll check.",
+  "/about":            "🏢 Learning about Navgrow? Ask me about our certifications, team, or completed projects.",
 };
 
 const QUICK_NAV = [
@@ -75,7 +80,7 @@ const QUICK_NAV = [
   { Icon: Briefcase,   label:"Jobs",  to:"/careers",          cls:"hover:bg-amber-900/50 hover:text-amber-300" },
 ];
 
-const LEAD_KEYS = ["quote","project","contract","tender","railway","maintenance","amc","hire","consulting","audit","bulk order","budget"];
+const LEAD_KEYS = ["quote","project","contract","tender","railway","maintenance","amc","hire","consulting","audit","bulk order","budget","construction","industrial","procurement","factory","plant","installation","service agreement","turnkey","detailed quotation","formal quote"];
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 function detectTopic(text) {

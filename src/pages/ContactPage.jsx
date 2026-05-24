@@ -26,7 +26,12 @@ const infos = [
 ];
 
 const ContactPage = () => {
-  useSeo({ title: 'Contact Us', description: 'Get in touch with Navgrow Engineering Service. Call +91 89270 70972, email info@navgrow.org, or visit our office in Siliguri, West Bengal.', path: '/contact' });
+  useSeo({
+    title: 'Contact Navgrow Engineering | Get a Project Quote!',
+    description: 'Contact Navgrow Engineering Service — call +91 89270 70972, email info@navgrow.org, or visit Siliguri, West Bengal. Get a project quote for railway, industrial, civil, or government engineering work.',
+    path: '/contact',
+    keywords: 'contact engineering company Siliguri, get project quote engineering, railway contractor contact India, engineering enquiry West Bengal, Navgrow Engineering contact',
+    description: 'Get in touch with Navgrow Engineering Service. Call +91 89270 70972, email info@navgrow.org, or visit our office in Siliguri, West Bengal.', path: '/contact' });
   return (
   <>
     {/* Hero */}

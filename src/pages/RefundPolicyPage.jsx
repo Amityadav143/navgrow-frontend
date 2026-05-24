@@ -1,4 +1,5 @@
 import React from 'react';
+import useSeo from '@/hooks/useSeo';
 import { motion } from 'framer-motion';
 import { RotateCcw, Truck, Clock, CheckCircle, XCircle, Phone } from 'lucide-react';
 import PageHero from '@/components/PageHero';

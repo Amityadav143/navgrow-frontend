@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Calculator, Train, Building, Wrench, Users, Shield, Cpu,
+  Calculator, Train, Building, Wrench, Users, Shield, Cpu, Building2,
   CheckCircle, ArrowRight, Phone, MessageCircle, Send, RotateCcw,
   ChevronDown, Info,
 } from 'lucide-react';
@@ -11,12 +11,18 @@ import { quotesApi } from '@/lib/api';
 
 /* ── Data ─────────────────────────────────────────────────────────────────── */
 const SERVICES = [
-  { id: 'railway',    icon: Train,    label: 'Railway Infrastructure',  base: 250000, unit: 'per loco / per shed' },
-  { id: 'govt',       icon: Building, label: 'Government Contracts',    base: 100000, unit: 'per tender' },
-  { id: 'maintenance',icon: Wrench,   label: 'Maintenance Services',    base: 50000,  unit: 'per month' },
-  { id: 'consulting', icon: Users,    label: 'Consulting Services',     base: 30000,  unit: 'per project' },
-  { id: 'safety',     icon: Shield,   label: 'Safety & Compliance',     base: 40000,  unit: 'per audit' },
-  { id: 'technology', icon: Cpu,      label: 'Technology Solutions',    base: 80000,  unit: 'per system' },
+  { id: 'railway',      icon: Train,    label: 'Railway Infrastructure',    base: 250000, unit: 'per loco / per shed',    sector:'Railway & Transport' },
+  { id: 'govt',         icon: Building, label: 'Government / PSU Contracts', base: 100000, unit: 'per tender',             sector:'Government' },
+  { id: 'maintenance',  icon: Wrench,   label: 'Maintenance & AMC',          base: 50000,  unit: 'per month',              sector:'Any Sector' },
+  { id: 'consulting',   icon: Users,    label: 'Consulting & Advisory',       base: 30000,  unit: 'per project',            sector:'Any Sector' },
+  { id: 'safety',       icon: Shield,   label: 'Safety & Compliance Audit',   base: 40000,  unit: 'per audit',              sector:'Any Sector' },
+  { id: 'technology',   icon: Cpu,      label: 'IoT / Technology Solutions',  base: 80000,  unit: 'per system',             sector:'Industrial & Tech' },
+  { id: 'civil',        icon: Building, label: 'Civil & Construction Works',   base: 150000, unit: 'per site / per project', sector:'Construction' },
+  { id: 'industrial',   icon: Wrench,   label: 'Industrial Engineering',       base: 120000, unit: 'per unit / per project', sector:'Manufacturing' },
+  { id: 'electrical',   icon: Cpu,      label: 'Electrical & Instrumentation', base: 90000,  unit: 'per system',             sector:'Utilities' },
+  { id: 'procurement',  icon: Users,    label: 'Procurement & Sourcing',       base: 20000,  unit: 'per engagement',         sector:'Any Sector' },
+  { id: 'training',     icon: Shield,   label: 'Training & Skill Development', base: 25000,  unit: 'per batch / per day',    sector:'Any Sector' },
+  { id: 'environment',  icon: Shield,   label: 'Environmental & HSE Services', base: 35000,  unit: 'per audit / per project',sector:'Any Sector' },
 ];
 
 const SCOPES = [
@@ -26,19 +32,25 @@ const SCOPES = [
 ];
 
 const ADDONS = [
-  { id: 'safety_audit',  label: 'Safety Audit & Documentation',  cost: 25000 },
-  { id: 'project_mgmt',  label: 'Dedicated Project Manager',     cost: 35000 },
-  { id: 'training',      label: 'Staff Training Programme',      cost: 20000 },
-  { id: 'annual_maint',  label: 'Annual Maintenance Contract',   cost: 60000 },
-  { id: 'reporting',     label: 'Monthly Reporting & Analytics', cost: 15000 },
-  { id: 'compliance',    label: 'Regulatory Compliance Filing',  cost: 18000 },
+  { id: 'safety_audit',  label: 'Safety Audit & HSE Documentation',      cost: 25000 },
+  { id: 'project_mgmt',  label: 'Dedicated Project Manager',              cost: 35000 },
+  { id: 'training',      label: 'Staff Training Programme',               cost: 20000 },
+  { id: 'annual_maint',  label: 'Annual Maintenance Contract (AMC)',      cost: 60000 },
+  { id: 'reporting',     label: 'Monthly Reporting & Analytics Dashboard',cost: 15000 },
+  { id: 'compliance',    label: 'Regulatory Compliance Filing',           cost: 18000 },
+  { id: 'quality',       label: 'Quality Assurance & ISO Documentation',  cost: 22000 },
+  { id: 'design',        label: 'Engineering Design & Drawings (CAD)',    cost: 40000 },
+  { id: 'procurement',   label: 'Material Procurement & Logistics',       cost: 30000 },
+  { id: 'digital',       label: 'Digital Twin / IoT Monitoring Setup',    cost: 55000 },
 ];
 
 const DURATIONS = [
-  { id: 'one_time', label: 'One-time', mult: 1.0 },
-  { id: '3month',   label: '3 Months', mult: 2.8 },
-  { id: '6month',   label: '6 Months', mult: 5.0 },
-  { id: '12month',  label: '1 Year',   mult: 9.0 },
+  { id: 'one_time', label: 'One-time / Ad-hoc',     mult: 1.0,  desc: 'Single project or delivery' },
+  { id: '1month',   label: '1 Month',               mult: 1.0,  desc: 'Short-term engagement' },
+  { id: '3month',   label: '3 Months',              mult: 2.8,  desc: 'Quarterly contract' },
+  { id: '6month',   label: '6 Months',              mult: 5.0,  desc: 'Half-year engagement' },
+  { id: '12month',  label: '1 Year (Annual)',        mult: 9.0,  desc: 'Annual contract — best value' },
+  { id: '24month',  label: '2 Years (Long-term)',    mult: 16.0, desc: 'Long-term partnership' },
 ];
 
 const fmt = n => '₹' + Math.round(n).toLocaleString('en-IN');
@@ -65,7 +77,12 @@ const Steps = ({ current }) => (
 
 /* ── Page ─────────────────────────────────────────────────────────────────── */
 const QuoteCalculatorPage = () => {
-  useSeo({ title: 'Quote Calculator', description: 'Estimate the cost of your engineering project with Navgrow\'s interactive quote calculator. Railway infrastructure, government contracts, maintenance, and more.', path: '/quote-calculator' });
+  useSeo({
+    title: 'Free Project Quote Calculator | Engineering Cost Estimator',
+    description: 'Get an instant cost estimate for your engineering project — railway infrastructure, industrial works, civil construction, government contracts, maintenance AMC. Free quote in 4 steps.',
+    path: '/quote-calculator',
+    keywords: 'engineering project quote calculator, railway project cost estimate, industrial engineering quote India, civil construction cost estimator, government contract bid estimate',
+    description: 'Estimate the cost of your engineering project with Navgrow\'s interactive quote calculator. Railway infrastructure, government contracts, maintenance, and more.', path: '/quote-calculator' });
 
   const [step,      setStep]      = useState(0);
   const [service,   setService]   = useState(null);
@@ -73,7 +90,7 @@ const QuoteCalculatorPage = () => {
   const [addons,    setAddons]    = useState([]);
   const [duration,  setDuration]  = useState('one_time');
   const [submitted, setSubmitted] = useState(false);
-  const [form,      setForm]      = useState({ name: '', email: '', phone: '', notes: '' });
+  const [form,      setForm]      = useState({ name: '', email: '', phone: '', company: '', industry: '', city: '', notes: '', urgency: 'standard' });
 
   const svc  = SERVICES.find(s => s.id === service);
   const scp  = SCOPES.find(s => s.id === scope);
@@ -90,24 +107,81 @@ const QuoteCalculatorPage = () => {
 
   const reset = () => { setStep(0); setService(null); setScope(null); setAddons([]); setDuration('one_time'); setSubmitted(false); };
 
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
+
   const sendQuote = async () => {
-    // Post to backend (best-effort — mail fallback always fires)
+    if (!form.name || !form.email || !form.phone) {
+      setSendError('Please fill in your name, email and phone number.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      setSendError('Please enter a valid email address.');
+      return;
+    }
+    setSending(true); setSendError('');
+    const addonNames = addons.map(id => ADDONS.find(a => a.id === id)?.label).filter(Boolean);
+
+    // Try backend API first (triggers professional HTML email template)
     try {
       await quotesApi.submit({
-        name: form.name, email: form.email, phone: form.phone,
-        serviceType: svc?.label, scope: scp?.label, duration: dur?.label,
-        estLow: low, estHigh: high, notes: form.notes,
+        name:        form.name,
+        email:       form.email,
+        phone:       form.phone,
+        company:     form.company || '',
+        industry:    form.industry || '',
+        city:        form.city || '',
+        serviceType: svc?.id,
+        serviceName: svc?.label,
+        scope:       scp?.label,
+        duration:    dur?.label,
+        addOns:      addonNames.join(', '),
+        estLow:      Math.round(low),
+        estHigh:     Math.round(high),
+        notes:       form.notes || '',
+        // Rich details for professional email
+        urgency:     form.urgency || 'standard',
       });
-    } catch (err) { /* best-effort — mailto fallback always fires */ }
-    const subject = encodeURIComponent(`Quote Request – ${svc?.label} (${scp?.label} scope)`);
-    const addonNames = addons.map(id => ADDONS.find(a => a.id === id)?.label).join(', ');
-    const body = encodeURIComponent(
-      `Name: ${form.name}\nEmail: ${form.email}\nPhone: ${form.phone}\n\n` +
-      `Service: ${svc?.label}\nScope: ${scp?.label}\nDuration: ${dur?.label}\nAdd-ons: ${addonNames || 'None'}\n\n` +
-      `Estimated Range: ${fmt(low)} – ${fmt(high)}\n\nNotes: ${form.notes}`
-    );
-    window.location.href = `mailto:info@navgrow.org?subject=${subject}&body=${body}`;
-    setSubmitted(true);
+      setSubmitted(true);
+    } catch (err) {
+      // Fallback: open pre-filled professional email in mail client
+      const subject = encodeURIComponent(
+        `[Quote Request] ${svc?.label} – ${scp?.label} Scope — ${form.company || form.name}`
+      );
+      const body = encodeURIComponent([
+        'Dear Navgrow Engineering Team,',
+        '',
+        'I would like to request a formal quotation for the following project:',
+        '',
+        '─── PROJECT DETAILS ───────────────────────────────',
+        `Service Type  : ${svc?.label}`,
+        `Project Scope : ${scp?.label} (${scp?.desc})`,
+        `Duration      : ${dur?.label}`,
+        addonNames.length ? `Add-ons       : ${addonNames.join(', ')}` : '',
+        `Indicative Est: ${fmt(low)} – ${fmt(high)} (ex-GST)`,
+        '',
+        '─── CONTACT INFORMATION ────────────────────────────',
+        `Name          : ${form.name}`,
+        `Email         : ${form.email}`,
+        `Phone         : ${form.phone}`,
+        form.company ? `Company       : ${form.company}` : '',
+        form.city    ? `Location      : ${form.city}` : '',
+        form.industry? `Industry      : ${form.industry}` : '',
+        '',
+        '─── ADDITIONAL NOTES ───────────────────────────────',
+        form.notes || 'No additional notes.',
+        '',
+        'Please send a formal quotation with full cost breakup, GST details,',
+        'timeline, and terms at your earliest convenience.',
+        '',
+        'Thank you,',
+        form.name,
+      ].filter(l => l !== null && l !== undefined).join('\n'));
+      window.location.href = `mailto:info@navgrow.org?subject=${subject}&body=${body}`;
+      setSubmitted(true);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (

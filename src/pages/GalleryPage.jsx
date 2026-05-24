@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Image, X, ChevronLeft, ChevronRight, ZoomIn, MapPin } from 'lucide-react';
 import PageHero from '@/components/PageHero';
 import CtaSection from '@/components/CtaSection';
+import useSeo from '@/hooks/useSeo';
 
 const PHOTOS = [
   { id: 1,  cat: 'Projects',   src: '/wltpsguj.jpeg',    title: 'Rainwater Leakage Testing Plant',          location: 'Siliguri Diesel Loco Shed',  year: '2025' },
@@ -52,6 +53,12 @@ const LightBox = ({ photo, total, onClose, onPrev, onNext }) => (
 );
 
 const GalleryPage = () => {
+  useSeo({
+    title: 'Project Gallery | Railway & Industrial Engineering Work',
+    description: "View Navgrow Engineering's completed project gallery — rainwater testing plants, loco modification, railway infrastructure, and industrial engineering work in North Bengal.",
+    path: '/gallery',
+    keywords: 'railway engineering projects gallery, loco modification photos, railway shed construction images, Navgrow projects Siliguri',
+  });
   const [cat, setCat]       = useState('All');
   const [lightbox, setLightbox] = useState(null);
 

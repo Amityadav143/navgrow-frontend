@@ -216,7 +216,8 @@ const Navbar = ({ scrolled, onSearchOpen }) => {
           {mobileOpen && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.22 }}
               className="lg:hidden bg-white border-t border-gray-100 shadow-2xl overflow-hidden">
-              <div className="px-4 py-5 flex flex-col gap-1">
+              <div className="px-4 py-5 flex flex-col gap-1 overflow-y-auto"
+                style={{ maxHeight: 'calc(100dvh - 140px)', paddingBottom: 'max(80px, env(safe-area-inset-bottom, 80px))' }}>
                 {NAV.map((link) => (
                   <div key={link.path}>
                     <NavLink to={link.path} onClick={() => setMobileOpen(false)}

@@ -1,4 +1,5 @@
 import React from 'react';
+import useSeo from '@/hooks/useSeo';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Map, ArrowRight, Home, Info, Briefcase, FolderOpen, ShoppingBag, Phone, FileText, Users, Image, Newspaper } from 'lucide-react';
@@ -64,9 +65,12 @@ const SITEMAP = [
   },
 ];
 
-const SitemapPage = () => (
-  <>
-    <PageHero
+const SitemapPage = () => {
+  useSeo({ title: "Sitemap | All Pages — Navgrow Engineering", description: "Full sitemap of navgrow.org — engineering services, projects, shop, careers, news, and contact pages.", path: "/sitemap" });
+
+  return (
+    <>
+      <PageHero
       chip={<><Map className="h-4 w-4" /> Navigation</>}
       title={<>Website <span className="gradient-text">Sitemap</span></>}
       subtitle="A complete overview of all pages and sections on navgrow.org."
@@ -103,7 +107,8 @@ const SitemapPage = () => (
         </div>
       </div>
     </section>
-  </>
-);
+    </>
+  );
+};
 
 export default SitemapPage;

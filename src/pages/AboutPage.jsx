@@ -7,10 +7,10 @@ import useSeo from '@/hooks/useSeo';
 
 const milestones = [
   { year: '2022', title: 'Company Founded', desc: 'Navgrow Engineering Service Pvt. Ltd. incorporated in Siliguri, West Bengal with a mission of "Quality First...!"' },
-  { year: '2023', title: 'MSME & DPIIT Registration', desc: 'Recognised under DPIIT Startup India and registered as MSME, unlocking priority access to government tender processes.' },
-  { year: '2024', title: 'Make in India Partner', desc: 'Onboarded as a Make in India aligned vendor, reinforcing commitment to domestic manufacturing and supply chains.' },
-  { year: '2025', title: 'Indian Railways Contracts', desc: 'Delivered Rainwater Leakage Testing Plant and Modified Hand Brake fitment projects at Siliguri Diesel Loco Shed.' },
-  { year: '2026', title: 'Wabtec Partnership', desc: 'Completed specialised lube oil storage solutions for Wabtec Locomotives Pvt. Ltd., expanding our private sector footprint.' },
+  { year: '2023', title: 'Journey Started', desc: 'Delivered projects for private sectors and defence....' },
+  { year: '2024', title: 'Indian Railways Contracts', desc: 'Delivered Rainwater Leakage Testing Plant and Modified Hand Brake fitment projects at Siliguri Diesel Loco Shed.' },
+  { year: '2025', title: 'MSME & DPIIT Registration', desc: 'Recognised under DPIIT Startup India and registered as MSME, unlocking priority access to government tender processes.' },
+  { year: '2026', title: "Wabtec Locomotive's", desc: 'Completed specialised lube oil storage solutions for Wabtec Locomotives Pvt. Ltd., expanding our private sector footprint.' },
 ];
 
 const values = [

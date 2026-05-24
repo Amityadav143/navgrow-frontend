@@ -5,8 +5,8 @@ import { ShoppingCart, ArrowRight, ShieldCheck, Package, Wrench, HardHat } from 
 import { useCart } from '@/context/CartContext';
 
 const FEATURED = [
-  { id: 1,  name: 'Industrial Safety Helmet (ISI Marked)',  price: 480,  cat: 'Safety', image: 'https://images.unsplash.com/photo-1582139329536-e7284fece509?w=400&q=80' },
-  { id: 6,  name: 'Digital Torque Wrench (10–200 Nm)',      price: 4800, cat: 'Tools',  image: 'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?w=400&q=80' },
+  { id: 1,  slug: 'industrial-safety-helmet-isi', name: 'Industrial Safety Helmet (ISI Marked)',  price: 480,  cat: 'Safety', image: 'https://images.unsplash.com/photo-1582139329536-e7284fece509?w=400&q=80' },
+  { id: 6, slug: 'digital-torque-wrench', name: 'Digital Torque Wrench (10–200 Nm)',      price: 4800, cat: 'Tools',  image: 'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?w=400&q=80' },
   { id: 11, name: 'Anti-Corrosion Penetrant Spray (500 ml)',price: 380,  cat: 'Supply', image: 'https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=400&q=80' },
   { id: 14, name: 'Digital Vernier Calliper (0–300 mm)',    price: 1650, cat: 'Testing',image: 'https://images.unsplash.com/photo-1611791484670-ce19b801d192?w=400&q=80' },
 ];
@@ -63,11 +63,11 @@ const ShopPreview = () => {
             return (
               <motion.div key={p.id} initial={{ opacity:0, y:20 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ delay:i*0.08 }}
                 className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden">
-                <div className="aspect-[4/3] overflow-hidden bg-gray-50">
+                <Link to={`/shop/${p.slug || p.id}`} className="block aspect-[4/3] overflow-hidden bg-gray-50">
                   <img src={p.image} alt={p.name} loading="lazy" decoding="async"
                   onError={(e) => { e.target.onerror=null; e.target.src=`data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect width='400' height='300' fill='%23dbeafe'/%3E%3Ctext x='200' y='155' font-family='sans-serif' font-size='13' fill='%232563eb' text-anchor='middle'%3E${encodeURIComponent(p.name.substring(0,20))}%3C/text%3E%3C/svg%3E`; }}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                </div>
+                </Link>
                 <div className="p-4">
                   <span className="text-xs font-semibold text-blue-600 uppercase tracking-wide">{p.cat}</span>
                   <p className="font-bold text-gray-900 text-sm mt-1 mb-3 line-clamp-2 leading-snug">{p.name}</p>

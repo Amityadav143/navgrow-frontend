@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import useSeo from '@/hooks/useSeo';
 import { motion } from 'framer-motion';
 import { FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import PageHero from '@/components/PageHero';
@@ -90,6 +91,7 @@ Before initiating legal proceedings, we encourage you to contact us at info@navg
 ];
 
 const AccordionItem = ({ section }) => {
+  useSeo({ title: "Terms & Conditions | Navgrow Engineering", description: "Terms and conditions governing use of navgrow.org and engagement with Navgrow Engineering Service Pvt. Ltd.", path: "/terms" });
   const [open, setOpen] = useState(false);
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}

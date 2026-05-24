@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import useSeo from '@/hooks/useSeo';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Home, ArrowLeft, Search, ShoppingBag, Phone, MessageCircle, Calculator } from 'lucide-react';
@@ -11,6 +12,7 @@ const SUGGESTIONS = [
 ];
 
 const NotFoundPage = () => {
+  useSeo({ title: "Page Not Found | 404", description: "The page you're looking for doesn't exist. Return to Navgrow Engineering homepage for railway, industrial and government engineering services.", path: "/404" });
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
 

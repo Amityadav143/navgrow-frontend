@@ -126,7 +126,11 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
     }
   };
 
-  const { grandTotal = 0, discount = 0 } = orderData || {};
+  // Compute totals directly from cart items (orderData prop is optional/deprecated)
+  const cartTotal = items.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0);
+  const grandTotal = (orderData?.grandTotal) || cartTotal;
+  const discount   = orderData?.discount || 0;
+  const itemCount  = items.reduce((s, i) => s + (i.qty || 1), 0);
 
   return (
     <AnimatePresence>
@@ -156,9 +160,33 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
             {step === 1 && (
               <form onSubmit={handlePay} noValidate className="p-6 space-y-4">
                 <p className="text-sm text-gray-500 font-medium -mt-1 mb-2">
-                  {items.length} item{items.length > 1 ? 's' : ''} · Total: <strong className="text-gray-900">₹{Math.round(grandTotal).toLocaleString('en-IN')}</strong>
+                  {itemCount} item{itemCount !== 1 ? 's' : ''} · Total: <strong className="text-gray-900">₹{Math.round(grandTotal).toLocaleString('en-IN')}</strong>
                   {discount > 0 && <span className="text-green-600 ml-2">(₹{Number(discount).toLocaleString('en-IN')} saved)</span>}
                 </p>
+
+                {/* Order Summary */}
+                <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 -mt-1 mb-2">
+                  <p className="text-xs font-bold text-blue-800 uppercase tracking-wide mb-2.5">Order Summary</p>
+                  <div className="space-y-2">
+                    {items.map(i => (
+                      <div key={i.id} className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          {i.image && <img src={i.image} alt={i.name} className="w-9 h-9 rounded-xl object-cover bg-white border border-blue-100 shrink-0" onError={e=>{e.target.style.display='none'}}/>}
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-gray-900 line-clamp-1">{i.name}</p>
+                            <p className="text-[10px] text-gray-500">Qty: {i.qty || 1} × ₹{(i.price||0).toLocaleString('en-IN')}</p>
+                          </div>
+                        </div>
+                        <p className="text-sm font-bold text-gray-900 shrink-0">₹{((i.price||0)*(i.qty||1)).toLocaleString('en-IN')}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="border-t border-blue-200 mt-3 pt-3 flex items-center justify-between">
+                    <p className="text-sm font-bold text-blue-900">Total Payable</p>
+                    <p className="text-xl font-extrabold text-blue-900">₹{Math.round(grandTotal).toLocaleString('en-IN')}</p>
+                  </div>
+                  {discount > 0 && <p className="text-xs text-green-600 font-semibold text-right mt-1">You save ₹{Number(discount).toLocaleString('en-IN')}</p>}
+                </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2"><Field id="name"    label="Full Name"     required value={form.name}    onChange={ch('name')}    placeholder="Your full name" error={errors.name} /></div>

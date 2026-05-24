@@ -11,24 +11,30 @@ import { useApi } from '@/hooks/useApi';
 import { analyticsApi } from '@/lib/api';
 
 const NAV_ITEMS = [
-  { path: '/admin',           label: 'Dashboard',    icon: LayoutDashboard, exact: true },
-  { path: '/admin/orders',    label: 'Orders',       icon: ShoppingCart },
-  { path: '/admin/products',  label: 'Products',     icon: Package },
-  { path: '/admin/quotes',    label: 'Quotes',       icon: FileText },
-  { path: '/admin/contacts',  label: 'Messages',     icon: MessageSquare },
-  { path: '/admin/news',      label: 'News',         icon: Newspaper },
-  { path: '/admin/projects',  label: 'Projects',     icon: Image },
-  { path: '/admin/jobs',      label: 'Careers',      icon: Briefcase },
-  { path: '/admin/tenders',   label: 'Tenders',      icon: Tag },
-  { path: '/admin/gallery',   label: 'Gallery',      icon: Image },
-  { path: '/admin/users',     label: 'Users',        icon: Users },
+  { path: '/admin',            label: 'Dashboard',     icon: LayoutDashboard, exact: true, group: 'Overview' },
+  { path: '/admin/orders',     label: 'Orders',        icon: ShoppingCart,                group: 'Commerce' },
+  { path: '/admin/products',   label: 'Products',      icon: Package,                     group: 'Commerce' },
+  { path: '/admin/quotes',     label: 'Quote Requests', icon: FileText,                   group: 'Commerce' },
+  { path: '/admin/contacts',   label: 'Messages',      icon: MessageSquare,               group: 'CRM' },
+  { path: '/admin/users',      label: 'Users',         icon: Users,                       group: 'CRM' },
+  { path: '/admin/news',       label: 'News',          icon: Newspaper,                   group: 'Content' },
+  { path: '/admin/projects',   label: 'Projects',      icon: Image,                       group: 'Content' },
+  { path: '/admin/jobs',       label: 'Careers',       icon: Briefcase,                   group: 'Content' },
+  { path: '/admin/tenders',    label: 'Tenders',       icon: Tag,                         group: 'Content' },
+  { path: '/admin/gallery',    label: 'Gallery',       icon: Image,                       group: 'Content' },
+  { path: '/admin/news',        label: 'News & Posts',  icon: Newspaper,                   group: 'Content' },
+  { path: '/admin/coupons',     label: 'Coupons',       icon: Tag,                         group: 'Commerce' },
+  { path: '/admin/settings',   label: 'Site Settings', icon: Settings,                    group: 'System' },
 ];
+
+const NAV_GROUPS = ['Overview', 'Commerce', 'CRM', 'Content', 'System'];
 
 export const AdminLayout = () => {
   const { isAdmin, isManager, user } = useAuth();
   const location = useLocation();
 
-  if (!isAdmin && !isManager) return <Navigate to="/" replace />;
+  const { isEditor } = useAuth();
+  if (!isAdmin && !isManager && !isEditor) return <Navigate to="/" replace />;
 
   return (
     <div className="flex min-h-screen bg-gray-950">
@@ -44,19 +50,26 @@ export const AdminLayout = () => {
 
         {/* Nav */}
         <nav className="flex-1 p-3 overflow-y-auto">
-          <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest px-3 mb-2 mt-2">Management</p>
-          {NAV_ITEMS.map(({ path, label, icon: Icon, exact }) => {
-            const active = exact ? location.pathname === path : location.pathname.startsWith(path) && path !== '/admin';
-            const isExactActive = exact && location.pathname === '/admin';
-            const isActive = active || isExactActive;
+          {NAV_GROUPS.map(group => {
+            const groupItems = NAV_ITEMS.filter(i => i.group === group);
             return (
-              <Link key={path} to={path}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors mb-0.5 ${
-                  isActive ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                }`}>
-                <Icon className="h-4 w-4 shrink-0" />
-                {label}
-              </Link>
+              <div key={group} className="mb-3">
+                <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest px-3 mb-1 mt-2">{group}</p>
+                {groupItems.map(({ path, label, icon: Icon, exact }) => {
+                  const active = exact ? location.pathname === path : location.pathname.startsWith(path) && path !== '/admin';
+                  const isExactActive = exact && location.pathname === '/admin';
+                  const isActive = active || isExactActive;
+                  return (
+                    <Link key={path} to={path}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors mb-0.5 ${
+                        isActive ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                      }`}>
+                      <Icon className="h-4 w-4 shrink-0" />
+                      {label}
+                    </Link>
+                  );
+                })}
+              </div>
             );
           })}
         </nav>

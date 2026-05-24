@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Users, MapPin, Clock, Briefcase, ChevronDown, ChevronUp, Send, CheckCircle, Star } from 'lucide-react';
 import PageHero from '@/components/PageHero';
 import CtaSection from '@/components/CtaSection';
+import useSeo from '@/hooks/useSeo';
 import { useToast } from '@/components/ui/use-toast';
 
 const PERKS = [

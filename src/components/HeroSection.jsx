@@ -37,13 +37,13 @@ const HeroSection = () => (
             className="section-chip mb-6 w-fit"
           >
             <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-            Trusted by Indian Railways & Wabtec
+            Trusted by Indian Railways, Wabtec and ...
           </motion.div>
 
           <h1 className="font-extrabold leading-tight mb-6 text-gray-900">
             Engineering Solutions for{' '}
-            <span className="gradient-text">Railway &amp; Government</span>{' '}
-            Contracts
+            <span className="gradient-text-royal">Private Industries</span>{' '}
+            &amp; Government Sectors.
           </h1>
 
           <p className="text-lg text-gray-600 mb-8 leading-relaxed max-w-lg">
@@ -83,7 +83,7 @@ const HeroSection = () => (
           {/* Trust proof strip */}
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-xs text-gray-400 font-medium">Trusted by:</span>
-            {['Indian Railways (NER)', 'Wabtec Locomotives', 'Govt. of India'].map((c) => (
+            {['Indian Railways (NER)', 'Wabtec Locomotives', 'Govt. of India', 'Industrial Clients'].map((c) => (
               <span key={c} className="text-xs font-semibold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200">{c}</span>
             ))}
           </div>
@@ -112,7 +112,7 @@ const HeroSection = () => (
               animate={{ y: [0, -6, 0] }}
               transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
             >
-              <p className="text-2xl font-extrabold text-blue-700">10+</p>
+              <p className="text-2xl font-extrabold text-blue-700">30+</p>
               <p className="text-xs text-gray-600 font-medium">Projects Delivered</p>
             </motion.div>
 

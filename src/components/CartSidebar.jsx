@@ -174,7 +174,7 @@ const CartSidebar = () => {
                   </button>
 
                   <div className="grid grid-cols-2 gap-2">
-                    <a href={`mailto:info@navgrow.org?subject=Bulk Quote Request&body=Items: ${items.map(i=>`${i.name} x${i.qty}`).join(', ')}`}
+                    <a href={buildBulkQuoteEmail(items, totalAmount, grandTotal, discount)}
                       className="py-2.5 border-2 border-blue-200 text-blue-700 font-bold rounded-xl text-sm hover:border-blue-400 hover:bg-blue-50 transition-colors text-center">
                       Request Quote
                     </a>

@@ -5,8 +5,8 @@ import AnimatedCounter from '@/components/AnimatedCounter';
 
 const stats = [
   {
-    icon: Building2, value: '10+', label: 'Projects Delivered',
-    desc: 'Railway & government projects completed',
+    icon: Building2, value: '30+', label: 'Projects Delivered',
+    desc: 'Railway, industrial & government projects',
     iconBg: 'from-blue-700 to-blue-900', accent: 'border-blue-400/20',
   },
   {

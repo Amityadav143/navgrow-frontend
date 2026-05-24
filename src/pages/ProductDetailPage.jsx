@@ -283,9 +283,36 @@ const ProductDetailPage = () => {
   const stickyRef = useRef(null);
 
   /* ── SEO ── */
+  const productSchema = product ? {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": product.name,
+    "description": product.summary || product.desc || '',
+    "sku": product.sku || product.id,
+    "brand": { "@type": "Brand", "name": "Navgrow Engineering" },
+    "offers": {
+      "@type": "Offer",
+      "url": `https://navgrow.org/shop/${product.slug || product.id}`,
+      "priceCurrency": "INR",
+      "price": product.price,
+      "availability": product.inStock !== false ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+      "seller": { "@type": "Organization", "name": "Navgrow Engineering Service Pvt. Ltd." }
+    },
+    "aggregateRating": product.rating ? {
+      "@type": "AggregateRating",
+      "ratingValue": product.rating,
+      "reviewCount": product.reviews || 1,
+      "bestRating": 5
+    } : undefined
+  } : null;
+
   useSeo({
-    title: product ? `${product.name} — Navgrow Shop` : 'Product — Navgrow',
-    description: product?.summary || product?.desc || '',
+    title: product ? `${product.name} — Buy Online | Navgrow Engineering Shop` : 'Product — Navgrow',
+    description: product ? `Buy ${product.name} online at ₹${product.price?.toLocaleString('en-IN')}. ${product.summary || product.desc || ''}. ISI-certified. Free shipping ₹5K+. GST invoice. Pan-India delivery.` : '',
+    path: product ? `/shop/${product.slug || product.id}` : '/shop',
+    keywords: product ? `buy ${product.name}, ${product.cat}, engineering products India, ${product.name} price` : '',
+    type: 'product',
+    schema: productSchema,
   });
 
   /* ── scroll to top on mount ── */

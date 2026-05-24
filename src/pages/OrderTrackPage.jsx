@@ -14,7 +14,12 @@ const StepIcon = ({ status }) => {
 };
 
 const OrderTrackPage = () => {
-  useSeo({ title: 'Track Order', path: '/track-order' });
+  useSeo({
+    title: 'Track Your Order | Products Delivery Status',
+    description: 'Track your Navgrow Engineering order — enter your order number to get real-time delivery status, courier details, and estimated delivery date for safety equipment and engineering products.',
+    path: '/track-order',
+    keywords: 'track engineering product order, safety equipment delivery tracking, Navgrow order tracking',
+    path: '/track-order' });
   const [orderNum, setOrderNum] = useState('');
   const [order, setOrder]       = useState(null);
   const [loading, setLoading]   = useState(false);

@@ -11,6 +11,7 @@ import {
 import { useCart } from '@/context/CartContext';
 import CheckoutModal from '@/components/CheckoutModal';
 import { ALL_PRODUCTS as PRODUCTS } from '@/lib/productData';
+import { debounce } from '@/lib/api';
 import CtaSection from '@/components/CtaSection';
 import useSeo from '@/hooks/useSeo';
 
@@ -206,9 +207,32 @@ const ProductDetail = ({ product, onClose, onBuyNow }) => {
 
 /* ── Page ─────────────────────────────────────────────────────────────────── */
 const ShopPage = () => {
-  useSeo({ title: 'Engineering Shop', description: 'Buy safety equipment, railway tools, maintenance supplies, and PPE online. B2B quotes and Razorpay payment. Pan-India shipping.', path: '/shop' });
+  useSeo({
+    title: 'B2B Engineering Shop | Safety Equipment, Railway Tools & PPE – Buy Online',
+    description: 'Buy ISI-certified safety equipment, railway tools, maintenance supplies, and PPE online. Industrial helmets, torque wrenches, rail gauges, FR coveralls. Free shipping ₹5K+. GST invoice. Pan-India delivery.',
+    path: '/shop',
+    keywords: 'buy safety equipment India, railway tools online, ISI certified safety helmet, torque wrench India, rail flaw detector, FR coverall buy, PPE supplier India, B2B engineering products, safety equipment Siliguri',
+    description: 'Buy safety equipment, railway tools, maintenance supplies, and PPE online. B2B quotes and Razorpay payment. Pan-India shipping.', path: '/shop' });
+
+  // Live products from DB; fallback to static catalogue if API unavailable
+  const { data: apiData } = useApi(() => productsApi.list({ size: 100, active: true }), [], { immediate: true });
+  const liveProducts = React.useMemo(() => {
+    const list = apiData?.content || (Array.isArray(apiData) ? apiData : null);
+    if (list && list.length > 0) return list.map(p => ({
+      id: p.id, slug: p.slug || String(p.id), cat: p.category,
+      name: p.name, price: p.price, mrp: p.mrp || p.price,
+      rating: p.avgRating || 4.5, reviews: p.reviewCount || 0,
+      badge: p.badge || '', image: p.imageUrl || '', desc: p.description || '',
+      inStock: (p.stockQty || 0) > 0, tagline: p.tagline || '',
+    }));
+    return null;
+  }, [apiData]);
+  const ACTIVE_PRODUCTS = liveProducts || PRODUCTS;
+  const ACTIVE_CATS = ['All', ...Array.from(new Set(ACTIVE_PRODUCTS.map(p => p.cat)))];
 
   const [search, setSearch]       = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const debouncedSetSearch = React.useMemo(() => debounce(setDebouncedSearch, 280), []);
   const [cat, setCat]             = useState('All');
   const [sort, setSort]           = useState('Featured');
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -221,9 +245,10 @@ const ShopPage = () => {
   };
 
   const filtered = useMemo(() => {
-    let list = [...PRODUCTS];
+    let list = [...ACTIVE_PRODUCTS];
     if (cat !== 'All') list = list.filter(p => p.cat === cat);
-    if (search.trim()) {
+    const sq = debouncedSearch || search;
+    if (sq.trim()) {
       const q = search.toLowerCase();
       list = list.filter(p => p.name.toLowerCase().includes(q) || p.cat.toLowerCase().includes(q) || p.desc.toLowerCase().includes(q));
     }
@@ -269,7 +294,7 @@ const ShopPage = () => {
             <div className="relative max-w-lg mx-auto">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
-                type="text" value={search} onChange={e => setSearch(e.target.value)}
+                type="text" value={search} onChange={e => { setSearch(e.target.value); debouncedSetSearch(e.target.value); }}
                 placeholder="Search products, categories…"
                 className="w-full pl-12 pr-10 py-4 rounded-2xl text-gray-900 bg-white shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
               />
@@ -289,7 +314,7 @@ const ShopPage = () => {
           {/* Filter bar */}
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-8">
             <div className="flex flex-wrap gap-2">
-              {CATS.map(c => (
+              {ACTIVE_CATS.map(c => (
                 <button key={c} onClick={() => setCat(c)}
                   className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
                     cat === c ? 'brand-gradient text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-blue-300'
@@ -352,7 +377,8 @@ const ShopPage = () => {
             <Tag className="h-7 w-7 text-blue-400 mx-auto mb-3" />
             <h3 className="text-xl font-bold text-white mb-2">Bulk & Custom Orders</h3>
             <p className="text-blue-300 text-sm mb-4 max-w-lg mx-auto">For orders of 10+ units or custom specifications, use "Add to Cart" and request a quote. We offer volume discounts and GST invoicing.</p>
-            <a href="mailto:info@navgrow.org?subject=Bulk Order Enquiry"
+            <a
+              href="mailto:info@navgrow.org?subject=Bulk%20Order%20Enquiry%20%E2%80%94%20Navgrow%20Engineering%20B2B&body=Dear%20Navgrow%20Engineering%20Team%2C%0A%0AI%20would%20like%20to%20enquire%20about%20bulk%20pricing%20and%20volume%20discounts%20for%20engineering%20products%20from%20your%20catalogue.%0A%0APRODUCTS%20OF%20INTEREST%0A%28Please%20list%20the%20products%20and%20approximate%20quantities%29%0A1.%20Product%20Name%20%20%20%3A%20%5Be.g.%20Industrial%20Safety%20Helmet%20ISI%5D%0A%20%20%20Qty%20Required%20%20%3A%20%5Be.g.%2050%20units%5D%0A%20%20%20Specification%20%3A%20%5Bany%20specific%20requirement%5D%0A%0A2.%20Product%20Name%20%20%20%3A%0A%20%20%20Qty%20Required%20%20%3A%0A%20%20%20Specification%20%3A%0A%0ABUYER%20INFORMATION%0ACompany%20/%20Org%20%20%3A%20%5BYour%20Company%20/%20Department%5D%0AContact%20Person%20%3A%20%5BYour%20Name%20%26%20Designation%5D%0APhone%20%20%20%20%20%20%20%20%20%20%3A%20%5BYour%20Mobile%20Number%5D%0ADelivery%20To%20%20%20%20%3A%20%5BCity%2C%20State%2C%20PIN%20Code%5D%0AGST%20Number%20%20%20%20%20%3A%20%5BYour%20GSTIN%20%E2%80%94%20for%20B2B%20GST%20invoice%5D%0A%0AREQUIREMENTS%0A%20%20Please%20provide%3A%0A%20%20-%20Bulk%20discount%20pricing%20for%20above%20quantities%0A%20%20-%20GST%20invoice%20and%20delivery%20challan%0A%20%20-%20Estimated%20delivery%20timeline%20to%20our%20location%0A%20%20-%20Whether%20customisation%20/%20logo%20branding%20is%20available%0A%20%20-%20Payment%20terms%20for%20large%20orders%0A%0AAdditional%20Notes%3A%0A%5BAny%20other%20requirements%2C%20certifications%2C%20packaging%20instructions%5D%0A%0AThank%20you%2C%0A%5BYour%20Name%5D%0A%5BDesignation%2C%20Company%5D%0A%5BPhone%5D%20%7C%20%5BEmail%5D"
               className="inline-flex items-center gap-2 px-6 py-3 bg-white text-blue-700 rounded-xl font-bold shadow-md hover:bg-blue-50 transition-colors text-sm">
               Contact for Bulk Pricing →
             </a>

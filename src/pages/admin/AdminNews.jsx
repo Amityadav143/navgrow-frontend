@@ -1,0 +1,332 @@
+import React, { useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Plus, Edit2, Trash2, Newspaper, Search, CheckCircle,
+  Eye, EyeOff, X, AlertCircle, RefreshCw, Calendar,
+  Tag, User, Globe, FileText, Image, Bold, Italic,
+  List, Type, AlignLeft, Heading,
+} from 'lucide-react';
+import { newsApi } from '@/lib/api';
+import { usePaginated, useMutation } from '@/hooks/useApi';
+import { useToast } from '@/components/ui/use-toast';
+
+const CATEGORIES = ['Project Update', 'Company News', 'Industry', 'Milestone', 'Announcement', 'Technical'];
+
+const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+/* ── Simple rich text toolbar ────────────────────────────────────────────── */
+const RichToolbar = ({ textareaRef }) => {
+  const insert = (before, after = before) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const { selectionStart: s, selectionEnd: e, value } = ta;
+    const selected = value.slice(s, e);
+    const newVal = value.slice(0, s) + before + selected + after + value.slice(e);
+    const event = { target: { value: newVal } };
+    ta.value = newVal;
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
+    ta.focus();
+    ta.setSelectionRange(s + before.length, s + before.length + selected.length);
+  };
+  const tools = [
+    { icon: Heading,   label: 'H2',  action: () => insert('<h2>', '</h2>') },
+    { icon: Bold,      label: 'B',   action: () => insert('<strong>', '</strong>') },
+    { icon: Italic,    label: 'I',   action: () => insert('<em>', '</em>') },
+    { icon: List,      label: 'UL',  action: () => insert('<ul>\n  <li>', '</li>\n</ul>') },
+    { icon: AlignLeft, label: 'P',   action: () => insert('<p>', '</p>') },
+    { icon: FileText,  label: 'Quote', action: () => insert('<blockquote>', '</blockquote>') },
+  ];
+  return (
+    <div className="flex gap-1 p-2 bg-gray-800 border-b border-gray-700 rounded-t-xl flex-wrap">
+      {tools.map(({ icon: Icon, label, action }) => (
+        <button key={label} type="button" onClick={action}
+          className="px-2.5 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1">
+          <Icon className="h-3 w-3" />{label}
+        </button>
+      ))}
+      <span className="ml-auto text-xs text-gray-500 self-center">HTML editor</span>
+    </div>
+  );
+};
+
+/* ── Article form ─────────────────────────────────────────────────────────── */
+const ArticleForm = ({ initial, onSave, onCancel, saving }) => {
+  const contentRef = useRef(null);
+  const [form, setForm] = useState(initial || {
+    title: '', slug: '', excerpt: '', content: '', category: 'Project Update',
+    imageUrl: '', authorName: 'Navgrow Team', tags: '', status: 'DRAFT',
+  });
+  const [preview, setPreview] = useState(false);
+  const ch = key => e => setForm(p => ({ ...p, [key]: e.target.value }));
+
+  const handleTitleChange = e => {
+    const t = e.target.value;
+    setForm(p => ({ ...p, title: t, slug: p.slug || slugify(t) }));
+  };
+
+  return (
+    <motion.div initial={{ opacity:0, y:-10 }} animate={{ opacity:1, y:0 }}
+      className="bg-gray-800 rounded-2xl border border-gray-700 p-5 mb-5 shadow-xl">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-bold text-white text-lg flex items-center gap-2">
+          {initial ? <Edit2 className="h-5 w-5 text-blue-400"/> : <Plus className="h-5 w-5 text-green-400"/>}
+          {initial ? 'Edit Article' : 'New Article'}
+        </h3>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setPreview(p=>!p)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 text-gray-300 rounded-lg text-xs font-bold hover:bg-gray-600 transition-colors">
+            <Eye className="h-3.5 w-3.5"/>{preview ? 'Editor' : 'Preview'}
+          </button>
+          <button onClick={onCancel} className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-400 transition-colors">
+            <X className="h-4 w-4"/>
+          </button>
+        </div>
+      </div>
+
+      {preview ? (
+        <div className="bg-white rounded-xl p-6">
+          {form.imageUrl && <img src={form.imageUrl} alt="" className="w-full h-48 object-cover rounded-xl mb-4"/>}
+          <span className="text-xs font-bold text-blue-600 uppercase">{form.category}</span>
+          <h2 className="text-2xl font-extrabold text-gray-900 mt-2 mb-3">{form.title || 'Article Title'}</h2>
+          <p className="text-gray-500 mb-4 italic">{form.excerpt}</p>
+          <div className="prose prose-sm max-w-none text-gray-700"
+            dangerouslySetInnerHTML={{ __html: form.content || '<p>Article content here…</p>' }}/>
+        </div>
+      ) : (
+        <form onSubmit={e => { e.preventDefault(); onSave(form); }} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Title */}
+            <div className="md:col-span-2">
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Title *</label>
+              <input required value={form.title} onChange={handleTitleChange}
+                placeholder="Article headline" maxLength={200}
+                className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"/>
+            </div>
+            {/* Slug */}
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">URL Slug *</label>
+              <input required value={form.slug} onChange={ch('slug')}
+                placeholder="url-friendly-slug"
+                className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white font-mono focus:outline-none focus:border-blue-500"/>
+            </div>
+            {/* Category */}
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Category</label>
+              <select value={form.category} onChange={ch('category')}
+                className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500">
+                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            {/* Author */}
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Author</label>
+              <input value={form.authorName} onChange={ch('authorName')} placeholder="Navgrow Team"
+                className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"/>
+            </div>
+            {/* Status */}
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Status</label>
+              <select value={form.status} onChange={ch('status')}
+                className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500">
+                <option value="DRAFT">📝 Draft</option>
+                <option value="PUBLISHED">🌐 Published</option>
+                <option value="ARCHIVED">📁 Archived</option>
+              </select>
+            </div>
+            {/* Image URL */}
+            <div className="md:col-span-2">
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Cover Image URL</label>
+              <input value={form.imageUrl} onChange={ch('imageUrl')} placeholder="https://…"
+                className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"/>
+              {form.imageUrl && <img src={form.imageUrl} alt="" className="mt-2 h-20 w-full object-cover rounded-xl" onError={e=>{e.target.style.display='none'}}/>}
+            </div>
+            {/* Excerpt */}
+            <div className="md:col-span-2">
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Excerpt (shown in listing)</label>
+              <textarea value={form.excerpt} onChange={ch('excerpt')} rows={2} maxLength={300}
+                placeholder="Brief summary shown in article cards…"
+                className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 resize-none"/>
+            </div>
+            {/* Tags */}
+            <div className="md:col-span-2">
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Tags (comma-separated)</label>
+              <input value={form.tags} onChange={ch('tags')} placeholder="Indian Railways, Safety, Innovation"
+                className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"/>
+            </div>
+            {/* Content */}
+            <div className="md:col-span-2">
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Full Content (HTML)</label>
+              <div className="rounded-xl overflow-hidden border border-gray-700">
+                <RichToolbar textareaRef={contentRef}/>
+                <textarea ref={contentRef} value={form.content} onChange={ch('content')} rows={14}
+                  placeholder="<h2>Section Heading</h2>&#10;<p>Article content...</p>"
+                  className="w-full px-3 py-2.5 bg-gray-900 border-0 text-sm text-white font-mono focus:outline-none resize-y"
+                  onInput={e => setForm(p => ({ ...p, content: e.target.value }))}/>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={saving}
+              className="flex items-center gap-2 px-6 py-2.5 brand-gradient text-white font-bold rounded-xl text-sm hover:opacity-90 disabled:opacity-60">
+              {saving ? <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"/> : <CheckCircle className="h-4 w-4"/>}
+              {saving ? 'Saving…' : initial ? 'Update Article' : 'Publish Article'}
+            </button>
+            {form.status === 'DRAFT' && (
+              <button type="button" onClick={() => onSave({ ...form, status: 'PUBLISHED' })} disabled={saving}
+                className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white font-bold rounded-xl text-sm hover:bg-green-700 disabled:opacity-60">
+                <Globe className="h-4 w-4"/>Publish Now
+              </button>
+            )}
+            <button type="button" onClick={onCancel}
+              className="px-5 py-2.5 bg-gray-700 text-gray-300 rounded-xl text-sm font-semibold hover:bg-gray-600 transition-colors">
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+    </motion.div>
+  );
+};
+
+/* ── Main AdminNews ─────────────────────────────────────────────────────── */
+const AdminNews = () => {
+  const { toast } = useToast();
+  const [showForm, setShowForm] = useState(false);
+  const [editing,  setEditing]  = useState(null);
+  const [search,   setSearch]   = useState('');
+
+  const { items, loading, refetch } = usePaginated(newsApi.list, { size: 50 });
+  const [create, { loading: creating }] = useMutation(newsApi.create);
+  const [update, { loading: updating }] = useMutation(newsApi.update);
+  const [remove]                        = useMutation(newsApi.delete);
+
+  const handleSave = async (form) => {
+    const data = {
+      ...form,
+      tags: typeof form.tags === 'string'
+        ? form.tags.split(',').map(t => t.trim()).filter(Boolean)
+        : form.tags || [],
+    };
+    const res = editing
+      ? await update(editing.id, data)
+      : await create(data);
+    if (res.error) { toast({ title: 'Failed', description: res.error, variant: 'destructive' }); return; }
+    toast({ title: editing ? '✓ Article updated' : '✓ Article published' });
+    setShowForm(false); setEditing(null); refetch();
+  };
+
+  const handleDelete = async (id, title) => {
+    if (!window.confirm(`Delete "${title}"?`)) return;
+    await remove(id);
+    toast({ title: '✓ Article deleted' });
+    refetch();
+  };
+
+  const filtered = items.filter(a =>
+    !search || a.title?.toLowerCase().includes(search.toLowerCase()) || a.category?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const STATUS_COLORS = { PUBLISHED: 'bg-green-100 text-green-700', DRAFT: 'bg-yellow-100 text-yellow-700', ARCHIVED: 'bg-gray-100 text-gray-500' };
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold text-white">News & Articles</h1>
+          <p className="text-gray-400 text-sm mt-0.5">{items.length} articles · accessible by Admin & Editor roles</p>
+        </div>
+        <button onClick={() => { setShowForm(f=>!f); setEditing(null); }}
+          className="flex items-center gap-2 px-4 py-2 brand-gradient text-white font-bold rounded-xl text-sm hover:opacity-90">
+          <Plus className="h-4 w-4"/>{showForm ? 'Cancel' : 'Write Article'}
+        </button>
+      </div>
+
+      {/* Search */}
+      <div className="relative mb-5">
+        <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400"/>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search articles…"
+          className="pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 w-64 transition-colors"/>
+      </div>
+
+      <AnimatePresence>
+        {(showForm || editing) && (
+          <ArticleForm
+            initial={editing}
+            onSave={handleSave}
+            onCancel={() => { setShowForm(false); setEditing(null); }}
+            saving={creating || updating}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Table */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[700px]">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                {['Article', 'Category', 'Status', 'Author', 'Views', 'Date', 'Actions'].map(h => (
+                  <th key={h} className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading
+                ? [...Array(4)].map((_,i) => (
+                    <tr key={i} className="border-b border-gray-50">
+                      {[...Array(7)].map((_,j) => <td key={j} className="px-4 py-3"><div className="h-4 bg-gray-100 animate-pulse rounded w-24"/></td>)}
+                    </tr>
+                  ))
+                : filtered.map(a => (
+                    <tr key={a.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors group">
+                      <td className="px-4 py-3 max-w-xs">
+                        <p className="font-semibold text-gray-900 text-xs leading-snug line-clamp-2">{a.title}</p>
+                        <p className="text-[10px] text-gray-400 font-mono mt-0.5">/{a.slug}</p>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{a.category}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${STATUS_COLORS[a.status] || 'bg-gray-100 text-gray-500'}`}>
+                          {a.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500">{a.authorName || '—'}</td>
+                      <td className="px-4 py-3 text-xs text-gray-500">{a.viewCount || 0}</td>
+                      <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
+                        {a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}) : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => { setEditing(a); setShowForm(false); }}
+                            className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" title="Edit">
+                            <Edit2 className="h-3.5 w-3.5"/>
+                          </button>
+                          <a href={`/news/${a.slug}`} target="_blank" rel="noopener noreferrer"
+                            className="p-1.5 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 transition-colors" title="View">
+                            <Eye className="h-3.5 w-3.5"/>
+                          </a>
+                          <button onClick={() => handleDelete(a.id, a.title)}
+                            className="p-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors" title="Delete">
+                            <Trash2 className="h-3.5 w-3.5"/>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+              }
+            </tbody>
+          </table>
+        </div>
+        {filtered.length === 0 && !loading && (
+          <div className="text-center py-16 text-gray-400">
+            <Newspaper className="h-12 w-12 mx-auto mb-3 opacity-20"/>
+            <p className="font-semibold">No articles yet</p>
+            <p className="text-sm mt-1">Click "Write Article" to create your first news post</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default AdminNews;
