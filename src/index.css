@@ -1,3 +1,14 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
@@ -523,3 +534,106 @@ code, pre, kbd, .font-mono {
 .prose-navgrow p { line-height: 1.8; margin-bottom: 1em; }
 .prose-navgrow h2 { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; }
 .prose-navgrow blockquote { font-style: italic; border-left: 4px solid #2563eb; padding: 1rem 1.5rem; background: #eff6ff; border-radius: 0 0.75rem 0.75rem 0; }
+
+/* ── Premium animations added in v1.0 Final ─────────────────────────────────
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/* Smooth page transitions */
+.page-enter { animation: pageEnter 0.3s ease-out forwards; }
+@keyframes pageEnter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Glass morphism card */
+.glass-card-premium {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
+}
+
+/* Premium gradient border */
+.gradient-border {
+  position: relative;
+  background: white;
+  border-radius: 16px;
+}
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #2563eb, #d97706, #2563eb);
+  background-size: 200% 200%;
+  animation: gradientShift 3s ease infinite;
+  z-index: -1;
+}
+
+/* Shine effect on hover */
+.shine-hover {
+  position: relative;
+  overflow: hidden;
+}
+.shine-hover::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -75%;
+  width: 50%;
+  height: 200%;
+  background: linear-gradient(to right, transparent, rgba(255,255,255,0.25), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.6s ease;
+}
+.shine-hover:hover::after { left: 125%; }
+
+/* Scrollbar hide utility */
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+/* Text gradient variants */
+.gradient-text-gold {
+  background: linear-gradient(135deg, #d97706, #f59e0b, #d97706);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.gradient-text-royal {
+  background: linear-gradient(135deg, #1d4ed8, #7c3aed);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Hero metrics card hover */
+@keyframes float-up {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.float-animate { animation: float-up 3s ease-in-out infinite; }
+
+/* Nav active indicator */
+.nav-active-dot {
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: #2563eb;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Brand pulse ring */
+@keyframes brand-ping {
+  0% { transform: scale(1); opacity: 0.3; }
+  75%, 100% { transform: scale(2.2); opacity: 0; }
+}
+.brand-ping { animation: brand-ping 2.5s cubic-bezier(0, 0, 0.2, 1) infinite; }
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite;
+}

@@ -1,7 +1,19 @@
-import React, { useEffect } from 'react';
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
+import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Calendar, User, Tag, Eye, Share2, Clock, ChevronRight, Newspaper } from 'lucide-react';
+import { ArrowLeft, Calendar, User, Tag, Eye, Share2, Clock, ChevronRight, Newspaper, Check } from 'lucide-react';
+import { sanitizeHtml } from '@/lib/sanitize';
 import { useApi } from '@/hooks/useApi';
 import { newsApi } from '@/lib/api';
 import useSeo from '@/hooks/useSeo';
@@ -96,13 +108,20 @@ const NewsDetailPage = () => {
     ? Math.max(1, Math.ceil((article.content?.replace(/<[^>]+>/g,'').length || 0) / 200))
     : 1;
 
+  const [copied, setCopied] = useState(false);
   const handleShare = async () => {
+    // Prefer native share sheet on mobile
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: article?.title, url: window.location.href });
+        return;
+      } catch { /* user cancelled — fall through to copy */ }
+    }
     try {
       await navigator.clipboard.writeText(window.location.href);
-      alert('Link copied to clipboard!');
-    } catch {
-      if (navigator.share) navigator.share({ title: article?.title, url: window.location.href });
-    }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    } catch { /* clipboard unavailable */ }
   };
 
   if (loading) return (
@@ -151,7 +170,7 @@ const NewsDetailPage = () => {
         {article.imageUrl && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             className="rounded-3xl overflow-hidden mb-8 shadow-xl aspect-[16/7]">
-            <img src={article.imageUrl} alt={article.title}
+            <img loading="lazy" decoding="async" src={article.imageUrl} alt={article.title}
               className="w-full h-full object-cover"
               onError={e => { e.target.src = '/Railway_Infra.jpg'; }} />
           </motion.div>
@@ -215,7 +234,7 @@ const NewsDetailPage = () => {
             prose-blockquote:bg-blue-50 prose-blockquote:rounded-r-xl
             prose-blockquote:px-5 prose-blockquote:py-3 prose-blockquote:italic
             prose-blockquote:text-blue-800 prose-blockquote:not-italic"
-          dangerouslySetInnerHTML={{ __html: article.content || article.excerpt || '' }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(article.content || article.excerpt || '') }}
         />
 
         {/* Share + Back */}
@@ -225,8 +244,10 @@ const NewsDetailPage = () => {
             <ArrowLeft className="h-4 w-4" />Browse All Articles
           </Link>
           <button onClick={handleShare}
-            className="flex items-center gap-2 px-5 py-2.5 brand-gradient text-white font-bold rounded-xl text-sm hover:opacity-90 transition-opacity">
-            <Share2 className="h-4 w-4" />Share This Article
+            className={`flex items-center gap-2 px-5 py-2.5 font-bold rounded-xl text-sm transition-all ${
+              copied ? 'bg-green-600 text-white' : 'brand-gradient text-white hover:opacity-90'
+            }`}>
+            {copied ? <><Check className="h-4 w-4" />Link Copied!</> : <><Share2 className="h-4 w-4" />Share This Article</>}
           </button>
         </div>
       </article>

@@ -1,3 +1,8 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 · navgrow.org · info@navgrow.org
+ * Unauthorised reproduction, modification or distribution is strictly prohibited.
+ */
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { newsletterApi } from '@/lib/api';
@@ -65,7 +70,7 @@ const Footer = () => {
                     }} className="flex gap-2">
                     <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="your@email.com"
                       className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors" />
-                    <button type="submit" disabled={subLoading} className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors shrink-0 disabled:opacity-60">
+                    <button type="submit" aria-label="Subscribe to newsletter" disabled={subLoading} className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors shrink-0 disabled:opacity-60">
                       {subLoading ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin block"/> : <Send className="h-4 w-4" />}
                     </button>
                   </form>

@@ -1,39 +1,54 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Link, Outlet, useLocation, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard, Package, ShoppingCart, MessageSquare, FileText,
   Users, Newspaper, Image, Briefcase, Tag, ChevronRight, Bell, Settings,
-  TrendingUp, AlertCircle, CheckCircle, Clock, BarChart2
-} from 'lucide-react';
+  TrendingUp, AlertCircle, CheckCircle, Clock, BarChart2, ClipboardList } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useApi } from '@/hooks/useApi';
 import { analyticsApi } from '@/lib/api';
 
 const NAV_ITEMS = [
-  { path: '/admin',            label: 'Dashboard',     icon: LayoutDashboard, exact: true, group: 'Overview' },
-  { path: '/admin/orders',     label: 'Orders',        icon: ShoppingCart,                group: 'Commerce' },
-  { path: '/admin/products',   label: 'Products',      icon: Package,                     group: 'Commerce' },
-  { path: '/admin/quotes',     label: 'Quote Requests', icon: FileText,                   group: 'Commerce' },
-  { path: '/admin/contacts',   label: 'Messages',      icon: MessageSquare,               group: 'CRM' },
-  { path: '/admin/users',      label: 'Users',         icon: Users,                       group: 'CRM' },
-  { path: '/admin/news',       label: 'News',          icon: Newspaper,                   group: 'Content' },
-  { path: '/admin/projects',   label: 'Projects',      icon: Image,                       group: 'Content' },
-  { path: '/admin/jobs',       label: 'Careers',       icon: Briefcase,                   group: 'Content' },
-  { path: '/admin/tenders',    label: 'Tenders',       icon: Tag,                         group: 'Content' },
-  { path: '/admin/gallery',    label: 'Gallery',       icon: Image,                       group: 'Content' },
-  { path: '/admin/news',        label: 'News & Posts',  icon: Newspaper,                   group: 'Content' },
-  { path: '/admin/coupons',     label: 'Coupons',       icon: Tag,                         group: 'Commerce' },
-  { path: '/admin/settings',   label: 'Site Settings', icon: Settings,                    group: 'System' },
+  // Overview
+  { path: '/admin',           label: 'Dashboard',      icon: LayoutDashboard, exact: true, group: 'Overview' },
+  // Commerce
+  { path: '/admin/orders',    label: 'Orders',         icon: ShoppingCart,                group: 'Commerce' },
+  { path: '/admin/products',  label: 'Products',       icon: Package,                     group: 'Commerce' },
+  { path: '/admin/quotes',    label: 'Quote Requests', icon: FileText,                    group: 'Commerce' },
+  { path: '/admin/rfqs',      label: 'RFQ Pipeline',   icon: ClipboardList,               group: 'Commerce' },
+  { path: '/admin/coupons',   label: 'Coupons',        icon: Tag,                         group: 'Commerce' },
+  // CRM
+  { path: '/admin/contacts',  label: 'Messages',       icon: MessageSquare,               group: 'CRM' },
+  { path: '/admin/users',     label: 'Users',          icon: Users,                       group: 'CRM' },
+  // Content
+  { path: '/admin/news',      label: 'News & Posts',   icon: Newspaper,                   group: 'Content' },
+  { path: '/admin/projects',  label: 'Projects',       icon: Image,                       group: 'Content' },
+  { path: '/admin/gallery',   label: 'Gallery',        icon: Image,                       group: 'Content' },
+  { path: '/admin/jobs',      label: 'Careers / Jobs', icon: Briefcase,                   group: 'Content' },
+  { path: '/admin/tenders',   label: 'Tenders',        icon: Tag,                         group: 'Content' },
+  // System
+  { path: '/admin/settings',  label: 'Site Settings',  icon: Settings,                    group: 'System' },
+  { path: '/admin/audit',     label: 'Audit Log',      icon: BarChart2,                   group: 'System' },
 ];
 
 const NAV_GROUPS = ['Overview', 'Commerce', 'CRM', 'Content', 'System'];
 
 export const AdminLayout = () => {
-  const { isAdmin, isManager, user } = useAuth();
+  const { isAdmin, isManager, isEditor, user } = useAuth();
   const location = useLocation();
 
-  const { isEditor } = useAuth();
   if (!isAdmin && !isManager && !isEditor) return <Navigate to="/" replace />;
 
   return (
@@ -43,7 +58,7 @@ export const AdminLayout = () => {
         {/* Logo */}
         <div className="p-5 border-b border-gray-800">
           <Link to="/">
-            <img src="/ng_white_logo.png" alt="Navgrow" className="h-10 w-auto object-contain" />
+            <img loading="lazy" decoding="async" src="/ng_white_logo.png" alt="Navgrow" className="h-10 w-auto object-contain" />
           </Link>
           <p className="text-xs text-gray-500 mt-2">Admin Console</p>
         </div>
@@ -186,7 +201,7 @@ const AdminHome = () => {
             {[
               { to: '/admin/products', label: 'Add Product',  icon: Package,   color: 'bg-blue-50 text-blue-600' },
               { to: '/admin/news',     label: 'Write News',   icon: Newspaper, color: 'bg-amber-50 text-amber-600' },
-              { to: '/admin/tenders',  label: 'Add Tender',   icon: Tag,       color: 'bg-violet-50 text-violet-600' },
+              { to: '/admin/tenders',  label: 'Tenders',      icon: Tag,       color: 'bg-violet-50 text-violet-600' },
               { to: '/admin/contacts', label: 'View Messages',icon: MessageSquare, color: 'bg-green-50 text-green-600' },
               { to: '/admin/quotes',   label: 'View Quotes',  icon: FileText,  color: 'bg-rose-50 text-rose-600' },
               { to: '/admin/jobs',     label: 'Manage Jobs',  icon: Briefcase, color: 'bg-cyan-50 text-cyan-600' },

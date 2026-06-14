@@ -1,3 +1,14 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -259,7 +270,7 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
   const [tab,          setTab]          = useState(defaultTab);
   const [loginMethod,  setLoginMethod]  = useState('email'); // 'email' | 'mobile' | 'otp'
   const [form,         setForm]         = useState({
-    name: '', email: '', phone: '', password: '', confirm: '',
+    name: '', email: '', phone: '', password: '', confirm: '', rememberMe: false,
   });
   const [errors,       setErrors]       = useState({});
   const [success,      setSuccess]      = useState('');
@@ -268,6 +279,16 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
   const [forgotLoading,setForgotLoading]= useState(false);
 
   // Reset state when modal opens
+  // Lock body scroll when modal is open so modal stays centred while page behind is frozen
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [open]);
+
   useEffect(() => {
     if (open) {
       setTab(defaultTab);
@@ -551,6 +572,18 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
                             </motion.div>
                           )}
 
+                          {/* Remember Me */}
+                          <label className="flex items-center gap-2.5 cursor-pointer group py-1">
+                            <input
+                              type="checkbox"
+                              checked={form.rememberMe || false}
+                              onChange={e => setForm(f => ({ ...f, rememberMe: e.target.checked }))}
+                              className="w-4 h-4 accent-blue-600 rounded cursor-pointer"
+                            />
+                            <span className="text-xs text-gray-500 group-hover:text-gray-700 transition-colors select-none">
+                              Remember me <span className="text-gray-400 text-[11px]">(stay logged in for 7 days)</span>
+                            </span>
+                          </label>
                           <button type="submit" disabled={loading}
                             className="w-full py-3.5 btn-gold rounded-xl font-bold text-base flex items-center justify-center gap-2 disabled:opacity-60 transition-all">
                             {loading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}

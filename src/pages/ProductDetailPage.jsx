@@ -1,4 +1,9 @@
 /**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 · navgrow.org · info@navgrow.org
+ * Unauthorised reproduction, modification or distribution is strictly prohibited.
+ */
+/**
  * Navgrow Engineering — Product Detail Page
  * Route: /shop/:slug
  * Conversion-focused, Blue+Gold theme, full eCommerce experience
@@ -11,14 +16,15 @@ import {
   Shield, Truck, RotateCcw, Award, CheckCircle, Share2,
   MessageCircle, Phone, ZoomIn, Package, AlertCircle,
   ThumbsUp, ThumbsDown, Send, User, Clock, Tag,
-  ChevronDown, ChevronUp, ArrowLeft, Copy, Check,
-} from 'lucide-react';
+  ChevronDown, ChevronUp, ArrowLeft, Copy, Check, FileText } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
+import { useRfq } from '@/context/RfqContext';
 import { useAuth } from '@/context/AuthContext';
 import { productsApi } from '@/lib/api';
 import { getProductBySlug, getRelated } from '@/lib/productData';
 import useSeo from '@/hooks/useSeo';
 import CheckoutModal from '@/components/CheckoutModal';
+import BulkOrderForm from '@/components/BulkOrderForm';
 
 /* ─── helpers ────────────────────────────────────────────────────────────── */
 const fmt     = (n) => '₹' + Number(n).toLocaleString('en-IN');
@@ -113,7 +119,9 @@ const ReviewCard = ({ review }) => (
 
 /* ─── Write review form ─────────────────────────────────────────────────── */
 const ReviewForm = ({ productId, productName, onSubmit }) => {
-  const { isLoggedIn } = useAuth();
+  // FIX: isLoggedIn must be in ReviewForm's own scope — it is a module-level component
+  const { isLoggedIn, user } = useAuth();
+
   const [rating,  setRating]  = useState(0);
   const [title,   setTitle]   = useState('');
   const [body,    setBody]    = useState('');
@@ -207,7 +215,7 @@ const ReviewForm = ({ productId, productName, onSubmit }) => {
         </div>
       )}
 
-      <button onClick={submit} disabled={loading}
+      <button aria-label="Send" onClick={submit} disabled={loading}
         className="w-full py-3 btn-gold rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50">
         {loading
           ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"/>
@@ -262,11 +270,53 @@ const ProductDetailPage = () => {
   const { slug }     = useParams();
   // navigate kept for future routing
   const { addItem, items, toggleWishlist, inWishlist } = useCart();
+  const { addToRfq, inRfq } = useRfq();
   const { isLoggedIn } = useAuth();
 
-  /* ── product data (from local lib — fast, no API call for catalogue) ── */
-  const product = getProductBySlug(slug);
-  const related = product ? getRelated(product, 4) : [];
+  /* ── product data: try local lib first (fast), then fall back to API ── */
+  const staticProduct = getProductBySlug(slug);
+  const [apiProduct, setApiProduct] = React.useState(null);
+  const [apiLoading, setApiLoading] = React.useState(false);
+
+  // If slug not in static catalogue, try fetching from API
+  React.useEffect(() => {
+    if (!staticProduct && slug) {
+      setApiLoading(true);
+      productsApi.get(slug)
+        .then(({ data }) => {
+          // Normalize API product to match static shape
+          setApiProduct({
+            id: data.id,
+            slug: data.slug || slug,
+            cat: data.category,
+            name: data.name,
+            tagline: data.tagline || '',
+            price: Number(data.price),
+            mrp: data.mrp ? Number(data.mrp) : Number(data.price),
+            rating: data.avgRating || data.rating || 0,
+            reviews: data.reviewCount || 0,
+            badge: data.badge || '',
+            image: data.imageUrl || '',
+            images: data.imageUrl ? [data.imageUrl] : [],
+            summary: data.description || '',
+            desc: data.description || '',
+            inStock: (data.stockQty || 0) > 0,
+            stockQty: data.stockQty || 0,
+            features: [],
+            specs: {},
+            benefits: [],
+            applications: [],
+            warranty: '',
+            gstRate: data.gstRate || 18,
+          });
+        })
+        .catch(() => {})
+        .finally(() => setApiLoading(false));
+    }
+  }, [slug, staticProduct]);
+
+  const product = staticProduct || apiProduct;
+  const related = staticProduct ? getRelated(staticProduct, 4) : [];
 
   /* ── state ── */
   const [imgIdx,      setImgIdx]    = useState(0);
@@ -280,6 +330,7 @@ const ProductDetailPage = () => {
   const [addedAnim,   setAddedAnim] = useState(false);
   const [pinchZoom,   setPinchZoom] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const stickyRef = useRef(null);
 
   /* ── SEO ── */
@@ -315,12 +366,31 @@ const ProductDetailPage = () => {
     schema: productSchema,
   });
 
-  /* ── scroll to top on mount ── */
-  useEffect(() => { window.scrollTo(0,0); }, [slug]);
+  /* ── scroll to top on mount + track view ── */
+  useEffect(() => {
+    window.scrollTo(0,0);
+    // Track recently viewed — same function used in ShopPage
+    if (product) {
+      try {
+        const key = 'ng_recently_viewed';
+        const prev = JSON.parse(localStorage.getItem(key) || '[]');
+        const updated = [
+          { id: product.id, name: product.name, price: product.price,
+            image: product.image, slug: product.slug || product.id, cat: product.cat },
+          ...prev.filter(p => p.id !== product.id)
+        ].slice(0, 6);
+        localStorage.setItem(key, JSON.stringify(updated));
+      } catch {}
+    }
+  }, [slug, product?.id]);
 
   /* ── load reviews from backend ── */
   useEffect(() => {
     if (!product) return;
+    // Only load reviews if product.id looks like a UUID (admin-added products)
+    // Static products have short string ids and won't have backend reviews
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(product.id);
+    if (!isUUID) { setRevLoad(false); return; }
     setRevLoad(true);
     productsApi.reviews(product.id)
       .then(({ data }) => {
@@ -336,13 +406,14 @@ const ProductDetailPage = () => {
 
   /* ── handlers ── */
   const handleAdd = useCallback(() => {
-    for (let i=0; i<qty; i++) addItem({ id:product.id, name:product.name, price:product.price, image:product.image });
+    addItem({ id:product.id, name:product.name, price:product.price, image:product.image, qty });
     setAddedAnim(true);
     setTimeout(() => setAddedAnim(false), 1800);
   }, [product, qty, addItem]);
 
   const handleBuyNow = useCallback(() => {
-    for (let i=0; i<qty; i++) addItem({ id:product.id, name:product.name, price:product.price, image:product.image });
+    // Add item once with qty property rather than looping (loop causes multiple cart entries)
+    addItem({ id:product.id, name:product.name, price:product.price, image:product.image, qty });
     setCheckoutOpen(true);
   }, [product, qty, addItem]);
 
@@ -464,7 +535,7 @@ const ProductDetailPage = () => {
                 {images.map((img, i) => (
                   <button key={i} onClick={() => setImgIdx(i)}
                     className={`shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${i===imgIdx?'border-amber-400 shadow-md shadow-amber-200':'border-gray-200 hover:border-blue-300'}`}>
-                    <img src={img} alt="" className="w-full h-full object-cover"
+                    <img loading="lazy" decoding="async" src={img} alt="" className="w-full h-full object-cover"
                       onError={e=>{e.target.onerror=null;e.target.src=product.image;}}/>
                   </button>
                 ))}
@@ -516,6 +587,11 @@ const ProductDetailPage = () => {
                 ? <span className="flex items-center gap-1 text-green-600 text-sm font-bold"><CheckCircle className="h-4 w-4"/>In Stock</span>
                 : <span className="flex items-center gap-1 text-red-500 text-sm font-bold"><AlertCircle className="h-4 w-4"/>Out of Stock</span>
               }
+              {product.inStock !== false && product.stockQty > 0 && product.stockQty <= 10 && (
+                <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full animate-pulse">
+                  ⚡ Only {product.stockQty} left!
+                </span>
+              )}
             </div>
 
             {/* Summary */}
@@ -606,6 +682,17 @@ const ProductDetailPage = () => {
                 className="w-full py-4 rounded-2xl font-bold text-base btn-gold flex items-center justify-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed">
                 <Zap className="h-5 w-5"/>
                 Buy Now — Instant Checkout
+              </button>
+
+              {/* B2B — Request for Quote */}
+              <button onClick={() => addToRfq(product, qty)}
+                className={`w-full py-3.5 rounded-2xl font-bold text-base border-2 transition-colors flex items-center justify-center gap-2.5 ${
+                  inRfq(product.id)
+                    ? 'border-green-400 bg-green-50 text-green-700'
+                    : 'border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-400'
+                }`}>
+                <FileText className="h-5 w-5"/>
+                {inRfq(product.id) ? 'Added to Quote List ✓' : 'Request for Quote (Bulk / B2B)'}
               </button>
 
               {/* WhatsApp quick enquiry */}
@@ -885,7 +972,7 @@ const ProductDetailPage = () => {
             <p className="font-extrabold text-gray-900 text-base leading-none">{fmt(product.price * qty)}</p>
             {d > 0 && <p className="text-xs text-green-600 font-semibold">{d}% OFF · Save {fmt(saved * qty)}</p>}
           </div>
-          <button onClick={handleAdd} disabled={!product.inStock}
+          <button aria-label="Add to cart" onClick={handleAdd} disabled={!product.inStock}
             className={`flex-1 py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${inCart?'bg-green-600 text-white':'bg-blue-900 text-white hover:bg-blue-800'} disabled:opacity-50`}>
             <ShoppingCart className="h-4 w-4"/>
             {inCart ? 'In Cart' : 'Add to Cart'}
@@ -900,6 +987,7 @@ const ProductDetailPage = () => {
       {/* Bottom spacing for sticky bar */}
       <div className="h-20 lg:h-0"/>
       <CheckoutModal open={checkoutOpen} onClose={() => setCheckoutOpen(false)} />
+      <BulkOrderForm product={product} open={bulkOpen} onClose={() => setBulkOpen(false)} />
 
     </div>
   );

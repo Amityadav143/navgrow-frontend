@@ -1,3 +1,14 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, MapPin, Calendar, User, Tag } from 'lucide-react';
@@ -29,7 +40,7 @@ const ProjectModal = ({ project, onClose }) => {
         >
           {/* Image */}
           <div className="relative h-64 overflow-hidden rounded-t-3xl">
-            <img
+            <img loading="lazy" decoding="async"
               src={`/${project.image}`} onError={(e) => { e.target.onerror=null; e.target.src='/Railway_Infra.jpg'; }}
               alt={project.title}
               className="w-full h-full object-cover"

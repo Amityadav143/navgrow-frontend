@@ -1,3 +1,14 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Package, Truck, CheckCircle, Clock, XCircle, MapPin } from 'lucide-react';
@@ -19,7 +30,7 @@ const OrderTrackPage = () => {
     description: 'Track your Navgrow Engineering order — enter your order number to get real-time delivery status, courier details, and estimated delivery date for safety equipment and engineering products.',
     path: '/track-order',
     keywords: 'track engineering product order, safety equipment delivery tracking, Navgrow order tracking',
-    path: '/track-order' });
+  });
   const [orderNum, setOrderNum] = useState('');
   const [order, setOrder]       = useState(null);
   const [loading, setLoading]   = useState(false);

@@ -1,9 +1,15 @@
-import React, { useState } from 'react';
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 · navgrow.org · info@navgrow.org
+ * Unauthorised reproduction, modification or distribution is strictly prohibited.
+ */
+import React, { useState, useEffect } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, ChevronDown, Phone, ShoppingCart, Search, Heart, User, LogOut, Settings, Package } from 'lucide-react';
+import { Menu, X, ChevronDown, Phone, ShoppingCart, Search, Heart, User, LogOut, Settings, Package, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCart } from '@/context/CartContext';
+import { useRfq } from '@/context/RfqContext';
 import { useAuth } from '@/context/AuthContext';
 import AuthModal from '@/components/AuthModal';
 
@@ -63,7 +69,7 @@ const UserMenu = ({ dark }) => {
 
   return (
     <div className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-      <button className={cn('flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-colors',
+      <button aria-label="Expand" className={cn('flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-colors',
         dark ? 'text-white hover:bg-white/15' : 'text-gray-700 hover:bg-gray-100')}>
         <div className="w-7 h-7 rounded-full brand-gradient flex items-center justify-center text-white text-xs font-bold">
           {user?.email?.[0]?.toUpperCase() || 'U'}
@@ -107,11 +113,16 @@ const UserMenu = ({ dark }) => {
 };
 
 const Navbar = ({ scrolled, onSearchOpen }) => {
+  // useLocation MUST be declared before any useEffect that uses location
+  const location = useLocation();
   const [mobileOpen, setMobileOpen]     = useState(false);
+
+  // Close mobile menu whenever route changes
+  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
   const [servicesOpen, setServicesOpen] = useState(false);
   const [authOpen, setAuthOpen]         = useState(false);
-  const location  = useLocation();
   const { totalItems, setCartOpen } = useCart();
+  const { totalItems: rfqCount, setDrawerOpen: setRfqOpen } = useRfq();
   const onDark = false;
   // Promo note shown at top
 
@@ -122,7 +133,7 @@ const Navbar = ({ scrolled, onSearchOpen }) => {
           <div className="flex items-center justify-between h-[70px]">
 
             <Link to="/" onClick={() => setMobileOpen(false)} className="shrink-0 flex items-center">
-              <img key={onDark ? 'white' : 'color'} src={onDark ? '/ng_white_logo.png' : '/ng_logo.png'}
+              <img loading="lazy" decoding="async" key={onDark ? 'white' : 'color'} src={onDark ? '/ng_white_logo.png' : '/ng_logo.png'}
                 alt="Navgrow Engineering Service" className="h-16 md:h-24 w-auto object-contain" style={{ maxWidth: 210 }} />
             </Link>
 
@@ -131,7 +142,7 @@ const Navbar = ({ scrolled, onSearchOpen }) => {
               {NAV.map((link) =>
                 link.sub ? (
                   <div key={link.path} className="relative" onMouseEnter={() => setServicesOpen(true)} onMouseLeave={() => setServicesOpen(false)}>
-                    <button className={cn('flex items-center gap-1 px-3 py-2 rounded-xl text-sm font-semibold transition-all',
+                    <button aria-label="Expand" className={cn('flex items-center gap-1 px-3 py-2 rounded-xl text-sm font-semibold transition-all',
                       location.pathname.startsWith('/services')
                         ? onDark ? 'text-white bg-white/15' : 'text-blue-700 bg-blue-50 border-b-2 border-amber-400'
                         : onDark ? 'text-white/85 hover:text-white hover:bg-white/15' : 'text-gray-700 hover:text-blue-600 hover:bg-blue-50')}>
@@ -178,6 +189,17 @@ const Navbar = ({ scrolled, onSearchOpen }) => {
 
               <WishlistBtn dark={onDark} />
 
+              {/* RFQ — Request for Quote basket */}
+              <button onClick={() => setRfqOpen(true)} aria-label="Request for Quote"
+                className={cn('relative p-2.5 rounded-xl transition-colors', onDark ? 'text-white hover:bg-white/15' : 'text-gray-700 hover:bg-gray-100')}>
+                <FileText className="h-5 w-5" />
+                {rfqCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
+                    {rfqCount > 9 ? '9+' : rfqCount}
+                  </span>
+                )}
+              </button>
+
               {/* Cart */}
               <button onClick={() => setCartOpen(true)} aria-label="Cart"
                 className={cn('relative p-2.5 rounded-xl transition-colors', onDark ? 'text-white hover:bg-white/15' : 'text-gray-700 hover:bg-gray-100')}>
@@ -198,6 +220,11 @@ const Navbar = ({ scrolled, onSearchOpen }) => {
 
             {/* Mobile right */}
             <div className="lg:hidden flex items-center gap-1">
+              <button onClick={() => setRfqOpen(true)} aria-label="Request for Quote"
+                className={cn('relative p-2 rounded-lg', onDark ? 'text-white' : 'text-gray-700')}>
+                <FileText className="h-5 w-5" />
+                {rfqCount > 0 && <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center">{rfqCount}</span>}
+              </button>
               <button onClick={() => setCartOpen(true)}
                 className={cn('relative p-2 rounded-lg', onDark ? 'text-white' : 'text-gray-700')}>
                 <ShoppingCart className="h-5 w-5" />

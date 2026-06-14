@@ -1,3 +1,14 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
 import React from 'react';
 import { motion } from 'framer-motion';
 import { MapPin, Phone, Mail, Clock, MessageCircle } from 'lucide-react';
@@ -31,7 +42,7 @@ const ContactPage = () => {
     description: 'Contact Navgrow Engineering Service — call +91 89270 70972, email info@navgrow.org, or visit Siliguri, West Bengal. Get a project quote for railway, industrial, civil, or government engineering work.',
     path: '/contact',
     keywords: 'contact engineering company Siliguri, get project quote engineering, railway contractor contact India, engineering enquiry West Bengal, Navgrow Engineering contact',
-    description: 'Get in touch with Navgrow Engineering Service. Call +91 89270 70972, email info@navgrow.org, or visit our office in Siliguri, West Bengal.', path: '/contact' });
+  });
   return (
   <>
     {/* Hero */}

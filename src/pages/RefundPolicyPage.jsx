@@ -1,3 +1,14 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
 import React from 'react';
 import useSeo from '@/hooks/useSeo';
 import { motion } from 'framer-motion';
@@ -15,7 +26,13 @@ const steps = [
 const eligible = ['Defective or damaged products on arrival', 'Item significantly different from website description', 'Wrong item delivered', 'Missing parts or accessories from the package'];
 const notEligible = ['Customised or made-to-order products', 'Consumables that have been opened or used', 'Products damaged due to customer misuse or improper installation', 'Returns requested after 7 days of delivery', 'Products without original packaging', 'Service contracts once work has commenced'];
 
-const RefundPolicyPage = () => (
+const RefundPolicyPage = () => {
+  useSeo({
+    title: 'Refund & Cancellation Policy | Navgrow Engineering Shop',
+    description: 'Navgrow Engineering refund and cancellation policy for B2B shop orders. Return window, refund process, and terms for engineering products and safety equipment.',
+    path: '/refund-policy',
+  });
+  return (
   <>
     <PageHero
       chip={<><RotateCcw className="h-4 w-4" /> Policy</>}
@@ -94,6 +111,7 @@ const RefundPolicyPage = () => (
       </div>
     </section>
   </>
-);
+  );
+};
 
 export default RefundPolicyPage;

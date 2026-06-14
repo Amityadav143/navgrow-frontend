@@ -1,4 +1,17 @@
-import React, { useState, useRef } from 'react';
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
+import { sanitizeHtml } from '@/lib/sanitize';
+import { useConfirm } from '@/components/ConfirmDialog';
+import React, { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Edit2, Trash2, Newspaper, Search, CheckCircle,
@@ -57,7 +70,7 @@ const ArticleForm = ({ initial, onSave, onCancel, saving }) => {
     imageUrl: '', authorName: 'Navgrow Team', tags: '', status: 'DRAFT',
   });
   const [preview, setPreview] = useState(false);
-  const ch = key => e => setForm(p => ({ ...p, [key]: e.target.value }));
+  const ch = useCallback(key => e => setForm(p => ({ ...p, [key]: e.target.value })), []);
 
   const handleTitleChange = e => {
     const t = e.target.value;
@@ -85,12 +98,12 @@ const ArticleForm = ({ initial, onSave, onCancel, saving }) => {
 
       {preview ? (
         <div className="bg-white rounded-xl p-6">
-          {form.imageUrl && <img src={form.imageUrl} alt="" className="w-full h-48 object-cover rounded-xl mb-4"/>}
+          {form.imageUrl && <img loading="lazy" decoding="async" src={form.imageUrl} alt="" className="w-full h-48 object-cover rounded-xl mb-4"/>}
           <span className="text-xs font-bold text-blue-600 uppercase">{form.category}</span>
           <h2 className="text-2xl font-extrabold text-gray-900 mt-2 mb-3">{form.title || 'Article Title'}</h2>
           <p className="text-gray-500 mb-4 italic">{form.excerpt}</p>
           <div className="prose prose-sm max-w-none text-gray-700"
-            dangerouslySetInnerHTML={{ __html: form.content || '<p>Article content here…</p>' }}/>
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(form.content || '<p>Article content here…</p>') }}/>
         </div>
       ) : (
         <form onSubmit={e => { e.preventDefault(); onSave(form); }} className="space-y-4">
@@ -138,7 +151,7 @@ const ArticleForm = ({ initial, onSave, onCancel, saving }) => {
               <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Cover Image URL</label>
               <input value={form.imageUrl} onChange={ch('imageUrl')} placeholder="https://…"
                 className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"/>
-              {form.imageUrl && <img src={form.imageUrl} alt="" className="mt-2 h-20 w-full object-cover rounded-xl" onError={e=>{e.target.style.display='none'}}/>}
+              {form.imageUrl && <img loading="lazy" decoding="async" src={form.imageUrl} alt="" className="mt-2 h-20 w-full object-cover rounded-xl" onError={e=>{e.target.style.display='none'}}/>}
             </div>
             {/* Excerpt */}
             <div className="md:col-span-2">
@@ -191,6 +204,7 @@ const ArticleForm = ({ initial, onSave, onCancel, saving }) => {
 
 /* ── Main AdminNews ─────────────────────────────────────────────────────── */
 const AdminNews = () => {
+  const confirm = useConfirm();
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editing,  setEditing]  = useState(null);
@@ -217,7 +231,13 @@ const AdminNews = () => {
   };
 
   const handleDelete = async (id, title) => {
-    if (!window.confirm(`Delete "${title}"?`)) return;
+    const ok = await confirm({
+      title: 'Delete article?',
+      message: `"${title}" will be permanently deleted. This cannot be undone.`,
+      confirmText: 'Delete Article',
+      variant: 'danger',
+    });
+    if (!ok) return;
     await remove(id);
     toast({ title: '✓ Article deleted' });
     refetch();

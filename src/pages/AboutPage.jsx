@@ -1,3 +1,14 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
 import React from 'react';
 import { motion } from 'framer-motion';
 import { CheckCircle, Award, Zap, Users, ShieldCheck, TrendingUp } from 'lucide-react';
@@ -22,6 +33,12 @@ const values = [
 ];
 
 const AboutPage = () => {
+  useSeo({
+    title: 'About Navgrow Engineering | DPIIT Railway & Industrial Engineering Company',
+    description: 'About Navgrow Engineering Service Pvt. Ltd. — DPIIT-recognised, MSME-registered engineering company in Siliguri, West Bengal. Indian Railways contractor, industrial engineering, civil works.',
+    path: '/about',
+    keywords: 'about Navgrow Engineering, DPIIT startup Siliguri, MSME engineering company, railway contractor about, Navgrow history milestones',
+  });
   return (
     <>
       {/* Hero */}

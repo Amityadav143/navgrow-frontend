@@ -1,3 +1,14 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Star, Quote, ExternalLink } from 'lucide-react';
@@ -62,7 +73,7 @@ const TestimonialsSection = () => (
             transition={{ duration: 0.5, delay: i * 0.1 }}
           >
             <div className="h-44 overflow-hidden relative">
-              <img src={c.image} alt={c.project} onError={(e) => { e.target.onerror=null; e.target.style.display='none'; }}
+              <img loading="lazy" decoding="async" src={c.image} alt={c.project} onError={(e) => { e.target.onerror=null; e.target.style.display='none'; }}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 loading="lazy" decoding="async" />
               <div className="absolute inset-0 bg-gradient-to-t from-blue-950/80 to-transparent" />

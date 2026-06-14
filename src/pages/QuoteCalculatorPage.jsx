@@ -1,3 +1,8 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 · navgrow.org · info@navgrow.org
+ * Unauthorised reproduction, modification or distribution is strictly prohibited.
+ */
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -82,7 +87,7 @@ const QuoteCalculatorPage = () => {
     description: 'Get an instant cost estimate for your engineering project — railway infrastructure, industrial works, civil construction, government contracts, maintenance AMC. Free quote in 4 steps.',
     path: '/quote-calculator',
     keywords: 'engineering project quote calculator, railway project cost estimate, industrial engineering quote India, civil construction cost estimator, government contract bid estimate',
-    description: 'Estimate the cost of your engineering project with Navgrow\'s interactive quote calculator. Railway infrastructure, government contracts, maintenance, and more.', path: '/quote-calculator' });
+  });
 
   const [step,      setStep]      = useState(0);
   const [service,   setService]   = useState(null);
@@ -177,10 +182,14 @@ const QuoteCalculatorPage = () => {
         'Thank you,',
         form.name,
       ].filter(l => l !== null && l !== undefined).join('\n'));
-      window.location.href = `mailto:info@navgrow.org?subject=${subject}&body=${body}`;
-      setSubmitted(true);
-    } finally {
-      setSending(false);
+      try {
+        window.location.href = `mailto:info@navgrow.org?subject=${subject}&body=${body}`;
+        setSubmitted(true);
+      } catch {
+        setSendError('Unable to send. Please email directly: info@navgrow.org');
+      } finally {
+        setSending(false);
+      }
     }
   };
 

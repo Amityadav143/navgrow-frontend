@@ -1,6 +1,17 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Building2, Users, Award, Clock } from 'lucide-react';
+import { Building2, Users, Award, Clock, Percent } from 'lucide-react';
 import AnimatedCounter from '@/components/AnimatedCounter';
 
 const stats = [
@@ -13,6 +24,11 @@ const stats = [
     icon: Users, value: '5+', label: 'Major Clients',
     desc: 'Indian Railways, Wabtec & more',
     iconBg: 'from-amber-500 to-amber-700', accent: 'border-amber-400/30',
+  },
+  {
+    icon: Percent, value: '100 %', label: 'On-Time Delivery',
+    desc: 'Indian Railways, Wabtec & more',
+    iconBg: 'from-green-500 to-amber-700', accent: 'border-amber-400/30',
   },
   {
     icon: Award, value: '3', label: 'Gov. Registrations',
@@ -41,7 +57,7 @@ const StatsSection = () => (
     <div className="absolute bottom-0 right-1/4 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl" />
 
     <div className="container mx-auto px-4 relative z-10">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-5">
         {stats.map(({ icon: Icon, value, label, desc, iconBg, accent }, i) => (
           <motion.div
             key={label}

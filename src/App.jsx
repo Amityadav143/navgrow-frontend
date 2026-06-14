@@ -1,3 +1,14 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
 import React, { Suspense } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
@@ -32,9 +43,16 @@ const AdminOrders        = React.lazy(() => import('@/pages/admin/AdminOrders'))
 const AdminProducts      = React.lazy(() => import('@/pages/admin/AdminProducts'));
 const AdminContacts      = React.lazy(() => import('@/pages/admin/AdminContacts'));
 const AdminQuotes        = React.lazy(() => import('@/pages/admin/AdminQuotes'));
+const AdminRfqs          = React.lazy(() => import('@/pages/admin/AdminRfqs'));
 const AdminNews          = React.lazy(() => import('@/pages/admin/AdminNews'));
 const AdminCoupons       = React.lazy(() => import('@/pages/admin/AdminCoupons'));
 const EditorLayout       = React.lazy(() => import('@/pages/editor/EditorLayout'));
+const AdminUsers         = React.lazy(() => import('@/pages/admin/AdminUsers'));
+const AdminJobs          = React.lazy(() => import('@/pages/admin/AdminJobs'));
+const AdminAuditLog      = React.lazy(() => import('@/pages/admin/AdminAuditLog'));
+const AdminGallery       = React.lazy(() => import('@/pages/admin/AdminGallery'));
+const AdminProjects      = React.lazy(() => import('@/pages/admin/AdminProjects'));
+const AdminTenders       = React.lazy(() => import('@/pages/admin/AdminTenders'));
 const NewsDetailPage     = React.lazy(() => import('@/pages/NewsDetailPage'));
 
 const PageLoader = () => (
@@ -86,7 +104,7 @@ const PageLoader = () => (
           display:'flex',alignItems:'center',justifyContent:'center',
           boxShadow:'0 0 24px rgba(37,99,235,0.5),inset 0 0 12px rgba(30,58,138,0.8)',
         }}>
-          <img src="/ng_logo.png" alt="Navgrow"
+          <img loading="lazy" decoding="async" src="/ng_logo.png" alt="Navgrow"
             style={{width:'44px',height:'44px',objectFit:'contain',filter:'brightness(0) invert(1)',animation:'ng-pulse 2s ease-in-out infinite'}}
             onError={e=>{e.target.style.display='none';}}/>
         </div>
@@ -172,9 +190,16 @@ function App() {
           <Route path="products"element={<W><AdminProducts /></W>} />
           <Route path="contacts"element={<W><AdminContacts /></W>} />
           <Route path="quotes"  element={<W><AdminQuotes /></W>} />
+          <Route path="rfqs"    element={<W><AdminRfqs /></W>} />
           <Route path="news"    element={<W><AdminNews /></W>} />
           <Route path="coupons" element={<W><AdminCoupons /></W>} />
-          <Route path="settings" element={<W><AdminSettings /></W>} />
+          <Route path="settings"  element={<W><AdminSettings /></W>} />
+          <Route path="users"     element={<W><AdminUsers /></W>} />
+          <Route path="jobs"      element={<W><AdminJobs /></W>} />
+          <Route path="audit"     element={<W><AdminAuditLog /></W>} />
+          <Route path="gallery"   element={<W><AdminGallery /></W>} />
+          <Route path="projects"  element={<W><AdminProjects /></W>} />
+          <Route path="tenders"   element={<W><AdminTenders /></W>} />
         </Route>
 
         {/* ── Editor routes ── */}

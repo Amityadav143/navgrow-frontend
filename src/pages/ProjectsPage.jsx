@@ -1,4 +1,16 @@
-import React, { useState } from 'react';
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
+import React, { useState, useEffect } from 'react';
+import { projectsApi } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Filter, MapPin, Calendar, User, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -42,7 +54,29 @@ const ProjectsPage = () => {
   useSeo({ title: 'Projects', description: 'Portfolio of completed railway and government engineering projects by Navgrow — Indian Railways loco shed works, Wabtec storage solutions, and more.', path: '/projects' });
   const [active, setActive] = useState('All');
   const [selected, setSelected] = useState(null);
-  const visible = active === 'All' ? projects : projects.filter(p => p.category === active);
+  const [allProjects, setAllProjects] = useState(projects);
+
+  // Fetch live projects from API, fall back to static data
+  useEffect(() => {
+    projectsApi.list().then(res => {
+      const data = res.data?.content || (Array.isArray(res.data) ? res.data : null);
+      if (data && data.length > 0) {
+        setAllProjects(data.map(item => ({
+          id: item.id,
+          title: item.title || '',
+          category: item.category || 'Infrastructure',
+          location: item.location || 'Siliguri, West Bengal',
+          year: item.year || new Date().getFullYear().toString(),
+          client: item.client || '',
+          description: item.description || '',
+          image: (item.imageUrl || item.image || 'Railway_Infra.jpg').replace(/^\//,''),
+        })));
+      }
+    }).catch(() => {}); // silently fall back to static
+  }, []);
+
+  const projectCategories = ['All', ...Array.from(new Set(allProjects.map(p => p.category)))];
+  const visible = active === 'All' ? allProjects : allProjects.filter(p => p.category === active);
 
   return (
     <>
@@ -76,7 +110,7 @@ const ProjectsPage = () => {
             <div className="flex items-center gap-2 text-gray-500 mr-2">
               <Filter className="h-4 w-4" /> <span className="text-sm font-medium">Filter:</span>
             </div>
-            {categories.map(cat => (
+            {projectCategories.map(cat => (
               <button
                 key={cat}
                 onClick={() => setActive(cat)}
@@ -106,7 +140,7 @@ const ProjectsPage = () => {
                   onClick={() => setSelected(project)}
                 >
                   <div className="aspect-[16/9] overflow-hidden relative">
-                    <img
+                    <img loading="lazy" decoding="async"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       src={`/${project.image}`} onError={(e) => { e.target.onerror=null; e.target.src='/Railway_Infra.jpg'; }}
                       alt={project.title}

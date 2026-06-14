@@ -1,10 +1,23 @@
-import React, { useState } from 'react';
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
+import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Users, MapPin, Clock, Briefcase, ChevronDown, ChevronUp, Send, CheckCircle, Star } from 'lucide-react';
 import PageHero from '@/components/PageHero';
 import CtaSection from '@/components/CtaSection';
 import useSeo from '@/hooks/useSeo';
 import { useToast } from '@/components/ui/use-toast';
+import { useApi } from '@/hooks/useApi';
+import { jobsApi } from '@/lib/api';
 
 const PERKS = [
   { icon: '🏆', title: 'Growth Opportunities', desc: 'Fast career progression in a growing company with direct access to Indian Railways and industrial projects.' },
@@ -143,7 +156,22 @@ const ApplicationForm = () => {
   );
 };
 
-const CareersPage = () => (
+const CareersPage = () => {
+  useSeo({
+    title: 'Careers at Navgrow Engineering | Railway & Industrial Jobs Siliguri',
+    description: 'Join Navgrow Engineering Service Pvt. Ltd. — open positions for civil engineers, mechanical engineers, safety officers, tender executives, and more in Siliguri, West Bengal.',
+    path: '/careers',
+    keywords: 'engineering jobs Siliguri, railway contractor jobs West Bengal, civil engineer vacancy Siliguri, mechanical engineer job NE India, Navgrow careers',
+  });
+
+  // Fetch live jobs from API; fall back to static JOBS list
+  const { data: apiJobs } = useApi(() => jobsApi.list({ status: 'OPEN' }), [], { immediate: true });
+  const liveJobs = React.useMemo(() => {
+    const list = apiJobs?.content || (Array.isArray(apiJobs) ? apiJobs : null);
+    return list && list.length > 0 ? list : JOBS;
+  }, [apiJobs]);
+
+  return (
   <>
     <PageHero
       chip={<><Users className="h-4 w-4" /> Careers</>}
@@ -171,7 +199,7 @@ const CareersPage = () => (
         <div className="max-w-3xl mx-auto">
           <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2"><Briefcase className="h-6 w-6 text-blue-600" /> Open Positions</h2>
           <div className="flex flex-col gap-4 mb-12">
-            {JOBS.map(j => <JobCard key={j.id} job={j} />)}
+            {liveJobs.map(j => <JobCard key={j.id || j.title} job={j} />)}
           </div>
 
           {/* Application form */}
@@ -185,6 +213,7 @@ const CareersPage = () => (
     </section>
     <CtaSection />
   </>
-);
+  );
+};
 
 export default CareersPage;

@@ -1,4 +1,9 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 · navgrow.org · info@navgrow.org
+ * Unauthorised reproduction, modification or distribution is strictly prohibited.
+ */
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, MapPin, Phone, User, Mail, Building, CreditCard, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
@@ -27,16 +32,29 @@ const Field = ({ id, label, type='text', required, placeholder, value, onChange,
 const CheckoutModal = ({ open, onClose, orderData }) => {
   const { items, clearCart } = useCart();
   const { toast } = useToast();
+  const mountedRef = useRef(true);
+  const [paying,  setPaying] = useState(false); // prevent double-submit
   const [step, setStep]   = useState(1); // 1 = shipping, 2 = processing, 3 = success
+
+  // Mount tracking
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // Reset step when modal closes so next open starts fresh
   useEffect(() => {
-    if (!open) { setTimeout(() => setStep(1), 300); }
+    if (!open) {
+      setTimeout(() => {
+        if (mountedRef.current) { setStep(1); setPaying(false); }
+      }, 300);
+    }
   }, [open]);
   const [errors, setErrors] = useState({});
   const [form, setForm]   = useState({
     name: '', email: '', phone: '', company: '',
     address1: '', address2: '', city: '', state: 'West Bengal', pincode: '', notes: '',
+    gstin: '',  // B2B GSTIN for GST invoice
   });
 
   const ch = (k) => (e) => { setForm(p => ({ ...p, [k]: e.target.value })); if (errors[k]) setErrors(p => ({ ...p, [k]: '' })); };
@@ -68,7 +86,9 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
 
   const handlePay = async (e) => {
     e.preventDefault();
+    if (paying) return; // prevent double-submit
     if (!validateShipping()) return;
+    setPaying(true);
     setStep(2);
 
     try {
@@ -84,6 +104,7 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
         state:         form.state,
         pincode:       form.pincode,
         notes:         form.notes || null,
+        gstin:         form.gstin || null,
         items: items.map(i => ({ productId: i.id, quantity: i.qty })),
       };
 
@@ -111,7 +132,7 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
               razorpaySignature: response.razorpay_signature,
             });
             clearCart();
-            setForm({ name:'',email:'',phone:'',company:'',address1:'',address2:'',city:'',state:'West Bengal',pincode:'',notes:'' });
+            setForm({ name:'',email:'',phone:'',company:'',address1:'',address2:'',city:'',state:'West Bengal',pincode:'',notes:'',gstin:'' });
             setStep(3);
           } catch {
             toast({ title: 'Payment verification failed', description: 'Please contact us with your payment ID.', variant: 'destructive' });
@@ -126,11 +147,14 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
     }
   };
 
-  // Compute totals directly from cart items (orderData prop is optional/deprecated)
-  const cartTotal = items.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0);
-  const grandTotal = (orderData?.grandTotal) || cartTotal;
-  const discount   = orderData?.discount || 0;
-  const itemCount  = items.reduce((s, i) => s + (i.qty || 1), 0);
+  // Compute totals directly from cart items
+  const cartSubtotal = items.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0);
+  const discount     = orderData?.discount || 0;
+  const taxableAmount= Math.max(0, cartSubtotal - discount);
+  const gst          = taxableAmount * 0.18;
+  const shipping     = cartSubtotal >= 5000 ? 0 : 150;
+  const grandTotal   = orderData?.grandTotal || (taxableAmount + gst + shipping);
+  const itemCount    = items.reduce((s, i) => s + (i.qty || 1), 0);
 
   return (
     <AnimatePresence>
@@ -171,7 +195,7 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
                     {items.map(i => (
                       <div key={i.id} className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2.5">
-                          {i.image && <img src={i.image} alt={i.name} className="w-9 h-9 rounded-xl object-cover bg-white border border-blue-100 shrink-0" onError={e=>{e.target.style.display='none'}}/>}
+                          {i.image && <img loading="lazy" decoding="async" src={i.image} alt={i.name} className="w-9 h-9 rounded-xl object-cover bg-white border border-blue-100 shrink-0" onError={e=>{e.target.style.display='none'}}/>}
                           <div className="min-w-0">
                             <p className="text-xs font-semibold text-gray-900 line-clamp-1">{i.name}</p>
                             <p className="text-[10px] text-gray-500">Qty: {i.qty || 1} × ₹{(i.price||0).toLocaleString('en-IN')}</p>
@@ -192,7 +216,11 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
                   <div className="col-span-2"><Field id="name"    label="Full Name"     required value={form.name}    onChange={ch('name')}    placeholder="Your full name" error={errors.name} /></div>
                   <Field id="email"   label="Email"        type="email" required value={form.email}   onChange={ch('email')}   placeholder="you@example.com" error={errors.email} />
                   <Field id="phone"   label="Phone"        type="tel"   required value={form.phone}   onChange={ch('phone')}   placeholder="+91 xxxxx xxxxx" error={errors.phone} />
-                  <div className="col-span-2"><Field id="company" label="Company (Optional)"          value={form.company} onChange={ch('company')} placeholder="Company name" /></div>
+                  <div className="col-span-2"><Field id="company" label="Company / Organisation" value={form.company} onChange={ch('company')} placeholder="Company / PSU / Railway Division" /></div>
+                  <div className="col-span-2">
+                    <Field id="gstin" label="GSTIN (for B2B GST Invoice)" value={form.gstin} onChange={ch('gstin')} placeholder="22AAAAA0000A1Z5 — optional" />
+                    <p className="text-[10px] text-gray-400 mt-1">Enter your 15-digit GSTIN to receive a GST-compliant tax invoice for input credit.</p>
+                  </div>
                   <div className="col-span-2"><Field id="address1" label="Address Line 1" required value={form.address1} onChange={ch('address1')} placeholder="Street, locality" error={errors.address1} /></div>
                   <div className="col-span-2"><Field id="address2" label="Address Line 2" value={form.address2} onChange={ch('address2')} placeholder="Landmark (optional)" /></div>
                   <Field id="city"    label="City"         required value={form.city}    onChange={ch('city')}    placeholder="Siliguri" error={errors.city} />
@@ -206,7 +234,8 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
                 </div>
 
                 <button type="submit"
-                  className="w-full py-4 btn-gold rounded-xl shadow-lg flex items-center justify-center gap-2 text-base">
+                  disabled={paying}
+                  className="w-full py-4 btn-gold rounded-xl shadow-lg flex items-center justify-center gap-2 text-base disabled:opacity-60">
                   <CreditCard className="h-5 w-5" /> Pay ₹{Math.round(grandTotal).toLocaleString('en-IN')}
                 </button>
                 <p className="text-center text-xs text-gray-400">Secured by Razorpay · UPI, Cards, Net Banking</p>

@@ -1,8 +1,13 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 · navgrow.org · info@navgrow.org
+ * Unauthorised reproduction, modification or distribution is strictly prohibited.
+ */
 import axios from 'axios';
 
 // ── Base instance ─────────────────────────────────────────────────────────────
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api',
   timeout: 30000, // 30s default; chat overrides to 45s
   headers: { 'Content-Type': 'application/json' },
 });
@@ -51,13 +56,14 @@ api.interceptors.response.use(
 // ── Auth API ──────────────────────────────────────────────────────────────────
 export const authApi = {
   login:          (email, password)       => api.post('/auth/login',    { email, password }),
-  loginWithPhone: (phone, password)       => api.post('/auth/login',    { phone, password }),
+  loginWithPhone: (phone, password)       => api.post('/auth/login-with-phone', { phone, password }),
   register:       (data)                  => api.post('/auth/register',  data),
   refresh:        (refreshToken)          => api.post('/auth/refresh',   null, { params: { refreshToken } }),
   forgotPw:       (email)                 => api.post('/auth/forgot-password', null, { params: { email } }),
   resetPw:        (token, password)       => api.post('/auth/reset-password', { token, newPassword: password }),
   sendOtp:        (phone)                 => api.post('/auth/send-otp',  null, { params: { phone } }),
   verifyOtp:      (phone, otp)            => api.post('/auth/verify-otp', { phone, otp }),
+  logout:         ()                      => api.post('/auth/logout'),
 };
 
 // ── Products API ──────────────────────────────────────────────────────────────
@@ -76,6 +82,7 @@ export const productsApi = {
 
 // ── Orders API ────────────────────────────────────────────────────────────────
 export const ordersApi = {
+  invoiceUrl:  (orderNumber) => `${api.defaults.baseURL}/orders/${orderNumber}/invoice`,
   create:        (d)      => api.post('/orders', d),
   verifyPayment: (d)      => api.post('/orders/payment/verify', d),
   track:         (num)    => api.get(`/orders/track/${num}`),
@@ -100,6 +107,20 @@ export const quotesApi = {
   submit:      (d)           => api.post('/quotes', d),
   list:        (params)      => api.get('/quotes', { params }),
   updateStatus:(id, st, amt) => api.patch(`/quotes/${id}/status`, null, { params: { status: st, quotedAmount: amt } }),
+};
+
+
+// ── RFQ (Request for Quote) API ───────────────────────────────────────────────
+export const rfqApi = {
+  submit:      (d)             => api.post('/rfqs', d),
+  track:       (number)        => api.get(`/rfqs/track/${number}`),
+  mine:        (params)        => api.get('/rfqs/mine', { params }),
+  accept:      (id)            => api.post(`/rfqs/${id}/accept`),
+  reject:      (id, reason)    => api.post(`/rfqs/${id}/reject`, { reason }),
+  list:        (params)        => api.get('/rfqs', { params }),
+  detail:      (id)            => api.get(`/rfqs/${id}`),
+  quote:       (id, d)         => api.put(`/rfqs/${id}/quote`, d),
+  updateStatus:(id, d)         => api.patch(`/rfqs/${id}/status`, d),
 };
 
 // ── Newsletter API ────────────────────────────────────────────────────────────
@@ -139,20 +160,24 @@ export const tendersApi = {
 
 // ── Jobs API ──────────────────────────────────────────────────────────────────
 export const jobsApi = {
-  list:           ()       => api.get('/jobs'),
+  list:           (p)      => api.get('/jobs', { params: p }),
   get:            (id)     => api.get(`/jobs/${id}`),
   apply:          (id, d)  => api.post(`/jobs/${id}/apply`, d),
   applications:   (id, p)  => api.get(`/jobs/${id}/applications`, { params: p }),
   updateAppStatus:(id, st) => api.patch(`/jobs/applications/${id}/status`, null, { params: { status: st } }),
   create:         (d)      => api.post('/jobs', d),
   update:         (id, d)  => api.put(`/jobs/${id}`, d),
+  delete:         (id)     => api.delete(`/jobs/${id}`),
+  toggle:         (id)     => api.patch(`/jobs/${id}/toggle`),
 };
 
 // ── Gallery API ───────────────────────────────────────────────────────────────
 export const galleryApi = {
-  list:   (cat) => api.get('/gallery', cat ? { params: { category: cat } } : {}),
-  create: (d)   => api.post('/gallery', d),
-  delete: (id)  => api.delete(`/gallery/${id}`),
+  list:   (p)      => api.get('/gallery', { params: p }),
+  get:    (id)     => api.get(`/gallery/${id}`),
+  create: (d)      => api.post('/gallery', d),
+  update: (id, d)  => api.put(`/gallery/${id}`, d),
+  delete: (id)     => api.delete(`/gallery/${id}`),
 };
 
 // ── Coupons API ───────────────────────────────────────────────────────────────
@@ -160,8 +185,46 @@ export const couponsApi = {
   validate: (code, amount) => api.post('/coupons/validate', null, { params: { code, amount } }),
   list:     ()             => api.get('/coupons'),
   create:   (d)            => api.post('/coupons', d),
+  update:   (id, d)        => api.put(`/coupons/${id}`, d),
+  delete:   (id)           => api.delete(`/coupons/${id}`),
   toggle:   (id)           => api.patch(`/coupons/${id}/toggle`),
 };
+
+// ── User addresses API ────────────────────────────────────────────────────────
+export const addressApi = {
+  list:    ()       => api.get('/users/me/addresses'),
+  create:  (d)      => api.post('/users/me/addresses', d),
+  update:  (id, d)  => api.put(`/users/me/addresses/${id}`, d),
+  delete:  (id)     => api.delete(`/users/me/addresses/${id}`),
+  setDefault: (id, type) => api.patch(`/users/me/addresses/${id}/default`, null, { params: { type } }),
+};
+
+// ── Company / GST profile ────────────────────────────────────────────────────
+export const companyApi = {
+  get:    () => api.get('/users/me/company'),
+  save:   (d)=> api.put('/users/me/company', d),
+};
+
+// ── Audit log API ────────────────────────────────────────────────────────────
+export const auditApi = {
+  list: (params) => api.get('/audit-logs', { params }),
+};
+
+// ── User management (admin) ──────────────────────────────────────────────────
+export const adminUsersApi = {
+  list:       (p)     => api.get('/users', { params: p }),
+  get:        (id)    => api.get(`/users/${id}`),
+  updateRole: (id, role) => api.patch(`/users/${id}/role`, null, { params: { role } }),
+  toggleActive:(id)   => api.patch(`/users/${id}/toggle-active`),
+  delete:     (id)    => api.delete(`/users/${id}`),
+  create:     (d)     => api.post('/users/admin/create', d),
+};
+
+// ── Jobs admin API ────────────────────────────────────────────────────────────
+
+// ── Gallery admin API ─────────────────────────────────────────────────────────
+
+// ── Tenders admin API ─────────────────────────────────────────────────────────
 
 // ── Analytics API ─────────────────────────────────────────────────────────────
 export const analyticsApi = {

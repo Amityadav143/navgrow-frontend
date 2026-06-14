@@ -1,4 +1,16 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSiteSettings } from '@/hooks/useSiteSettings';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingBag, MessageCircle, Star, FileText } from 'lucide-react';
 
@@ -14,6 +26,7 @@ const EVENTS = [
 ];
 
 const SocialProof = () => {
+  const settings = useSiteSettings();
   const [current, setCurrent] = useState(null);
   const [idx, setIdx] = useState(0);
 
@@ -28,6 +41,8 @@ const SocialProof = () => {
     const interval = setInterval(show, 14000);
     return () => { clearTimeout(first); clearInterval(interval); };
   }, [show]);
+
+  if (!settings.socialProof?.enabled) return null;
 
   return (
     <div className="fixed bottom-28 left-4 z-[88] pointer-events-none">

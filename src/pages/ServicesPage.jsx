@@ -1,3 +1,14 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
@@ -154,6 +165,12 @@ const services = [
 ];
 
 const ServicesPage = () => {
+  useSeo({
+    title: 'Engineering Services | Railway, Industrial, Civil & Government',
+    description: 'Navgrow Engineering services: railway infrastructure, loco modification, industrial engineering, civil construction, government contracts, maintenance AMC, consulting, safety, and IoT solutions.',
+    path: '/services',
+    keywords: 'railway engineering services India, loco modification contractor, industrial engineering services, government contract engineering, civil construction services Siliguri',
+  });
   return (
     <>
       {/* Hero */}
@@ -192,7 +209,7 @@ const ServicesPage = () => {
             >
               <div className={`order-2 ${index % 2 === 0 ? 'lg:order-2' : 'lg:order-1'}`}>
                 <div className="rounded-xl overflow-hidden shadow-xl">
-                  <img
+                  <img loading="lazy" decoding="async"
                     className="w-full h-72 object-cover"
                     alt={service.imageAlt}
                     src={service.image}

@@ -1,4 +1,16 @@
-import React, { useState } from 'react';
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
+import React, { useState, useEffect } from 'react';
+import { galleryApi } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Image, X, ChevronLeft, ChevronRight, ZoomIn, MapPin } from 'lucide-react';
 import PageHero from '@/components/PageHero';
@@ -61,9 +73,29 @@ const GalleryPage = () => {
   });
   const [cat, setCat]       = useState('All');
   const [lightbox, setLightbox] = useState(null);
+  const [allPhotos, setAllPhotos] = useState(PHOTOS);
 
-  const visible = cat === 'All' ? PHOTOS : PHOTOS.filter(p => p.cat === cat);
-  const lb = lightbox !== null ? visible[lightbox] : null;
+  // Fetch live gallery from API, fall back to static photos if API unavailable
+  useEffect(() => {
+    galleryApi.list().then(res => {
+      const data = res.data?.content || (Array.isArray(res.data) ? res.data : null);
+      if (data && data.length > 0) {
+        setAllPhotos(data.map(item => ({
+          id: item.id,
+          cat: item.category || 'Projects',
+          src: item.imageUrl || item.image || '/Railway_Infra.jpg',
+          title: item.title || '',
+          location: item.location || 'Navgrow Engineering',
+          year: item.year || new Date().getFullYear().toString(),
+        })));
+      }
+    }).catch(() => {}); // silently fall back to PHOTOS
+  }, []);
+
+  const galleryCategories = ['All', ...Array.from(new Set(allPhotos.map(p => p.cat)))];
+  const visible = cat === 'All' ? allPhotos : allPhotos.filter(p => p.cat === cat);
+  // Guard: if lightbox index is out of bounds for current category, close it
+  const lb = (lightbox !== null && lightbox < visible.length) ? visible[lightbox] : null;
 
   return (
     <>
@@ -78,7 +110,7 @@ const GalleryPage = () => {
         <div className="container mx-auto px-4">
           {/* Filter */}
           <div className="flex flex-wrap gap-2 mb-8">
-            {CATS.map(c => (
+            {galleryCategories.map(c => (
               <button key={c} onClick={() => { setCat(c); setLightbox(null); }}
                 className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${cat === c ? 'brand-gradient text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-blue-300'}`}>
                 {c}

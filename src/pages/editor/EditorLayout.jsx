@@ -1,3 +1,14 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
 import React from 'react';
 import { Link, Outlet, useLocation, Navigate } from 'react-router-dom';
 import { Newspaper, Settings, Image, Briefcase, LayoutDashboard, ChevronRight, Globe } from 'lucide-react';
@@ -14,15 +25,16 @@ const EDITOR_ITEMS = [
 
 export default function EditorLayout() {
   const { isEditor, isAdmin, user } = useAuth();
-  if (!isEditor && !isAdmin) return <Navigate to="/" replace />;
-
+  // useLocation MUST be called before any conditional return (React Hooks Rules)
   const location = useLocation();
+
+  if (!isEditor && !isAdmin) return <Navigate to="/" replace />;
 
   return (
     <div className="flex min-h-screen bg-gray-950">
       <aside className="w-56 bg-gray-900 text-gray-300 flex flex-col shrink-0">
         <div className="p-5 border-b border-gray-800">
-          <Link to="/"><img src="/ng_white_logo.png" alt="Navgrow" className="h-9 w-auto object-contain"/></Link>
+          <Link to="/"><img loading="lazy" decoding="async" src="/ng_white_logo.png" alt="Navgrow" className="h-9 w-auto object-contain"/></Link>
           <p className="text-xs text-amber-400 font-bold mt-2">✏ Editor Panel</p>
         </div>
         <nav className="flex-1 p-3 overflow-y-auto">

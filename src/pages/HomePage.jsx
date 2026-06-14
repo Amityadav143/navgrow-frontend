@@ -1,3 +1,8 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 · navgrow.org · info@navgrow.org
+ * Unauthorised reproduction, modification or distribution is strictly prohibited.
+ */
 import React from 'react';
 import HeroSection from '@/components/HeroSection';
 import StatsSection from '@/components/StatsSection';
@@ -25,7 +30,8 @@ const HomePage = () => {
         { "@type": "Question", "name": "Does Navgrow work outside the railway sector?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Navgrow serves railway, industrial manufacturing, civil construction, government and PSU, utilities, procurement, and training sectors across India." } },
         { "@type": "Question", "name": "What products does the Navgrow shop sell?", "acceptedAnswer": { "@type": "Answer", "text": "The Navgrow B2B shop sells ISI-certified safety equipment, railway tools, maintenance supplies, testing instruments, and PPE with free shipping on orders above ₹5,000." } }
       ]
-    }, description: 'DPIIT-recognised engineering firm for Indian Railways and government contracts. Loco modification, shed construction, safety compliance. Siliguri, West Bengal.', path: '/' });
+  }
+  });
   return (
   <>
     <HeroSection />

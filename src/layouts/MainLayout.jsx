@@ -1,3 +1,14 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
+ *
+ * PROPRIETARY & CONFIDENTIAL
+ * This file is part of the Navgrow Engineering Platform.
+ * Unauthorised copying, modification, distribution, or use is prohibited
+ * without prior written consent of Navgrow Engineering Service Pvt. Ltd.
+ *
+ * Licensed for: navgrow.org (Production Deployment Only)
+ */
 import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -8,6 +19,7 @@ import ScrollToTop from '@/components/ScrollToTop';
 import ChatBot from '@/components/ChatBot';
 import PageProgress from '@/components/PageProgress';
 import CartSidebar from '@/components/CartSidebar';
+import RfqDrawer from '@/components/RfqDrawer';
 import TenderBanner from '@/components/TenderBanner';
 import CookieBanner from '@/components/CookieBanner';
 import MobileContactBar from '@/components/MobileContactBar';
@@ -65,6 +77,7 @@ const MainLayout = () => {
 
       <Footer />
       <CartSidebar />
+      <RfqDrawer />
       <CookieBanner />
       <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
       <WhatsAppButton />
