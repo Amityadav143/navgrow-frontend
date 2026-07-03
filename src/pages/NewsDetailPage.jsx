@@ -237,6 +237,29 @@ const NewsDetailPage = () => {
           dangerouslySetInnerHTML={{ __html: sanitizeHtml(article.content || article.excerpt || '') }}
         />
 
+        {/* Image gallery */}
+        {(() => {
+          const gallery = (article.imageUrls || '')
+            .split('\n').map(u => u.trim()).filter(Boolean);
+          if (gallery.length === 0) return null;
+          return (
+            <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+              className="mt-10">
+              <h3 className="text-lg font-extrabold text-gray-900 mb-4">Gallery</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {gallery.map((url, i) => (
+                  <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                    className="block rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow aspect-[4/3] bg-gray-100">
+                    <img loading="lazy" decoding="async" src={url} alt={`${article.title} — image ${i + 1}`}
+                      className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                      onError={e => { e.target.onerror = null; e.target.parentElement.style.display = 'none'; }} />
+                  </a>
+                ))}
+              </div>
+            </motion.div>
+          );
+        })()}
+
         {/* Share + Back */}
         <div className="mt-12 pt-6 border-t border-gray-200 flex items-center justify-between flex-wrap gap-4">
           <Link to="/news"

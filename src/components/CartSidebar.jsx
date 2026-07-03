@@ -10,12 +10,15 @@
  * Licensed for: navgrow.org (Production Deployment Only)
  */
 import React, { useState } from 'react';
+import useEscapeKey from '@/hooks/useEscapeKey';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingCart, Minus, Plus, Trash2, Package, ArrowRight, Tag,
-         CheckCircle, AlertTriangle } from 'lucide-react';
+         CheckCircle, AlertTriangle, Mail, Send, FileText, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '@/context/CartContext';
-import { couponsApi } from '@/lib/api';
+import { couponsApi, rfqApi } from '@/lib/api';
+import { track } from '@/lib/analytics';
+import { useToast } from '@/components/ui/use-toast';
 import CheckoutModal from '@/components/CheckoutModal';
 
 /* ── Professional bulk-quote email ──────────────────────────────────────── */
@@ -83,6 +86,114 @@ const ClearCartConfirm = ({ itemCount, onConfirm, onCancel }) => (
 );
 
 /* ── Main CartSidebar ────────────────────────────────────────────────────── */
+/* ── Request-Quote choice modal: direct send (API) or email ──────────────── */
+const QuoteChoiceModal = ({ open, onClose, items, subtotal, grandTotal, discount, emailHref, onToast }) => {
+  const [mode, setMode] = useState('choose');   // choose | form | done
+  const [submitting, setSubmitting] = useState(false);
+  const [rfqNumber, setRfqNumber] = useState('');
+  const [err, setErr] = useState('');
+  const [form, setForm] = useState({ buyerName:'', buyerEmail:'', buyerPhone:'', company:'', gstin:'' });
+  const set = (k,v) => setForm(f => ({ ...f, [k]: v }));
+
+  React.useEffect(() => { if (open) { setMode('choose'); setErr(''); setRfqNumber(''); } }, [open]);
+
+  const submitDirect = async () => {
+    if (!form.buyerName.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.buyerEmail) || !/^[6-9]\d{9}$/.test(form.buyerPhone.replace(/\s/g,''))) {
+      setErr('Please enter a valid name, email and 10-digit mobile.'); return;
+    }
+    setSubmitting(true); setErr('');
+    try {
+      const payload = {
+        ...form, buyerPhone: form.buyerPhone.replace(/\s/g,''),
+        items: items.map(i => ({
+          productId: String(i.id), productName: i.name, sku: i.sku || '',
+          quantity: i.qty || 1, gstRate: i.gstRate || 18,
+        })),
+        notes: discount ? `Cart subtotal ₹${subtotal}, after discount ₹${grandTotal}.` : '',
+      };
+      const { data } = await rfqApi.submit(payload);
+      try { track('rfq_submit', { label: data?.rfqNumber, value: (payload?.items?.length)||undefined }); } catch {}
+      setRfqNumber(data.rfqNumber || '');
+      setMode('done');
+      onToast?.({ title: '✓ Quote request sent', description: 'Our team will respond within 1 business day.' });
+    } catch (e) {
+      setErr(e?.response?.data?.message || 'Could not send. Try the email option or call +91 89270 70972.');
+    } finally { setSubmitting(false); }
+  };
+
+  if (!open) return null;
+  return (
+    <AnimatePresence>
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+        className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm z-[130]" onClick={onClose} />
+      <div className="fixed inset-0 z-[131] flex items-center justify-center p-4 pointer-events-none">
+        <motion.div initial={{opacity:0,scale:0.94,y:16}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:0.94}}
+          className="bg-white rounded-3xl shadow-2xl w-full max-w-md pointer-events-auto overflow-hidden">
+          <div className="brand-gradient px-5 py-4 flex items-center justify-between">
+            <h3 className="text-white font-extrabold flex items-center gap-2"><FileText className="h-5 w-5"/> Request a Quote</h3>
+            <button onClick={onClose} aria-label="Close" className="p-1.5 rounded-lg hover:bg-white/15 text-white"><X className="h-5 w-5"/></button>
+          </div>
+
+          {mode === 'choose' && (
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-gray-500 mb-1">Choose how you'd like to send your bulk quote request for {items.length} item{items.length>1?'s':''}:</p>
+              <button onClick={() => setMode('form')}
+                className="w-full flex items-center gap-3 p-4 rounded-2xl border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50 transition-all text-left">
+                <div className="w-10 h-10 rounded-xl brand-gradient flex items-center justify-center shrink-0"><Send className="h-5 w-5 text-white"/></div>
+                <div><p className="font-bold text-gray-900 text-sm">Send Directly (Recommended)</p>
+                  <p className="text-xs text-gray-500">Submits to our procurement team — fastest response, tracked in our system.</p></div>
+              </button>
+              <a href={emailHref} onClick={() => setTimeout(onClose, 300)}
+                className="w-full flex items-center gap-3 p-4 rounded-2xl border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all text-left">
+                <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center shrink-0"><Mail className="h-5 w-5 text-gray-600"/></div>
+                <div><p className="font-bold text-gray-900 text-sm">Send via Email</p>
+                  <p className="text-xs text-gray-500">Opens your mail app with the quote pre-filled to info@navgrow.org.</p></div>
+              </a>
+            </div>
+          )}
+
+          {mode === 'form' && (
+            <div className="p-5 space-y-3">
+              {[
+                {k:'buyerName', l:'Full Name *', ph:'Contact person'},
+                {k:'buyerEmail', l:'Email *', ph:'you@company.com', t:'email'},
+                {k:'buyerPhone', l:'Mobile *', ph:'10-digit mobile', t:'tel'},
+                {k:'company', l:'Company / PSU', ph:'Organisation (optional)'},
+                {k:'gstin', l:'GSTIN', ph:'For GST invoice (optional)'},
+              ].map(f => (
+                <div key={f.k}>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">{f.l}</label>
+                  <input type={f.t||'text'} value={form[f.k]} onChange={e=>set(f.k,e.target.value)} placeholder={f.ph}
+                    className="w-full px-3.5 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"/>
+                </div>
+              ))}
+              {err && <p className="text-red-500 text-xs bg-red-50 rounded-lg px-3 py-2">{err}</p>}
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setMode('choose')} className="px-4 py-3 border-2 border-gray-200 text-gray-600 font-bold rounded-xl text-sm">Back</button>
+                <button onClick={submitDirect} disabled={submitting}
+                  className="flex-1 py-3 brand-gradient text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 disabled:opacity-60">
+                  {submitting ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}
+                  {submitting ? 'Sending…' : 'Submit Quote Request'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {mode === 'done' && (
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4"><CheckCircle className="h-8 w-8 text-green-600"/></div>
+              <h4 className="text-lg font-extrabold text-gray-900 mb-1">Request Sent!</h4>
+              {rfqNumber && <p className="text-sm font-mono font-bold text-blue-600 bg-blue-50 rounded-lg py-1.5 px-3 inline-block mb-3">{rfqNumber}</p>}
+              <p className="text-sm text-gray-500 mb-5">Our team will send a GST-compliant quotation within 1 business day.</p>
+              <button onClick={onClose} className="px-6 py-2.5 brand-gradient text-white font-bold rounded-xl text-sm">Done</button>
+            </div>
+          )}
+        </motion.div>
+      </div>
+    </AnimatePresence>
+  );
+};
+
 const CartSidebar = () => {
   const { items, totalItems, totalAmount, cartOpen, setCartOpen, removeItem, updateQty, clearCart } = useCart();
   const [checkoutOpen,  setCheckoutOpen]  = useState(false);
@@ -91,10 +202,22 @@ const CartSidebar = () => {
   const [couponError,   setCouponError]   = useState('');
   const [couponLoading, setCouponLoading] = useState(false);
   const [confirmClear,  setConfirmClear]  = useState(false);
+  const [quoteOpen,     setQuoteOpen]     = useState(false);
+  const { toast } = useToast();
+
+  // Close the cart on Escape (only meaningful while it's open).
+  useEscapeKey(cartOpen, () => setCartOpen(false));
 
   const discount    = coupon?.discount || 0;
   const taxableAmt  = Math.max(0, totalAmount - discount);
-  const gst         = taxableAmt * 0.18;
+  // GST per line item (each product can sit on a different slab: 5/12/18/28%).
+  // Falls back to 18% when a rate isn't known, matching the server calculation.
+  const grossGst = items.reduce((sum, i) => {
+    const rate = (typeof i.gstRate === 'number' && i.gstRate > 0) ? i.gstRate : 18;
+    return sum + (i.price || 0) * (i.qty || 1) * (rate / 100);
+  }, 0);
+  // Scale the GST down proportionally if a discount applies to the order.
+  const gst         = totalAmount > 0 ? grossGst * (taxableAmt / totalAmount) : 0;
   const shipping    = totalAmount >= 5000 ? 0 : 150;
   const grandTotal  = taxableAmt + gst + shipping;
 
@@ -181,8 +304,9 @@ const CartSidebar = () => {
                               </button>
                               <span className="px-2.5 text-sm font-bold text-gray-900 min-w-[28px] text-center">{item.qty}</span>
                               <button onClick={() => updateQty(item.id, item.qty+1)}
+                                disabled={typeof item.stockQty === 'number' && item.stockQty > 0 && item.qty >= item.stockQty}
                                 style={{minWidth:44,minHeight:44}}
-                                className="flex items-center justify-center hover:bg-gray-50 rounded-r-lg text-gray-600 transition-colors"
+                                className="flex items-center justify-center hover:bg-gray-50 rounded-r-lg text-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                 aria-label="Increase quantity">
                                 <Plus className="h-3.5 w-3.5"/>
                               </button>
@@ -194,6 +318,9 @@ const CartSidebar = () => {
                               <Trash2 className="h-4 w-4"/>
                             </button>
                           </div>
+                          {typeof item.stockQty === 'number' && item.stockQty > 0 && item.qty >= item.stockQty && (
+                            <p className="text-[11px] text-amber-600 font-semibold mt-1">Max available: {item.stockQty}</p>
+                          )}
                         </div>
                       </motion.div>
                     ))}
@@ -274,10 +401,10 @@ const CartSidebar = () => {
                   </button>
 
                   <div className="grid grid-cols-2 gap-2">
-                    <a href={buildBulkQuoteEmail(items, totalAmount, grandTotal, discount)}
-                      className="py-2.5 border-2 border-blue-200 text-blue-700 font-bold rounded-xl text-sm hover:border-blue-400 hover:bg-blue-50 transition-colors text-center">
-                      Request Quote
-                    </a>
+                    <button onClick={() => setQuoteOpen(true)}
+                      className="py-2.5 border-2 border-blue-200 text-blue-700 font-bold rounded-xl text-sm hover:border-blue-400 hover:bg-blue-50 transition-colors text-center flex items-center justify-center gap-1.5">
+                      <FileText className="h-4 w-4" /> Request Quote
+                    </button>
                     <button onClick={() => setConfirmClear(true)}
                       className="py-2.5 border-2 border-gray-200 text-gray-500 font-semibold rounded-xl text-sm hover:border-red-200 hover:text-red-500 hover:bg-red-50 transition-colors">
                       Clear Cart
@@ -295,6 +422,17 @@ const CartSidebar = () => {
         open={checkoutOpen}
         onClose={() => setCheckoutOpen(false)}
         orderData={{ items, totalAmount, discount, couponCode: coupon?.code, grandTotal }}
+      />
+
+      <QuoteChoiceModal
+        open={quoteOpen}
+        onClose={() => setQuoteOpen(false)}
+        items={items}
+        subtotal={totalAmount}
+        grandTotal={grandTotal}
+        discount={discount}
+        emailHref={buildBulkQuoteEmail(items, totalAmount, grandTotal, discount)}
+        onToast={toast}
       />
     </>
   );

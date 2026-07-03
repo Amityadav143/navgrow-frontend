@@ -16,6 +16,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { ordersApi, userApi, addressApi, companyApi } from '@/lib/api';
 import PageHero from '@/components/PageHero';
+import OrderTrackWidget from '@/components/OrderTrackWidget';
 import { useApi } from '@/hooks/useApi';
 import useSeo from '@/hooks/useSeo';
 import AuthModal from '@/components/AuthModal';
@@ -58,12 +59,13 @@ const EMPTY_ADDR = {
 };
 
 /* ── AddressField — module-level to prevent cursor-jump in AddressForm ───── */
-const AddressField = ({ k, label, req, type='text', ph, full=false, form, onChange }) => (
+const AddressField = ({ k, label, req, type='text', ph, full=false, form, onChange, autoComplete, inputMode }) => (
   <div className={full?'sm:col-span-2':''}>
     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">
       {label}{req&&<span className="text-red-400 ml-1">*</span>}
     </label>
     <input required={req} type={type} value={form[k]??''} onChange={e=>onChange(k,e.target.value)} placeholder={ph}
+      autoComplete={autoComplete} inputMode={inputMode}
       className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 transition-colors"/>
   </div>
 );
@@ -119,13 +121,13 @@ const AddressForm = ({ initial, onSave, onCancel, saving }) => {
 
       <form onSubmit={e=>{e.preventDefault();onSave(form);}} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <AddressField k="label" label="Label (Home/Office/Site)" ph="e.g. Office, Home, Project Site" full form={form} onChange={ch}/>
-        <AddressField k="recipientName" label="Recipient Name *" ph="Full name" req form={form} onChange={ch}/>
-        <AddressField k="phone" label="Phone *" ph="+91 XXXXX XXXXX" req type="tel" form={form} onChange={ch}/>
-        <AddressField k="addressLine1" label="Address Line 1 *" ph="Street, Locality" req full form={form} onChange={ch}/>
-        <AddressField k="addressLine2" label="Address Line 2" ph="Landmark, Building (optional)" full form={form} onChange={ch}/>
+        <AddressField k="recipientName" label="Recipient Name *" ph="Full name" req form={form} onChange={ch} autoComplete="name"/>
+        <AddressField k="phone" label="Phone *" ph="+91 XXXXX XXXXX" req type="tel" form={form} onChange={ch} autoComplete="tel" inputMode="tel"/>
+        <AddressField k="addressLine1" label="Address Line 1 *" ph="Street, Locality" req full form={form} onChange={ch} autoComplete="address-line1"/>
+        <AddressField k="addressLine2" label="Address Line 2" ph="Landmark, Building (optional)" full form={form} onChange={ch} autoComplete="address-line2"/>
         <AddressField k="locality" label="Locality / Area" ph="Colony, Area, Ward" full form={form} onChange={ch}/>
-        <AddressField k="city" label="City *" ph="e.g. Siliguri" req form={form} onChange={ch}/>
-        <AddressField k="pincode" label="Pincode *" ph="734001" req form={form} onChange={ch}/>
+        <AddressField k="city" label="City *" ph="e.g. Siliguri" req form={form} onChange={ch} autoComplete="address-level2"/>
+        <AddressField k="pincode" label="Pincode *" ph="734001" req form={form} onChange={ch} autoComplete="postal-code" inputMode="numeric"/>
         <div>
           <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">State *</label>
           <select required value={form.state} onChange={e=>ch('state',e.target.value)}
@@ -477,6 +479,7 @@ const AccountPage = () => {
                   {/* ─── ORDERS ─────────────────────────────────────────── */}
                   {tab==='orders' && (
                     <div>
+                      <OrderTrackWidget className="mb-6" />
                       <h2 className="text-xl font-extrabold text-gray-900 mb-4">Order History</h2>
                       {ordersLoading
                         ? <div className="space-y-3">{[...Array(3)].map((_,i)=><div key={i} className="h-24 bg-white rounded-2xl border border-gray-100 animate-pulse"/>)}</div>

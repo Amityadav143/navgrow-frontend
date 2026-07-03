@@ -29,49 +29,98 @@ const CATEGORIES = [
 const GST_RATES = ['0','5','12','18','28'];
 
 /* ── CSV helpers ─────────────────────────────────────────────────────────── */
+// Full column set — matches the backend ProductRequest DTO exactly.
+// Rich text/list fields are supported; in CSV, encode line-separated lists
+// (features, benefits, applications, specifications, imageUrls) using a
+// literal "\n" between items, or wrap the whole multi-line cell in quotes.
 const CSV_HEADERS = [
-  'name','category','price','mrp','gstRate','stockQty',
-  'description','imageUrl','badge','featured','sku',
+  'name','category','price','mrp','gstRate','stockQty','minOrderQty',
+  'description','imageUrl','badge','featured',
+  'tagline','summary','warranty',
+  'features','benefits','applications','specifications','imageUrls',
 ];
+// Only name, category and price are mandatory; everything else is optional.
+const CSV_REQUIRED = ['name','category','price'];
+
+function csvCell(v) {
+  const s = v == null ? '' : String(v);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
 function productsToCSV(products) {
   const rows = [CSV_HEADERS.join(',')];
   products.forEach(p => {
-    rows.push(CSV_HEADERS.map(h => {
-      const v = p[h] ?? '';
-      return typeof v==='string' && (v.includes(',')||v.includes('"')||v.includes('\n'))
-        ? `"${v.replace(/"/g,'""')}"` : v;
-    }).join(','));
+    rows.push(CSV_HEADERS.map(h => csvCell(p[h] ?? '')).join(','));
   });
   return rows.join('\n');
 }
+
+// Full RFC-4180-style parser: handles quoted fields containing commas,
+// embedded newlines, and escaped "" quotes — so Excel / Google Sheets
+// exports (including \r\n line endings) import cleanly.
+function parseCSV(text) {
+  const rows = [];
+  let row = [], cur = '', inQ = false;
+  // normalise BOM
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { cur += '"'; i++; }
+        else inQ = false;
+      } else cur += ch;
+    } else if (ch === '"') {
+      inQ = true;
+    } else if (ch === ',') {
+      row.push(cur); cur = '';
+    } else if (ch === '\n' || ch === '\r') {
+      // handle \r\n as a single break; ignore lone \r before \n
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      row.push(cur); cur = '';
+      rows.push(row); row = [];
+    } else cur += ch;
+  }
+  // flush last field/row if any content remains
+  if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+  // drop fully-empty trailing rows
+  return rows.filter(r => r.some(c => c.trim() !== ''));
+}
+
 function csvToProducts(csvText) {
-  const lines = csvText.trim().split('\n');
-  if (lines.length < 2) throw new Error('CSV must have a header row and at least one data row');
-  const headers = lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,''));
-  return lines.slice(1).map((line, i) => {
-    const vals = []; let cur=''; let inQ=false;
-    for (const ch of line) {
-      if (ch==='"') { inQ=!inQ; }
-      else if (ch===','&&!inQ) { vals.push(cur); cur=''; }
-      else cur+=ch;
-    }
-    vals.push(cur);
-    const obj = {};
-    headers.forEach((h,idx) => { obj[h]=vals[idx]?.trim()??''; });
-    return {
-      name:       obj.name,
-      category:   obj.category||'Safety Equipment',
-      price:      parseFloat(obj.price)||0,
-      mrp:        obj.mrp ? parseFloat(obj.mrp) : null,
-      gstRate:    parseInt(obj.gstRate)||18,
-      stockQty:   parseInt(obj.stockQty)||0,
-      description:obj.description||'',
-      imageUrl:   obj.imageUrl||'',
-      badge:      obj.badge||'',
-      featured:   obj.featured==='true'||obj.featured==='1',
-      sku:        obj.sku||'',
-    };
-  });
+  const rows = parseCSV(csvText);
+  if (rows.length < 2) throw new Error('CSV must have a header row and at least one data row');
+  const headers = rows[0].map(h => h.trim());
+  const idx = Object.fromEntries(headers.map((h, i) => [h, i]));
+  // make sure the mandatory columns are present
+  const missing = CSV_REQUIRED.filter(c => !(c in idx));
+  if (missing.length) throw new Error(`CSV is missing required column(s): ${missing.join(', ')}`);
+
+  const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
+  const get = (cells, key) => (idx[key] != null ? (cells[idx[key]] ?? '').trim() : '');
+
+  return rows.slice(1).map(cells => ({
+    name:           get(cells, 'name'),
+    category:       get(cells, 'category') || 'Safety Equipment',
+    price:          num(get(cells, 'price')) ?? 0,
+    mrp:            get(cells, 'mrp') ? num(get(cells, 'mrp')) : null,
+    gstRate:        get(cells, 'gstRate') ? (num(get(cells, 'gstRate')) ?? 18) : 18,
+    stockQty:       get(cells, 'stockQty') ? Math.trunc(num(get(cells, 'stockQty')) ?? 0) : 0,
+    minOrderQty:    get(cells, 'minOrderQty') ? Math.max(1, Math.trunc(num(get(cells, 'minOrderQty')) ?? 1)) : 1,
+    description:    get(cells, 'description'),
+    imageUrl:       get(cells, 'imageUrl'),
+    badge:          get(cells, 'badge'),
+    featured:       ['true', '1', 'yes', 'y'].includes(get(cells, 'featured').toLowerCase()),
+    tagline:        get(cells, 'tagline'),
+    summary:        get(cells, 'summary'),
+    warranty:       get(cells, 'warranty'),
+    // list/multiline fields: allow literal "\n" in the cell as an item separator
+    features:       get(cells, 'features').replace(/\\n/g, '\n'),
+    benefits:       get(cells, 'benefits').replace(/\\n/g, '\n'),
+    applications:   get(cells, 'applications').replace(/\\n/g, '\n'),
+    specifications: get(cells, 'specifications').replace(/\\n/g, '\n'),
+    imageUrls:      get(cells, 'imageUrls').replace(/\\n/g, '\n'),
+  }));
 }
 
 /* ── Confirm dialog ──────────────────────────────────────────────────────── */
@@ -118,10 +167,12 @@ const FormInput = ({ label, fieldKey, type='text', required, placeholder, form, 
 
 /* ── Product form — Input defined OUTSIDE to fix cursor jump bug ─────────── */
 const ProductForm = ({ initial, onSave, onCancel, saving }) => {
-  const [form, setForm] = useState(initial || {
+  const DEFAULTS = {
     name:'', category:'Safety Equipment', price:'', mrp:'', gstRate:'18',
-    stockQty:'0', description:'', imageUrl:'', badge:'', featured:false, sku:'',
-  });
+    stockQty:'0', minOrderQty:'1', description:'', imageUrl:'', badge:'', featured:false, sku:'', active:true,
+    tagline:'', summary:'', warranty:'', imageUrls:'', features:'', benefits:'', applications:'', specifications:'',
+  };
+  const [form, setForm] = useState({ ...DEFAULTS, ...(initial || {}) });
 
   // Stable onChange handler — won't recreate on each render
   const handleChange = useCallback((key, value) => {
@@ -152,6 +203,7 @@ const ProductForm = ({ initial, onSave, onCancel, saving }) => {
           <FormInput label="Price (₹)"    fieldKey="price"    required type="number" placeholder="480" form={form} onChange={handleChange} />
           <FormInput label="MRP (₹)"      fieldKey="mrp"      type="number" placeholder="650" form={form} onChange={handleChange} />
           <FormInput label="Stock Qty"    fieldKey="stockQty" type="number" placeholder="100" form={form} onChange={handleChange} />
+          <FormInput label="Min Order Qty" fieldKey="minOrderQty" type="number" placeholder="1" form={form} onChange={handleChange} />
           <FormInput label="Badge"        fieldKey="badge"    placeholder="Bestseller / New / 26% OFF" form={form} onChange={handleChange} />
           <FormInput label="Image URL"    fieldKey="imageUrl" placeholder="https://…" form={form} onChange={handleChange} full />
 
@@ -184,6 +236,75 @@ const ProductForm = ({ initial, onSave, onCancel, saving }) => {
                          focus:outline-none focus:border-blue-500 resize-y placeholder-gray-600"/>
           </div>
 
+          {/* ── Rich product detail (shown on the product detail page) ── */}
+          <div className="col-span-2 mt-2 mb-1">
+            <p className="text-xs font-bold text-blue-400 uppercase tracking-wide">Product Detail Page Content</p>
+            <p className="text-[11px] text-gray-500">These appear on the product page. For list fields, put one item per line.</p>
+          </div>
+
+          <div className="col-span-2">
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Tagline</label>
+            <input value={form.tagline} onChange={e => handleChange('tagline', e.target.value)}
+              placeholder="Short catchy line shown under the product name"
+              className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 placeholder-gray-600"/>
+          </div>
+
+          <div className="col-span-2">
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Summary</label>
+            <textarea value={form.summary} onChange={e => handleChange('summary', e.target.value)}
+              rows={2} placeholder="Longer overview shown at the top of the description tab (falls back to Description if empty)"
+              className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 resize-y placeholder-gray-600"/>
+          </div>
+
+          <div className="col-span-2 md:col-span-1">
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Key Features <span className="text-gray-600 normal-case">(one per line)</span></label>
+            <textarea value={form.features} onChange={e => handleChange('features', e.target.value)}
+              rows={4} placeholder={"Corrosion-resistant coating\nMeets IS 2925 standard\nAdjustable fit"}
+              className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 resize-y placeholder-gray-600"/>
+          </div>
+
+          <div className="col-span-2 md:col-span-1">
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Benefits <span className="text-gray-600 normal-case">(one per line)</span></label>
+            <textarea value={form.benefits} onChange={e => handleChange('benefits', e.target.value)}
+              rows={4} placeholder={"Reduces workplace injuries\nLong service life\nLowers replacement cost"}
+              className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 resize-y placeholder-gray-600"/>
+          </div>
+
+          <div className="col-span-2 md:col-span-1">
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Applications <span className="text-gray-600 normal-case">(one per line)</span></label>
+            <textarea value={form.applications} onChange={e => handleChange('applications', e.target.value)}
+              rows={4} placeholder={"Railway maintenance\nConstruction sites\nIndustrial plants"}
+              className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 resize-y placeholder-gray-600"/>
+          </div>
+
+          <div className="col-span-2 md:col-span-1">
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Specifications <span className="text-gray-600 normal-case">(Label: Value per line)</span></label>
+            <textarea value={form.specifications} onChange={e => handleChange('specifications', e.target.value)}
+              rows={4} placeholder={"Material: High-density polyethylene\nWeight: 350 g\nColour: Yellow"}
+              className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 resize-y placeholder-gray-600"/>
+          </div>
+
+          <div className="col-span-2 md:col-span-1">
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Warranty</label>
+            <textarea value={form.warranty} onChange={e => handleChange('warranty', e.target.value)}
+              rows={2} placeholder="e.g. 1-year manufacturer warranty against defects"
+              className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 resize-y placeholder-gray-600"/>
+          </div>
+
+          <div className="col-span-2">
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Gallery Images <span className="text-gray-600 normal-case">(one URL per line — shown as a swipeable gallery on the product page)</span></label>
+            <textarea value={form.imageUrls} onChange={e => handleChange('imageUrls', e.target.value)}
+              rows={3} placeholder={"https://…/photo-2.jpg\nhttps://…/photo-3.jpg"}
+              className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 resize-y placeholder-gray-600"/>
+            {form.imageUrls && form.imageUrls.split('\n').map(u=>u.trim()).filter(Boolean).length > 0 && (
+              <div className="flex gap-2 mt-2 flex-wrap">
+                {form.imageUrls.split('\n').map(u=>u.trim()).filter(Boolean).slice(0,8).map((u,i)=>(
+                  <img key={i} loading="lazy" decoding="async" src={u} alt="" className="h-14 w-14 object-cover rounded-lg border border-gray-700" onError={e=>{e.target.style.display='none'}}/>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Featured toggle */}
           <div className="col-span-2 flex items-center gap-3 p-3 bg-gray-900 rounded-xl border border-gray-700">
             <input type="checkbox" id="featured-check" checked={form.featured}
@@ -210,7 +331,12 @@ const ProductForm = ({ initial, onSave, onCancel, saving }) => {
                        hover:opacity-90 disabled:opacity-60 transition-opacity">
             {saving ? <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"/>
                     : <CheckCircle className="h-4 w-4"/>}
-            {saving ? 'Saving…' : initial ? 'Update Product' : 'Create Product'}
+            {saving ? 'Saving…' : initial ? 'Update Product' : 'Publish Product'}
+          </button>
+          <button type="button" disabled={saving}
+            onClick={() => onSave({ ...form, active: false })}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gray-700 text-gray-200 rounded-xl text-sm font-bold hover:bg-gray-600 transition-colors disabled:opacity-60">
+            Save as Draft
           </button>
           <button type="button" onClick={onCancel}
             className="px-5 py-2.5 bg-gray-700 text-gray-300 rounded-xl text-sm font-semibold hover:bg-gray-600 transition-colors">
@@ -241,7 +367,8 @@ const BulkUploadPanel = ({ onClose, onSuccess }) => {
         const errs = [];
         rows.forEach((r,i) => {
           if (!r.name) errs.push(`Row ${i+2}: name is required`);
-          if (!r.price || r.price <= 0) errs.push(`Row ${i+2}: valid price required`);
+          if (!r.category) errs.push(`Row ${i+2}: category is required`);
+          if (!r.price || r.price <= 0) errs.push(`Row ${i+2}: a valid price (> 0) is required`);
         });
         setErrors(errs); setPreview(rows.slice(0,5));
       } catch (err) { setErrors([err.message]); setPreview([]); }
@@ -256,35 +383,41 @@ const BulkUploadPanel = ({ onClose, onSuccess }) => {
     reader.onload = async ev => {
       try {
         const rows = csvToProducts(ev.target.result);
-        let success=0, fail=0;
-        for (const row of rows) {
-          try {
-            // Build clean payload matching backend ProductRequest DTO
-            const payload = {
-              name:        row.name,
-              category:    row.category || 'Safety Equipment',
-              price:       Number(row.price),
-              mrp:         row.mrp ? Number(row.mrp) : null,
-              gstRate:     Number(row.gstRate) || 18,
-              stockQty:    Number(row.stockQty) || 0,
-              description: row.description || '',
-              imageUrl:    row.imageUrl || '',
-              badge:       row.badge || '',
-              featured:    Boolean(row.featured),
-              sku:         row.sku || '',
-            };
-            await productsApi.create(payload);
-            success++;
-          } catch (err) {
-            console.warn('Product upload failed:', row.name, err.response?.data);
-            fail++;
-          }
-        }
-        toast({ title: `Bulk upload done: ${success} added${fail ? `, ${fail} failed` : ''}`,
-                variant: fail > 0 ? 'destructive' : 'default' });
-        if (success > 0) { onSuccess(); onClose(); }
+        // Build clean payloads matching the backend ProductRequest DTO,
+        // carrying ALL fields (including rich detail/list fields).
+        const payload = rows.map(row => ({
+          name:           row.name,
+          category:       row.category || 'Safety Equipment',
+          price:          Number(row.price),
+          mrp:            row.mrp != null ? Number(row.mrp) : null,
+          gstRate:        Number(row.gstRate) || 18,
+          stockQty:       Number(row.stockQty) || 0,
+          minOrderQty:    Number(row.minOrderQty) || 1,
+          description:    row.description || '',
+          imageUrl:       row.imageUrl || '',
+          badge:          row.badge || '',
+          featured:       Boolean(row.featured),
+          tagline:        row.tagline || '',
+          summary:        row.summary || '',
+          warranty:       row.warranty || '',
+          features:       row.features || '',
+          benefits:       row.benefits || '',
+          applications:   row.applications || '',
+          specifications: row.specifications || '',
+          imageUrls:      row.imageUrls || '',
+        }));
+
+        // One transactional request instead of one HTTP call per row.
+        const res = await productsApi.bulkCreate(payload);
+        const created = res?.data?.created ?? payload.length;
+        toast({ title: `Bulk upload complete: ${created} product${created === 1 ? '' : 's'} added` });
+        onSuccess(); onClose();
       } catch (err) {
-        toast({ title: 'Upload failed', description: err.message, variant: 'destructive' });
+        const msg = err.response?.data?.message
+          || err.response?.data?.error
+          || err.message
+          || 'Upload failed';
+        toast({ title: 'Bulk upload failed', description: msg, variant: 'destructive' });
       } finally { setUploading(false); }
     };
     reader.readAsText(file);
@@ -302,9 +435,10 @@ const BulkUploadPanel = ({ onClose, onSuccess }) => {
 
       {/* Format hint */}
       <div className="bg-gray-900 rounded-xl p-4 mb-4 text-xs font-mono">
-        <p className="font-semibold mb-1.5 text-white">CSV Format (required columns)</p>
+        <p className="font-semibold mb-1.5 text-white">CSV columns <span className="text-gray-400 font-normal">(only name, category, price required)</span></p>
         <p className="text-amber-300 break-all">{CSV_HEADERS.join(', ')}</p>
-        <p className="text-gray-500 mt-1.5">All numeric fields must be numbers. featured: true/false.</p>
+        <p className="text-gray-500 mt-1.5">Numeric: price, mrp, gstRate, stockQty, minOrderQty. featured: true/false. For list fields (features, benefits, applications, specifications, imageUrls) put items on separate lines, or use <span className="text-gray-300">\n</span> between items. Download the template for a ready-made example.</p>
+        <p className="text-gray-500 mt-1">Best practice: <span className="text-gray-300">Export</span> your current products first to get a perfectly-formatted file to edit.</p>
       </div>
 
       <div className="flex gap-3 mb-4">
@@ -386,11 +520,20 @@ const AdminProducts = () => {
       mrp:         form.mrp ? Number(form.mrp) : null,
       gstRate:     Number(form.gstRate)||18,
       stockQty:    Number(form.stockQty)||0,
+      minOrderQty: Number(form.minOrderQty)||1,
       description: form.description||'',
       imageUrl:    form.imageUrl||'',
       badge:       form.badge||'',
       featured:    Boolean(form.featured),
       sku:         form.sku||'',
+      tagline:        form.tagline||'',
+      summary:        form.summary||'',
+      warranty:       form.warranty||'',
+      imageUrls:      form.imageUrls||'',
+      features:       form.features||'',
+      benefits:       form.benefits||'',
+      applications:   form.applications||'',
+      specifications: form.specifications||'',
     };
 
     const action = () => editing ? update(editing.id, payload) : create(payload);
@@ -424,9 +567,27 @@ const AdminProducts = () => {
   };
 
   const handleDownloadTemplate = () => {
-    const csv = CSV_HEADERS.join(',') + '\nSample Safety Helmet,Safety Equipment,480,650,18,100,Product description,https://image-url.com,Bestseller,false,NGP-001';
+    // Build a correctly-escaped example row that exercises the rich/list fields,
+    // so admins can see exactly how multi-line columns should look.
+    const example = {
+      name: 'Sample Safety Helmet ISI',
+      category: 'Safety Equipment',
+      price: 480, mrp: 650, gstRate: 18, stockQty: 100, minOrderQty: 1,
+      description: 'ISI-marked industrial safety helmet with adjustable harness.',
+      imageUrl: 'https://example.com/helmet.jpg',
+      badge: 'Bestseller', featured: 'false',
+      tagline: 'Certified head protection for every site',
+      summary: 'A durable, lightweight helmet built to IS 2925 for railway and construction use.',
+      warranty: '1-year manufacturer warranty against defects',
+      features: 'Corrosion-resistant shell\nAdjustable ratchet fit\nMeets IS 2925',
+      benefits: 'Reduces injury risk\nAll-day comfort\nLong service life',
+      applications: 'Railway maintenance\nConstruction sites\nIndustrial plants',
+      specifications: 'Material: HDPE\nWeight: 350 g\nColour: Yellow',
+      imageUrls: 'https://example.com/helmet-2.jpg\nhttps://example.com/helmet-3.jpg',
+    };
+    const csv = CSV_HEADERS.join(',') + '\n' + CSV_HEADERS.map(h => csvCell(example[h] ?? '')).join(',');
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     a.download = 'products-template.csv';
     a.click();
   };

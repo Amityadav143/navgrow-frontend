@@ -27,7 +27,7 @@ const clients = [
     project: 'Modified Hand Brake Fitment',
     location: 'Siliguri Diesel Loco Shed',
     year: '2025–2026',
-    image: '/handbreak.png',
+    image: '/handbreak.jpg',
     stars: 5,
   },
   {
@@ -35,7 +35,7 @@ const clients = [
     project: 'Lube Oil Storage Solutions',
     location: 'Siliguri, West Bengal',
     year: '2026',
-    image: '/barricading.png',
+    image: '/barricading.jpg',
     stars: 5,
   },
 ];
@@ -57,7 +57,7 @@ const TestimonialsSection = () => (
         </div>
         <h2 className="mb-4 text-white">Trusted by <span className="gradient-text">Industry Leaders</span></h2>
         <p className="text-blue-200 text-lg">
-          Delivering quality-first engineering to India's most demanding railway and industrial clients.
+          Delivering quality-first engineering — the proven foundation behind our sustainability solutions.
         </p>
       </motion.div>
 

@@ -18,7 +18,7 @@ import ProjectModal from '@/components/ProjectModal';
 const projects = [
   {
     title: 'Rainwater Leakage Testing Plant For Electric Locomotives',
-    category: 'Infrastructure',
+    category: 'Civil & Infrastructure',
     location: 'Siliguri Diesel Loco Shed, West Bengal',
     year: '2025',
     client: 'Indian Railways',
@@ -27,21 +27,21 @@ const projects = [
   },
   {
     title: 'Fitment of Modified Hand Brake in Locomotives',
-    category: 'Infrastructure',
+    category: 'Mechanical Engineering',
     location: 'Siliguri Diesel Loco Shed, West Bengal',
     year: '2025–2026',
     client: 'Indian Railways',
     description: 'Installation of an improved hand brake mechanism at Siliguri Diesel Loco Shed, designed for better ergonomics, durability, and ease of manual operation. Executed per Indian Railways technical standards to ensure reliable performance.',
-    image: 'handbreak.png',
+    image: 'handbreak.jpg',
   },
   {
     title: 'Specialised Lube Oil Storage for Wabtec Locomotives',
-    category: 'Infrastructure',
+    category: 'Industrial Fabrication',
     client: 'Wabtec Locomotives Pvt. Ltd.',
     location: 'Siliguri, West Bengal',
     year: '2026',
     description: 'Modular storage solutions providing maximum airflow and safety for the storage of volatile or temperature-sensitive locomotive fluids — engineered specifically for Wabtec locomotive requirements.',
-    image: 'barricading.png',
+    image: 'barricading.jpg',
   },
 ];
 
@@ -60,7 +60,7 @@ const ProjectsSection = () => {
               <div className="section-chip mb-4 w-fit">Our Track Record</div>
               <h2 className="mb-3">Featured <span className="gradient-text">Projects</span></h2>
               <p className="text-gray-600 text-lg">
-                Real projects delivered for Indian Railways and industrial clients across North Bengal.
+                Real projects that prove our engineering rigour — the same discipline we now bring to every sustainability solution.
               </p>
             </motion.div>
             <motion.div

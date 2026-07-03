@@ -1,9 +1,0 @@
-# Navgrow Engineering — URL Redirects & SPA routing
-# For Netlify / static hosting
-
-# SPA fallback — all routes to index.html
-/*    /index.html   200
-
-# Legacy URL redirects (if any old links exist)
-/services/railway     /services#railway-infrastructure   301
-/services/government  /services#government-contracts     301

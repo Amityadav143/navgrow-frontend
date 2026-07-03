@@ -12,6 +12,8 @@ import TestimonialsSection from '@/components/TestimonialsSection';
 import FaqSection from '@/components/FaqSection';
 import CtaSection from '@/components/CtaSection';
 import ShopPreview from '@/components/ShopPreview';
+import IndustriesSection from '@/components/IndustriesSection';
+import ProcessSection from '@/components/ProcessSection';
 import useSeo from '@/hooks/useSeo';
 
 const HomePage = () => {
@@ -37,7 +39,9 @@ const HomePage = () => {
     <HeroSection />
     <StatsSection />
     <ServicesSection />
+    <IndustriesSection />
     <ProjectsSection />
+    <ProcessSection />
     <ShopPreview />
     <TestimonialsSection />
     <FaqSection />

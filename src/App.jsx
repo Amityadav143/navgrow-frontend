@@ -29,6 +29,8 @@ const NewsPage           = React.lazy(() => import('@/pages/NewsPage'));
 const GalleryPage        = React.lazy(() => import('@/pages/GalleryPage'));
 const QuoteCalculatorPage= React.lazy(() => import('@/pages/QuoteCalculatorPage'));
 const OrderTrackPage     = React.lazy(() => import('@/pages/OrderTrackPage'));
+const SavedQuotesPage    = React.lazy(() => import('@/pages/SavedQuotesPage'));
+const OAuthCallbackPage  = React.lazy(() => import('@/pages/OAuthCallbackPage'));
 const AccountPage        = React.lazy(() => import('@/pages/AccountPage'));
 const TermsPage          = React.lazy(() => import('@/pages/TermsPage'));
 const PrivacyPage        = React.lazy(() => import('@/pages/PrivacyPage'));
@@ -221,6 +223,8 @@ function App() {
           <Route path="gallery"       element={<W><GalleryPage /></W>} />
           <Route path="quote-calculator" element={<W><QuoteCalculatorPage /></W>} />
           <Route path="track-order"   element={<W><OrderTrackPage /></W>} />
+          <Route path="saved-quotes"  element={<W><SavedQuotesPage /></W>} />
+          <Route path="oauth/callback" element={<W><OAuthCallbackPage /></W>} />
           <Route path="account"       element={<W><AccountPage /></W>} />
           <Route path="account/orders"element={<W><AccountPage /></W>} />
           <Route path="terms"         element={<W><TermsPage /></W>} />

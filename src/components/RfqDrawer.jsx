@@ -13,7 +13,9 @@ import {
   Building2, ArrowRight, ArrowLeft, Loader2, Package,
 } from 'lucide-react';
 import { useRfq } from '@/context/RfqContext';
+import useEscapeKey from '@/hooks/useEscapeKey';
 import { rfqApi } from '@/lib/api';
+import { track } from '@/lib/analytics';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const PHONE_RE = /^[6-9]\d{9}$/;
@@ -53,7 +55,20 @@ const RfqDrawer = () => {
         })),
       };
       const { data } = await rfqApi.submit(payload);
+      try { track('rfq_submit', { label: data?.rfqNumber, value: (payload?.items?.length)||undefined }); } catch {}
       setRfqNumber(data.rfqNumber || '');
+      // Auto-track this RFQ on the Saved Quotes page so the buyer doesn't have
+      // to re-enter the number to follow its status.
+      if (data?.rfqNumber) {
+        try {
+          const KEY = 'ng_saved_quotes';
+          const saved = JSON.parse(localStorage.getItem(KEY) || '[]');
+          const list = Array.isArray(saved) ? saved : [];
+          if (!list.includes(data.rfqNumber)) {
+            localStorage.setItem(KEY, JSON.stringify([...list, data.rfqNumber]));
+          }
+        } catch { /* ignore storage errors */ }
+      }
       setStep(3);
       clearRfq();
     } catch (err) {
@@ -67,6 +82,7 @@ const RfqDrawer = () => {
     setDrawerOpen(false);
     setTimeout(() => { setStep(1); setRfqNumber(''); setErrors({}); }, 300);
   };
+  useEscapeKey(drawerOpen, close);
 
   return (
     <AnimatePresence>
@@ -228,9 +244,15 @@ const RfqDrawer = () => {
                     Our procurement team will send your formal, GST-compliant quotation within
                     <strong className="text-gray-700"> 1 business day</strong>. A confirmation email is on its way.
                   </p>
-                  <button onClick={close} className="px-6 py-3 brand-gradient text-white font-bold rounded-xl text-sm hover:opacity-90 transition-opacity">
-                    Done
-                  </button>
+                  <div className="flex flex-col sm:flex-row gap-2.5 justify-center">
+                    <a href="/saved-quotes" onClick={close}
+                      className="px-6 py-3 bg-white border-2 border-blue-200 text-blue-700 font-bold rounded-xl text-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-1.5">
+                      Track your quotes <ArrowRight className="h-4 w-4" />
+                    </a>
+                    <button onClick={close} className="px-6 py-3 brand-gradient text-white font-bold rounded-xl text-sm hover:opacity-90 transition-opacity">
+                      Done
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -245,7 +267,7 @@ const RfqDrawer = () => {
                   </button>
                 )}
                 {step === 1 ? (
-                  <button onClick={() => setStep(2)}
+                  <button onClick={() => (track('rfq_start', { value: totalItems }), setStep(2))}
                     className="flex-1 py-3 brand-gradient text-white font-bold rounded-xl text-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
                     Continue <ArrowRight className="h-4 w-4" />
                   </button>

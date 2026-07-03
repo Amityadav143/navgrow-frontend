@@ -65,9 +65,10 @@ const RichToolbar = ({ textareaRef }) => {
 /* ── Article form ─────────────────────────────────────────────────────────── */
 const ArticleForm = ({ initial, onSave, onCancel, saving }) => {
   const contentRef = useRef(null);
-  const [form, setForm] = useState(initial || {
+  const [form, setForm] = useState({
     title: '', slug: '', excerpt: '', content: '', category: 'Project Update',
-    imageUrl: '', authorName: 'Navgrow Team', tags: '', status: 'DRAFT',
+    imageUrl: '', imageUrls: '', authorName: 'Navgrow Team', tags: '', status: 'DRAFT',
+    ...(initial || {}),
   });
   const [preview, setPreview] = useState(false);
   const ch = useCallback(key => e => setForm(p => ({ ...p, [key]: e.target.value })), []);
@@ -152,6 +153,20 @@ const ArticleForm = ({ initial, onSave, onCancel, saving }) => {
               <input value={form.imageUrl} onChange={ch('imageUrl')} placeholder="https://…"
                 className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"/>
               {form.imageUrl && <img loading="lazy" decoding="async" src={form.imageUrl} alt="" className="mt-2 h-20 w-full object-cover rounded-xl" onError={e=>{e.target.style.display='none'}}/>}
+            </div>
+            {/* Gallery Images */}
+            <div className="md:col-span-2">
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Gallery Images <span className="text-gray-600 normal-case">(one URL per line — shown as a gallery in the article)</span></label>
+              <textarea value={form.imageUrls} onChange={ch('imageUrls')} rows={3}
+                placeholder={"https://…/photo-2.jpg\nhttps://…/photo-3.jpg"}
+                className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 resize-y placeholder-gray-600"/>
+              {form.imageUrls && form.imageUrls.split('\n').map(u=>u.trim()).filter(Boolean).length > 0 && (
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  {form.imageUrls.split('\n').map(u=>u.trim()).filter(Boolean).slice(0,6).map((u,i)=>(
+                    <img key={i} loading="lazy" decoding="async" src={u} alt="" className="h-14 w-14 object-cover rounded-lg border border-gray-700" onError={e=>{e.target.style.display='none'}}/>
+                  ))}
+                </div>
+              )}
             </div>
             {/* Excerpt */}
             <div className="md:col-span-2">

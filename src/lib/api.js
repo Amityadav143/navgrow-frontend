@@ -75,6 +75,7 @@ export const productsApi = {
   reviews:    (id)     => api.get(`/products/${id}/reviews`),
   addReview:  (id, d)  => api.post(`/products/${id}/reviews`, d),
   create:     (d)      => api.post('/products', d),
+  bulkCreate: (list)   => api.post('/products/bulk', list),
   update:     (id, d)  => api.put(`/products/${id}`, d),
   delete:     (id)     => api.delete(`/products/${id}`),
   updateStock:(id, q)  => api.patch(`/products/${id}/stock`, null, { params: { qty: q } }),
@@ -230,7 +231,7 @@ export const adminUsersApi = {
 export const analyticsApi = {
   dashboard:    () => api.get('/admin/analytics/dashboard'),
   recentOrders: () => api.get('/admin/analytics/recent-orders'),
-  revenue:      (period) => api.get('/admin/analytics/revenue', { params: { period } }),
+  funnel:       (days) => api.get('/admin/analytics/funnel', { params: { days: days || 30 } }),
 };
 
 // ── User API ──────────────────────────────────────────────────────────────────
@@ -250,6 +251,13 @@ export const chatApi = {
 };
 
 // ── Debounce utility ─────────────────────────────────────────────────────────
+
+// ── Site Settings API ─────────────────────────────────────────────────────────
+export const siteSettingsApi = {
+  get:  ()  => api.get('/site-settings'),
+  save: (settingsJson) => api.put('/site-settings', { settings: settingsJson }),
+};
+
 export const debounce = (fn, ms = 300) => {
   let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 };

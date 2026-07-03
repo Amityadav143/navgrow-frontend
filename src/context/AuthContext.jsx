@@ -89,6 +89,29 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // ── Login ─────────────────────────────────────────────────────────────────
+  // ── Apply a session from a token response (e.g. OTP login, OAuth) ──────────
+  const applySession = useCallback(async (data) => {
+    if (!data || !data.accessToken) return { success: false };
+    localStorage.setItem(TOKEN_KEY,   data.accessToken);
+    localStorage.setItem(REFRESH_KEY, data.refreshToken);
+    recordActivity();
+
+    const roles = parseRoles(data.roles);
+    const userData = {
+      email:     data.email    || '',
+      fullName:  data.fullName || '',
+      avatarUrl: data.avatarUrl || '',
+      roles,
+      isAdmin:   roles.some(r => r === 'ROLE_ADMIN'),
+      isManager: roles.some(r => r === 'ROLE_MANAGER'),
+      isEditor:  roles.some(r => r === 'ROLE_EDITOR'),
+    };
+    const enriched = await enrichUser(userData);
+    localStorage.setItem(USER_KEY, JSON.stringify(enriched));
+    setUser(enriched);
+    return { success: true };
+  }, [enrichUser]);
+
   const login = useCallback(async (emailOrPhone, password, rememberMe = false) => {
     setLoading(true); setError(null);
     try {
@@ -163,7 +186,7 @@ export const AuthProvider = ({ children }) => {
     <AuthContext.Provider value={{
       user, loading, error, isLoggedIn,
       isAdmin, isManager, isEditor,
-      login, register, logout, refreshUser,
+      login, register, logout, refreshUser, applySession,
       clearError: () => setError(null),
     }}>
       {children}

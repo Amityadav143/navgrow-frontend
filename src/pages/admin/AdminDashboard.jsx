@@ -133,6 +133,7 @@ const KpiCard = ({ label, value, icon: Icon, color, sub, loading }) => (
 const AdminHome = () => {
   const { data: stats, loading } = useApi(analyticsApi.dashboard, []);
   const { data: recent } = useApi(analyticsApi.recentOrders, []);
+  const { data: funnel } = useApi(() => analyticsApi.funnel(30), []);
 
   const kpis = [
     { label: 'Total Orders',         value: stats?.totalOrders,          icon: ShoppingCart, color: 'bg-blue-600', sub: `${stats?.pendingOrders || 0} pending` },
@@ -165,6 +166,74 @@ const AdminHome = () => {
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-7">
         {kpis.map((kpi) => <KpiCard key={kpi.label} {...kpi} loading={loading} />)}
+      </div>
+
+      {/* Conversion funnel (last 30 days) */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-gray-900">Conversion Funnel <span className="text-xs font-normal text-gray-400">· last 30 days</span></h3>
+          {funnel?.conversionRate != null && (
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-green-50 text-green-700">
+              {funnel.conversionRate}% view → buy
+            </span>
+          )}
+        </div>
+        {!funnel ? (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[...Array(4)].map((_,i)=><div key={i} className="h-20 bg-gray-100 animate-pulse rounded-xl"/>)}</div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+              {(funnel.shopFunnel || []).map((s, i) => {
+                const labels = { product_view:'Product Views', add_to_cart:'Added to Cart', checkout_start:'Checkout Started', order_placed:'Orders Placed' };
+                const colors = ['bg-blue-50 text-blue-700','bg-violet-50 text-violet-700','bg-amber-50 text-amber-700','bg-green-50 text-green-700'];
+                return (
+                  <div key={s.stage} className={`rounded-xl p-4 ${colors[i] || 'bg-gray-50 text-gray-700'}`}>
+                    <p className="text-2xl font-extrabold">{Number(s.sessions||0).toLocaleString('en-IN')}</p>
+                    <p className="text-xs font-semibold opacity-80 mt-0.5">{labels[s.stage] || s.stage}</p>
+                    {s.dropFromPrev != null && s.dropFromPrev > 0 && (
+                      <p className="text-[11px] mt-1 opacity-70">▼ {s.dropFromPrev}% drop-off</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {/* RFQ mini-funnel + top products */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">RFQ Funnel</p>
+                <div className="flex items-center gap-2">
+                  {(funnel.rfqFunnel || []).map((s, i) => {
+                    const labels = { rfq_start:'Started', rfq_submit:'Submitted', rfq_accept:'Accepted' };
+                    return (
+                      <React.Fragment key={s.stage}>
+                        <div className="flex-1 text-center rounded-xl bg-gray-50 py-3">
+                          <p className="text-lg font-extrabold text-gray-900">{Number(s.sessions||0)}</p>
+                          <p className="text-[11px] text-gray-500 font-semibold">{labels[s.stage] || s.stage}</p>
+                        </div>
+                        {i < (funnel.rfqFunnel.length - 1) && <span className="text-gray-300 font-bold">→</span>}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Most Viewed Products</p>
+                {(funnel.topProducts || []).length === 0 ? (
+                  <p className="text-sm text-gray-400">No product views recorded yet.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {(funnel.topProducts || []).slice(0,5).map((p) => (
+                      <div key={p.label} className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600 truncate pr-2 font-mono text-xs">{p.label}</span>
+                        <span className="font-bold text-gray-900 shrink-0">{p.views}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Quick actions */}

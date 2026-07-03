@@ -54,6 +54,11 @@ const MainLayout = () => {
 
   return (
     <div className="flex min-h-screen flex-col">
+      {/* Skip link — first focusable element, lets keyboard users jump past the nav */}
+      <a href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:px-4 focus:py-2.5 focus:rounded-lg focus:bg-blue-700 focus:text-white focus:font-bold focus:shadow-lg">
+        Skip to main content
+      </a>
       <PageProgress />
 
       {/* Fixed header wrapper — TenderBanner + Navbar stacked together */}
@@ -66,7 +71,9 @@ const MainLayout = () => {
       <div style={{ height: headerHeight }} aria-hidden="true" />
 
       <motion.main
-        className="flex-1"
+        id="main-content"
+        tabIndex={-1}
+        className="flex-1 outline-none"
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 16 }}

@@ -19,17 +19,17 @@ import useSeo from '@/hooks/useSeo';
 
 const PHOTOS = [
   { id: 1,  cat: 'Projects',   src: '/wltpsguj.jpeg',    title: 'Rainwater Leakage Testing Plant',          location: 'Siliguri Diesel Loco Shed',  year: '2025' },
-  { id: 2,  cat: 'Projects',   src: '/handbreak.png',    title: 'Modified Hand Brake Fitment',              location: 'Siliguri Diesel Loco Shed',  year: '2025' },
-  { id: 3,  cat: 'Projects',   src: '/barricading.png',  title: 'Lube Oil Storage Solutions',               location: 'Siliguri, West Bengal',      year: '2026' },
+  { id: 2,  cat: 'Projects',   src: '/handbreak.jpg',    title: 'Modified Hand Brake Fitment',              location: 'Siliguri Diesel Loco Shed',  year: '2025' },
+  { id: 3,  cat: 'Projects',   src: '/barricading.jpg',  title: 'Lube Oil Storage Solutions',               location: 'Siliguri, West Bengal',      year: '2026' },
   { id: 4,  cat: 'Projects',   src: '/Railway_Infra.jpg',title: 'Railway Infrastructure Work',              location: 'North Bengal Zone',          year: '2025' },
   { id: 5,  cat: 'Certifications', src: '/DPIIT.png',    title: 'DPIIT Startup India Recognition',         location: 'Government of India',        year: '2023' },
   { id: 6,  cat: 'Certifications', src: '/makeinindia.png', title: 'Make in India Registration',           location: 'Government of India',        year: '2024' },
   { id: 7,  cat: 'Certifications', src: '/msme.png',     title: 'MSME Registration Certificate',           location: 'Ministry of MSME, India',    year: '2023' },
   { id: 8,  cat: 'Team',       src: '/Railway_Infra.jpg', title: 'Site Safety Briefing',    location: 'Project Site, Siliguri',    year: '2025' },
-  { id: 9,  cat: 'Projects',   src: '/barricading.png', title: 'Track Inspection Works',       location: 'NE Railway Zone',           year: '2025' },
-  { id: 10, cat: 'Team',       src: '/handbreak.png', title: 'Engineering Team at Work',  location: 'Siliguri Workshop',         year: '2026' },
+  { id: 9,  cat: 'Projects',   src: '/barricading.jpg', title: 'Track Inspection Works',       location: 'NE Railway Zone',           year: '2025' },
+  { id: 10, cat: 'Team',       src: '/handbreak.jpg', title: 'Engineering Team at Work',  location: 'Siliguri Workshop',         year: '2026' },
   { id: 11, cat: 'Projects',   src: '/wltpsguj.jpeg', title: 'Quality Inspection',        location: 'Diesel Loco Shed',          year: '2025' },
-  { id: 12, cat: 'Team',       src: '/smsystem.png', title: 'Equipment Calibration',     location: 'Navgrow Workshop',          year: '2026' },
+  { id: 12, cat: 'Team',       src: '/smsystem.jpg', title: 'Equipment Calibration',     location: 'Navgrow Workshop',          year: '2026' },
 ];
 
 const CATS = ['All', 'Projects', 'Team', 'Certifications'];

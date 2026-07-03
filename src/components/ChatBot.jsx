@@ -59,7 +59,7 @@ const STARTERS = [
   { e:"📋", label:"Get a Quote",       text:"How do I get a project quote? What details do you need?" },
   { e:"📦", label:"Track Order",       text:"How do I track my order from Navgrow?" },
   { e:"💼", label:"Careers",           text:"What job openings do you have right now?" },
-  { e:"🚂", label:"Railway Projects",  text:"Do you work with Indian Railways? What's your experience?" },
+  { e:"🏗", label:"Our Sectors",       text:"Which sectors and industries does Navgrow work across?" },
   { e:"🏭", label:"Industrial",        text:"Do you serve manufacturing and industrial clients?" },
   { e:"🎟", label:"Offers",            text:"Are there any discount codes or ongoing offers?" },
   { e:"🏆", label:"Certifications",    text:"What certifications does Navgrow hold?" },

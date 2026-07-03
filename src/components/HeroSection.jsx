@@ -146,9 +146,9 @@ const HeroVisual = () => (
       {/* Project cards */}
       <div className="px-5 mb-4 space-y-2">
         {[
-          { name: 'Hand Break Modification in Locomotives',    client: 'Indian Railways · NFR Zone',    status: 'IN PROGRESS', pct: 78, color: 'bg-blue-500'    },
-          { name: 'Wabtec Storage Solutions',  client: 'Wabtec Corporation',            status: 'COMPLETED',   pct: 100,color: 'bg-green-500'   },
-          { name: 'Industrial Safety Audit',   client: 'MSME Registered Client · Siliguri',        status: 'IN REVIEW',   pct: 55, color: 'bg-amber-500'   },
+          { name: 'Locomotive Hand-Brake Modification', client: 'Indian Railways · NFR Zone',       status: 'IN PROGRESS', pct: 78, color: 'bg-blue-500'    },
+          { name: 'Industrial Lube-Oil Storage System',  client: 'Wabtec Corporation',                status: 'COMPLETED',   pct: 100,color: 'bg-green-500'   },
+          { name: 'Rooftop Solar Installation',          client: 'Industrial Client · Siliguri',      status: 'IN REVIEW',   pct: 55, color: 'bg-amber-500'   },
         ].map((p, i) => (
           <motion.div key={p.name}
             initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
@@ -284,14 +284,14 @@ const HeroSection = () => (
           {/* Sub */}
           <p className="text-lg text-gray-600 mb-3 leading-relaxed max-w-lg">
             Navgrow Engineering delivers turnkey solutions for Indian Railways, government
-            contracts, industrial plants, and civil infrastructure — on time, on budget,
-            fully compliant.
+            contracts, industrial plants, and civil infrastructure — plus sustainability
+            services like solar and rainwater harvesting. On time, on budget, fully compliant.
           </p>
 
           {/* Social proof line */}
           <p className="text-sm font-semibold text-blue-700 mb-8 flex items-start gap-2">
             <CheckCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5"/>
-            Trusted by Indian Railways , Wabtec Corp., and 5+ industrial clients
+            Trusted by Indian Railways, Wabtec Corp., and 5+ industrial clients
           </p>
 
           {/* CTA buttons */}

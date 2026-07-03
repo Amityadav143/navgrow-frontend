@@ -10,6 +10,7 @@
  * Licensed for: navgrow.org (Production Deployment Only)
  */
 import { useState, useEffect } from 'react';
+import { siteSettingsApi } from '@/lib/api';
 
 const SETTINGS_KEY = 'ng_admin_site_settings';
 
@@ -54,7 +55,25 @@ export const useSiteSettings = () => {
     };
     window.addEventListener('ng:settings-updated', handleCustom);
     window.addEventListener('storage', handleStorage);
+
+    // Sync from backend so settings apply globally (not just the admin's browser)
+    let cancelled = false;
+    siteSettingsApi.get()
+      .then(({ data }) => {
+        if (cancelled || !data?.settings) return;
+        let parsed = {};
+        try { parsed = typeof data.settings === 'string' ? JSON.parse(data.settings) : data.settings; }
+        catch { parsed = {}; }
+        if (parsed && Object.keys(parsed).length) {
+          const merged = { ...defaultSettings, ...parsed };
+          try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed)); } catch {}
+          setSettings(merged);
+        }
+      })
+      .catch(() => { /* offline / not configured — fall back to localStorage */ });
+
     return () => {
+      cancelled = true;
       window.removeEventListener('ng:settings-updated', handleCustom);
       window.removeEventListener('storage', handleStorage);
     };

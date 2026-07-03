@@ -32,7 +32,7 @@ const STATIC_NEWS = [
   {
     id: '2', slug: 'hand-brake-fitment-siliguri-loco-shed', cat: 'Project Update',
     category: 'Project Update', date: 'January 2026', publishedAt: '2026-01-10',
-    imageUrl: '/handbreak.png', authorName: 'Navgrow Team', viewCount: 98,
+    imageUrl: '/handbreak.jpg', authorName: 'Navgrow Team', viewCount: 98,
     title: 'Modified Hand Brake Fitment Completed at Siliguri Diesel Loco Shed',
     excerpt: 'Our engineering team successfully completed the fitment of modified hand brake assemblies across multiple locomotives at the Siliguri Diesel Loco Shed.',
     tags: ['Indian Railways', 'Hand Brake', 'Loco Shed'],
@@ -64,7 +64,7 @@ const STATIC_NEWS = [
   {
     id: '6', slug: 'indian-railways-budget-fy26-infrastructure', cat: 'Industry',
     category: 'Industry', date: 'June 2025', publishedAt: '2025-06-15',
-    imageUrl: '/barricading.png', authorName: 'Navgrow Team', viewCount: 489,
+    imageUrl: '/barricading.jpg', authorName: 'Navgrow Team', viewCount: 489,
     title: 'Indian Railways Announces ₹2.5 Lakh Crore Infrastructure Push for FY26',
     excerpt: 'The Union Budget 2025-26 has allocated a record ₹2.5 lakh crore for Indian Railways capital expenditure — a major opportunity for engineering contractors.',
     tags: ['Indian Railways', 'Budget', 'Opportunity'],

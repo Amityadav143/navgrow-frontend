@@ -84,7 +84,7 @@ const ShopPreview = () => {
                   <p className="font-bold text-gray-900 text-sm mt-1 mb-3 line-clamp-2 leading-snug">{p.name}</p>
                   <div className="flex items-center justify-between">
                     <span className="font-extrabold text-gray-900">₹{p.price.toLocaleString('en-IN')}</span>
-                    <button onClick={() => addItem({ id:p.id, name:p.name, price:p.price, image:p.image })}
+                    <button onClick={() => addItem({ id:p.id, name:p.name, price:p.price, image:p.image, stockQty:p.stockQty, gstRate:p.gstRate })}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${inCart ? 'bg-green-100 text-green-700' : 'brand-gradient text-white shadow-sm hover:opacity-90'}`}>
                       <ShoppingCart className="h-3.5 w-3.5" />
                       {inCart ? 'Added' : 'Add'}

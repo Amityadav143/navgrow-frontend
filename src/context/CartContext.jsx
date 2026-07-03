@@ -4,6 +4,7 @@
  * Unauthorised reproduction, modification or distribution is strictly prohibited.
  */
 import React, { createContext, useContext, useReducer, useState, useEffect } from 'react';
+import { track } from '@/lib/analytics';
 
 const CartContext = createContext(null);
 const STORAGE_KEY = 'navgrow_cart_v1';
@@ -27,25 +28,36 @@ const loadWishlist = () => {
 };
 
 // ── Cart reducer ──────────────────────────────────────────────────────────────
+// Clamp a desired quantity to the item's available stock (when known) and a
+// sensible floor of 1. Prevents adding more than can be fulfilled, so checkout
+// won't fail late on the server.
+const clampQty = (desired, item) => {
+  let q = Math.max(1, desired);
+  const stock = item?.stockQty;
+  if (typeof stock === 'number' && stock > 0) q = Math.min(q, stock);
+  return q;
+};
+
 const cartReducer = (state, action) => {
   switch (action.type) {
     case 'ADD': {
       const requestedQty = action.item.qty && action.item.qty > 1 ? action.item.qty : 1;
       const ex = state.find(i => i.id === action.item.id);
       if (ex) {
-        // If explicit qty provided (e.g. from product detail page), add that amount
-        // If no explicit qty, increment by 1 (default shop behaviour)
-        const newQty = action.item.qty && action.item.qty > 1
-          ? action.item.qty  // Replace with the specified qty
-          : ex.qty + 1;      // Increment by 1
-        return state.map(i => i.id === action.item.id ? { ...i, qty: newQty } : i);
+        // If explicit qty provided (e.g. from product detail page), use that amount;
+        // otherwise increment by 1. Either way, clamp to available stock.
+        const target = action.item.qty && action.item.qty > 1
+          ? action.item.qty
+          : ex.qty + 1;
+        return state.map(i => i.id === action.item.id
+          ? { ...i, qty: clampQty(target, { ...i, ...action.item }) } : i);
       }
-      return [...state, { ...action.item, qty: requestedQty }];
+      return [...state, { ...action.item, qty: clampQty(requestedQty, action.item) }];
     }
     case 'REMOVE':     return state.filter(i => i.id !== action.id);
     case 'UPDATE_QTY': return action.qty < 1
       ? state.filter(i => i.id !== action.id)
-      : state.map(i => i.id === action.id ? { ...i, qty: action.qty } : i);
+      : state.map(i => i.id === action.id ? { ...i, qty: clampQty(action.qty, i) } : i);
     case 'CLEAR':      return [];
     default:           return state;
   }
@@ -67,7 +79,10 @@ export const CartProvider = ({ children }) => {
     try { localStorage.setItem(WISHLIST_KEY, JSON.stringify(wishlist)); } catch {}
   }, [wishlist]);
 
-  const addItem    = item  => dispatch({ type: 'ADD', item });
+  const addItem    = item  => {
+    dispatch({ type: 'ADD', item });
+    try { track('add_to_cart', { label: item?.name || item?.slug, value: Number(item?.price) || undefined }); } catch {}
+  };
   const removeItem = id    => dispatch({ type: 'REMOVE', id });
   const updateQty  = (id, qty) => dispatch({ type: 'UPDATE_QTY', id, qty });
   const clearCart  = ()   => dispatch({ type: 'CLEAR' });

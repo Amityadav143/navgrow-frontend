@@ -12,15 +12,18 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Train, Building, Wrench, Users, Shield, Cpu, ArrowRight } from 'lucide-react';
+import { ArrowRight, Train, Factory, Building2, Landmark, Droplets, Sun, Wrench, Users, Shield } from 'lucide-react';
 
 const services = [
-  { icon: Train,    title: 'Railway Infrastructure', desc: 'Loco modification, shed construction, and station development for Indian Railways.', link: '/services#railway-infrastructure', color: 'from-blue-700 to-blue-900' },
-  { icon: Building, title: 'Government Contracts',   desc: 'Expert tender preparation, compliance, and execution for public sector initiatives.', link: '/services#government-contracts', color: 'from-amber-500 to-amber-700' },
+  { icon: Train,     title: 'Railway Infrastructure', desc: 'Locomotive modification, testing plants, and shed works for Indian Railways, delivered to RDSO standards.', link: '/services#railway-infrastructure', color: 'from-blue-700 to-blue-900', tag: 'Engineering' },
+  { icon: Factory,   title: 'Industrial Engineering', desc: 'Fabrication, storage systems, and mechanical fitment for manufacturing plants and processing units.', link: '/services#industrial-engineering', color: 'from-blue-600 to-indigo-800', tag: 'Engineering' },
+  { icon: Landmark,  title: 'Government Contracts',   desc: 'End-to-end tender management and compliant execution for railways, PSUs, and government agencies.', link: '/services#government-contracts', color: 'from-slate-600 to-blue-800', tag: 'Engineering' },
+  { icon: Droplets,  title: 'Rainwater Harvesting',   desc: 'Turnkey rainwater harvesting and groundwater recharge systems for plants, campuses, and facilities.', link: '/services#rainwater-harvesting', color: 'from-cyan-600 to-blue-700', tag: 'Sustainability' },
+  { icon: Sun,       title: 'Solar Energy Solutions', desc: 'Rooftop, ground-mount, and hybrid solar power systems that cut energy costs and carbon footprint.', link: '/services#solar-solutions', color: 'from-amber-500 to-orange-600', tag: 'Sustainability' },
+  { icon: Building2, title: 'Civil & Construction',   desc: 'Structural and civil works for industrial, institutional, and infrastructure projects.', link: '/services#civil-construction', color: 'from-blue-800 to-slate-700', tag: 'Engineering' },
   { icon: Wrench,   title: 'Maintenance Services',   desc: 'Scheduled and emergency maintenance keeping railway systems safe and operational.', link: '/services#maintenance', color: 'from-blue-500 to-blue-700' },
   { icon: Users,    title: 'Consulting Services',    desc: 'Strategic advisory for infrastructure planning, compliance, and operational efficiency.', link: '/services#consulting', color: 'from-amber-600 to-yellow-600' },
   { icon: Shield,   title: 'Safety & Compliance',   desc: 'Adhering to Indian Railways safety standards and regulatory requirements.', link: '/services#safety', color: 'from-blue-600 to-blue-800' },
-  { icon: Cpu,      title: 'Technology Solutions',  desc: 'Modern digital systems for monitoring, automation, and operational management.', link: '/services#technology', color: 'from-amber-500 to-amber-600' },
 ];
 
 const ServicesSection = () => (
@@ -35,17 +38,17 @@ const ServicesSection = () => (
         </motion.div>
         <motion.h2 className="mb-4"
           initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}>
-          Our Specialised <span className="gradient-text">Services</span>
+          Engineering &amp; <span className="gradient-text">Sustainability</span>
         </motion.h2>
         <motion.p className="text-gray-600 text-lg"
           initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.1 }}>
-          End-to-end engineering solutions for government agencies and railway operators — from initial planning to final handover.
+          Two capabilities under one roof — core railway, industrial, and civil engineering, plus modern sustainability solutions like solar power and rainwater harvesting.
         </motion.p>
       </div>
 
       {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {services.map(({ icon: Icon, title, desc, link, color }, i) => (
+        {services.map(({ icon: Icon, title, desc, link, color, tag }, i) => (
           <motion.div
             key={title}
             initial={{ opacity: 0, y: 30 }}
@@ -63,8 +66,13 @@ const ServicesSection = () => (
               {/* Top accent line */}
               <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${color} scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left`} />
 
-              <div className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br ${color} shadow-md mb-5 group-hover:scale-110 transition-transform duration-300`}>
-                <Icon className="h-7 w-7 text-white" />
+              <div className="flex items-center justify-between mb-5">
+                <div className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br ${color} shadow-md group-hover:scale-110 transition-transform duration-300`}>
+                  <Icon className="h-7 w-7 text-white" />
+                </div>
+                <span className={`text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full ${tag === 'Sustainability' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>
+                  {tag}
+                </span>
               </div>
 
               <h3 className="text-xl font-bold text-gray-900 mb-3 group-hover:text-blue-800 transition-colors">{title}</h3>

@@ -33,7 +33,7 @@ const Footer = () => {
           <div className="lg:col-span-2">
             <img src="/ng_white_logo.png" alt="Navgrow Engineering" loading="lazy" className="h-16 md:h-24 w-auto object-contain mb-5" />
             <p className="text-sm leading-relaxed mb-5 max-w-xs">
-              DPIIT-recognised engineering firm delivering quality-first solutions for Indian Railways and government agencies from Siliguri, West Bengal.
+              DPIIT-recognised engineering & sustainability company delivering quality-first solutions for railway, industrial, and civil engineering plus solar and rainwater-harvesting solutions, from Siliguri, West Bengal.
             </p>
             {/* Socials */}
             <div className="flex gap-2.5 mb-6">
@@ -82,7 +82,7 @@ const Footer = () => {
           <div>
             <h4 className="text-white font-bold text-sm uppercase tracking-wider mb-5">Company</h4>
             <ul className="space-y-2.5">
-              {[['Home','/'],['About Us','/about'],['Services','/services'],['Projects','/projects'],['Shop','/shop'],['Track Order','/track-order'],['My Account','/account'],['Careers','/careers'],['News & Updates','/news'],['Gallery','/gallery'],['Quote Calculator','/quote-calculator']].map(([l,t]) => (
+              {[['Home','/'],['About Us','/about'],['Services','/services'],['Projects','/projects'],['Shop','/shop'],['Track Order','/track-order'],['Saved Quotes','/saved-quotes'],['My Account','/account'],['Careers','/careers'],['News & Updates','/news'],['Gallery','/gallery'],['Quote Calculator','/quote-calculator']].map(([l,t]) => (
                 <li key={t}><Link to={t} className="text-sm hover:text-blue-400 transition-colors flex items-center gap-1.5 group">
                   <span className="w-1 h-1 rounded-full bg-gray-700 group-hover:bg-blue-500 transition-colors shrink-0" />{l}
                 </Link></li>

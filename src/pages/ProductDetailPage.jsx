@@ -21,6 +21,7 @@ import { useCart } from '@/context/CartContext';
 import { useRfq } from '@/context/RfqContext';
 import { useAuth } from '@/context/AuthContext';
 import { productsApi } from '@/lib/api';
+import { track } from '@/lib/analytics';
 import { getProductBySlug, getRelated } from '@/lib/productData';
 import useSeo from '@/hooks/useSeo';
 import CheckoutModal from '@/components/CheckoutModal';
@@ -253,7 +254,7 @@ const RelatedCard = ({ product }) => {
             <span className="font-extrabold text-gray-900 text-sm">{fmt(product.price)}</span>
             {product.mrp > product.price && <span className="text-[10px] text-gray-400 line-through ml-1">{fmt(product.mrp)}</span>}
           </div>
-          <button onClick={(e) => { e.preventDefault(); addItem({id:product.id,name:product.name,price:product.price,image:product.image}); }}
+          <button onClick={(e) => { e.preventDefault(); addItem({id:product.id,name:product.name,price:product.price,image:product.image,stockQty:product.stockQty,gstRate:product.gstRate}); }}
             className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition-all ${inCart?'bg-green-100 text-green-700':'bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white'}`}>
             {inCart ? '✓ In Cart' : '+ Add'}
           </button>
@@ -284,6 +285,17 @@ const ProductDetailPage = () => {
       setApiLoading(true);
       productsApi.get(slug)
         .then(({ data }) => {
+          try { track('product_view', { label: data?.slug || slug }); } catch {}
+          // Helpers to parse newline-separated admin text into UI shapes
+          const lines = (s) => (s || '').split('\n').map(x => x.trim()).filter(Boolean);
+          const parseSpecs = (s) => lines(s).map((row) => {
+            const idx = row.indexOf(':');
+            return idx === -1
+              ? { label: row, value: '' }
+              : { label: row.slice(0, idx).trim(), value: row.slice(idx + 1).trim() };
+          });
+          const galleryImgs = lines(data.imageUrls);
+          const primaryImg = data.imageUrl || galleryImgs[0] || '';
           // Normalize API product to match static shape
           setApiProduct({
             id: data.id,
@@ -293,20 +305,20 @@ const ProductDetailPage = () => {
             tagline: data.tagline || '',
             price: Number(data.price),
             mrp: data.mrp ? Number(data.mrp) : Number(data.price),
-            rating: data.avgRating || data.rating || 0,
+            rating: Number(data.rating) || 0,
             reviews: data.reviewCount || 0,
             badge: data.badge || '',
-            image: data.imageUrl || '',
-            images: data.imageUrl ? [data.imageUrl] : [],
-            summary: data.description || '',
+            image: primaryImg,
+            images: [primaryImg, ...galleryImgs].filter((v, i, a) => v && a.indexOf(v) === i),
+            summary: data.summary || data.description || '',
             desc: data.description || '',
             inStock: (data.stockQty || 0) > 0,
             stockQty: data.stockQty || 0,
-            features: [],
-            specs: {},
-            benefits: [],
-            applications: [],
-            warranty: '',
+            features: lines(data.features),
+            specs: parseSpecs(data.specifications),
+            benefits: lines(data.benefits),
+            applications: lines(data.applications),
+            warranty: data.warranty || '',
             gstRate: data.gstRate || 18,
           });
         })
@@ -406,14 +418,14 @@ const ProductDetailPage = () => {
 
   /* ── handlers ── */
   const handleAdd = useCallback(() => {
-    addItem({ id:product.id, name:product.name, price:product.price, image:product.image, qty });
+    addItem({ id:product.id, name:product.name, price:product.price, image:product.image, stockQty:product.stockQty, gstRate:product.gstRate, qty });
     setAddedAnim(true);
     setTimeout(() => setAddedAnim(false), 1800);
   }, [product, qty, addItem]);
 
   const handleBuyNow = useCallback(() => {
     // Add item once with qty property rather than looping (loop causes multiple cart entries)
-    addItem({ id:product.id, name:product.name, price:product.price, image:product.image, qty });
+    addItem({ id:product.id, name:product.name, price:product.price, image:product.image, stockQty:product.stockQty, gstRate:product.gstRate, qty });
     setCheckoutOpen(true);
   }, [product, qty, addItem]);
 
@@ -437,7 +449,9 @@ const ProductDetailPage = () => {
     </div>
   );
 
-  const images    = product.images || [product.image];
+  const PLACEHOLDER = '/Railway_Infra.jpg';
+  const imageList = (product.images && product.images.length) ? product.images : (product.image ? [product.image] : []);
+  const images    = imageList.length ? imageList : [PLACEHOLDER];
   const inCart    = items.some(i => i.id === product.id);
   const wished    = typeof inWishlist === 'function' ? inWishlist(product.id) : false;
   const d         = disc(product);
@@ -484,6 +498,7 @@ const ProductDetailPage = () => {
                   key={imgIdx}
                   src={images[imgIdx]}
                   alt={`${product.name} — view ${imgIdx+1}`}
+                  onError={(e) => { if (e.target.src !== window.location.origin + '/Railway_Infra.jpg') { e.target.onerror = null; e.target.src = '/Railway_Infra.jpg'; } }}
                   initial={{ opacity:0, scale:1.02 }}
                   animate={{ opacity:1, scale: pinchZoom ? 1.35 : 1 }}
                   exit={{ opacity:0 }}

@@ -17,17 +17,17 @@ import AnimatedCounter from '@/components/AnimatedCounter';
 const stats = [
   {
     icon: Building2, value: '30+', label: 'Projects Delivered',
-    desc: 'Railway, industrial & government projects',
+    desc: 'Railway, industrial & sustainability projects',
     iconBg: 'from-blue-700 to-blue-900', accent: 'border-blue-400/20',
   },
   {
     icon: Users, value: '5+', label: 'Major Clients',
-    desc: 'Indian Railways, Wabtec & more',
+    desc: 'Industrial, government & commercial',
     iconBg: 'from-amber-500 to-amber-700', accent: 'border-amber-400/30',
   },
   {
     icon: Percent, value: '100 %', label: 'On-Time Delivery',
-    desc: 'Indian Railways, Wabtec & more',
+    desc: 'Every project, on schedule',
     iconBg: 'from-green-500 to-amber-700', accent: 'border-amber-400/30',
   },
   {

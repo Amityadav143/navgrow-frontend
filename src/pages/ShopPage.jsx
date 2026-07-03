@@ -98,11 +98,19 @@ const ProductCard = ({ product, onBuyNow }) => {
         </div>
 
         {/* Price */}
-        <div className="flex items-baseline gap-2 mb-3">
-          <span className="text-xl font-extrabold text-gray-900">₹{product.price.toLocaleString('en-IN')}</span>
+        <div className="mb-3">
+          <div className="flex items-baseline gap-2">
+            <span className="text-xl font-extrabold text-gray-900">₹{product.price.toLocaleString('en-IN')}</span>
+            {product.mrp > product.price && (
+              <span className="text-xs text-gray-400 line-through">₹{product.mrp.toLocaleString('en-IN')}</span>
+            )}
+          </div>
           {product.mrp > product.price && (
-            <span className="text-xs text-gray-400 line-through">₹{product.mrp.toLocaleString('en-IN')}</span>
+            <span className="text-[11px] font-bold text-green-600">
+              You save ₹{(product.mrp - product.price).toLocaleString('en-IN')}
+            </span>
           )}
+          <span className="block text-[10px] text-gray-400 mt-0.5">+ GST · GST invoice available</span>
         </div>
 
         {/* Compare */}
@@ -119,7 +127,7 @@ const ProductCard = ({ product, onBuyNow }) => {
         {/* Actions */}
         <div className="grid grid-cols-2 gap-2">
           <button
-            onClick={() => addItem({ id: product.id, name: product.name, price: product.price, image: product.image })}
+            onClick={() => addItem({ id: product.id, name: product.name, price: product.price, image: product.image, stockQty: product.stockQty, gstRate: product.gstRate })}
             className={`flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
               inCart
                 ? 'border-green-400 bg-green-50 text-green-700'
@@ -233,7 +241,7 @@ const ProductDetail = ({ product, onClose, onBuyNow }) => {
               </div>
 
               <button
-                onClick={() => { addItem({ id: product.id, name: product.name, price: product.price, image: product.image, qty }); onClose(); }}
+                onClick={() => { addItem({ id: product.id, name: product.name, price: product.price, image: product.image, stockQty: product.stockQty, gstRate: product.gstRate, qty }); onClose(); }}
                 className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all border-2 ${
                   inCart ? 'border-green-400 bg-green-50 text-green-700' : 'border-blue-200 text-blue-600 hover:border-blue-400 hover:bg-blue-50'
                 }`}
@@ -243,7 +251,7 @@ const ProductDetail = ({ product, onClose, onBuyNow }) => {
               </button>
 
               <button
-                onClick={() => { addItem({ id: product.id, name: product.name, price: product.price, image: product.image }); onClose(); onBuyNow(product); }}
+                onClick={() => { addItem({ id: product.id, name: product.name, price: product.price, image: product.image, stockQty: product.stockQty, gstRate: product.gstRate }); onClose(); onBuyNow(product); }}
                 className="flex items-center gap-2 px-6 py-3 rounded-xl brand-gradient text-white font-bold shadow-md hover:opacity-90 text-sm"
               >
                 <Zap className="h-4 w-4" />
@@ -321,9 +329,11 @@ const ShopPage = () => {
     if (list && list.length > 0) return list.map(p => ({
       id: p.id, slug: p.slug || String(p.id), cat: p.category,
       name: p.name, price: p.price, mrp: p.mrp || p.price,
-      rating: p.avgRating || 4.5, reviews: p.reviewCount || 0,
+      rating: (p.rating && Number(p.rating) > 0) ? Number(p.rating) : 4.5, reviews: p.reviewCount || 0,
       badge: p.badge || '', image: p.imageUrl || '', desc: p.description || '',
-      inStock: (p.stockQty || 0) > 0, tagline: p.tagline || '',
+      inStock: (p.stockQty || 0) > 0, stockQty: p.stockQty ?? null,
+      featured: p.featured || false, sku: p.sku || '', gstRate: p.gstRate || 18,
+      tagline: p.tagline || '',
     }));
     return null;
   }, [apiData]);
@@ -378,7 +388,8 @@ const ShopPage = () => {
     if (sort === 'Price: Low to High')  list.sort((a, b) => a.price - b.price);
     if (sort === 'Price: High to Low')  list.sort((a, b) => b.price - a.price);
     if (sort === 'Top Rated')           list.sort((a, b) => b.rating - a.rating);
-    if (sort === 'Most Reviewed')       list.sort((a, b) => b.reviews - a.reviews);
+    if (sort === 'Most Reviewed')       list.sort((a, b) => (b.reviews||0) - (a.reviews||0));
+    if (sort === 'Featured')             list.sort((a, b) => (b.featured?1:0) - (a.featured?1:0) || (b.rating||0) - (a.rating||0));
     return list;
   }, [cat, debouncedSearch, sort, priceMin, priceMax, ACTIVE_PRODUCTS]);
 

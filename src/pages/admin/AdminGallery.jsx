@@ -37,7 +37,7 @@ const AdminGallery = () => {
   const [showForm, setShowForm] = useState(false);
   const [editing,  setEditing]  = useState(null);
   const [confirm,  setConfirm]  = useState(null);
-  const [form, setForm] = useState({ title:'', description:'', imageUrl:'', active:true });
+  const [form, setForm] = useState({ title:'', category:'', location:'', year:'', altText:'', imageUrl:'', active:true });
   const ch = useCallback((k,v) => setForm(p => ({...p,[k]:v})), []);
 
   const { items, loading, refetch } = usePaginated(galleryApi.list, { size: 50 });
@@ -47,7 +47,7 @@ const AdminGallery = () => {
 
   const openEdit = (item) => {
     setEditing(item);
-    setForm({ title: item.title||'', description: item.description||'', imageUrl: item.imageUrl||item.image||'', active: item.active!==false });
+    setForm({ title: item.title||'', category: item.category||'', location: item.location||'', year: item.year||'', altText: item.altText||'', imageUrl: item.imageUrl||item.image||'', active: item.active!==false });
     setShowForm(false);
   };
 
@@ -57,7 +57,7 @@ const AdminGallery = () => {
     if (res.error) { toast({ title:'Failed', description:res.error, variant:'destructive' }); return; }
     toast({ title: editing ? '✓ Updated' : '✓ Created' });
     setShowForm(false); setEditing(null);
-    setForm({ title:'', description:'', imageUrl:'', active:true });
+    setForm({ title:'', category:'', location:'', year:'', altText:'', imageUrl:'', active:true });
     refetch();
   };
 
@@ -102,15 +102,30 @@ const AdminGallery = () => {
                 <input value={form.imageUrl} onChange={e=>ch('imageUrl',e.target.value)} placeholder="https://…"
                   className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"/>
               </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Category</label>
+                <input value={form.category} onChange={e=>ch('category',e.target.value)} placeholder="e.g. Railway / Industrial / Civil"
+                  className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 placeholder-gray-600"/>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Location</label>
+                <input value={form.location} onChange={e=>ch('location',e.target.value)} placeholder="e.g. Siliguri, West Bengal"
+                  className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 placeholder-gray-600"/>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Year</label>
+                <input value={form.year} onChange={e=>ch('year',e.target.value)} placeholder="e.g. 2025"
+                  className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 placeholder-gray-600"/>
+              </div>
               <div className="flex items-center gap-3 p-3 bg-gray-900 rounded-xl border border-gray-700 self-end">
                 <input type="checkbox" id="active-ck" checked={form.active} onChange={e=>ch('active',e.target.checked)} className="w-4 h-4 accent-blue-500"/>
                 <label htmlFor="active-ck" className="text-sm text-gray-300 cursor-pointer">Active / Published</label>
               </div>
               <div className="col-span-2">
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Description</label>
-                <textarea value={form.description} onChange={e=>ch('description',e.target.value)} rows={3}
-                  placeholder="Description…"
-                  className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 resize-y"/>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Alt Text <span className="text-gray-600 normal-case">(for accessibility & SEO)</span></label>
+                <input value={form.altText} onChange={e=>ch('altText',e.target.value)} rows={2}
+                  placeholder="Describe the image, e.g. Workers installing rainwater testing plant"
+                  className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"/>
               </div>
               {form.imageUrl && (
                 <div className="col-span-2">

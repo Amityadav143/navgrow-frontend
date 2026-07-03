@@ -18,12 +18,13 @@ import { contactApi } from '@/lib/api';
 
 const INIT = { name: '', email: '', phone: '', company: '', subject: '', message: '' };
 
-const Field = ({ id, label, type = 'text', required = false, placeholder = '', value, onChange, error }) => (
+const Field = ({ id, label, type = 'text', required = false, placeholder = '', value, onChange, error, autoComplete, inputMode }) => (
   <div>
     <label htmlFor={id} className="block text-sm font-semibold text-gray-700 mb-1.5">
       {label} {required && <span className="text-red-500">*</span>}
     </label>
     <input type={type} id={id} name={id} value={value} onChange={onChange} required={required} placeholder={placeholder}
+      autoComplete={autoComplete} inputMode={inputMode} aria-invalid={error ? 'true' : undefined}
       className={`w-full px-4 py-3 border-2 rounded-xl text-sm transition-colors focus:outline-none ${
         error ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 bg-white focus:border-blue-500'
       }`} />
@@ -106,10 +107,10 @@ const ContactForm = () => {
       <p className="text-gray-500 text-sm mb-7">We reply within 24 business hours. <span className="text-red-500">*</span> required.</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-        <Field id="name"    label="Full Name"              type="text"  required value={form.name}    onChange={change} error={errors.name}    placeholder="Your full name" />
-        <Field id="email"   label="Email Address"          type="email" required value={form.email}   onChange={change} error={errors.email}   placeholder="you@example.com" />
-        <Field id="phone"   label="Phone Number"           type="tel"            value={form.phone}   onChange={change} error={errors.phone}   placeholder="+91 89270 70972" />
-        <Field id="company" label="Company / Organisation" type="text"           value={form.company} onChange={change} error={errors.company} placeholder="Your company" />
+        <Field id="name"    label="Full Name"              type="text"  required value={form.name}    onChange={change} error={errors.name}    placeholder="Your full name" autoComplete="name" />
+        <Field id="email"   label="Email Address"          type="email" required value={form.email}   onChange={change} error={errors.email}   placeholder="you@example.com" autoComplete="email" inputMode="email" />
+        <Field id="phone"   label="Phone Number"           type="tel"            value={form.phone}   onChange={change} error={errors.phone}   placeholder="+91 XXXXXXXXXX" autoComplete="tel" inputMode="tel" />
+        <Field id="company" label="Company / Organisation" type="text"           value={form.company} onChange={change} error={errors.company} placeholder="Your company" autoComplete="organization" />
       </div>
 
       <div className="mb-5">

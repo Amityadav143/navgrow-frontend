@@ -17,6 +17,7 @@ import {
   KeyRound, RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import useEscapeKey from '@/hooks/useEscapeKey';
 import { authApi } from '@/lib/api';
 
 /* ─────────────────────────────────────────────────────── helpers */
@@ -24,10 +25,40 @@ const EMAIL_RE  = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const PHONE_RE  = /^[6-9]\d{9}$/;   // Indian 10-digit mobile
 const PWD_MIN   = 8;
 
+/* Password strength: 0–4 based on length + character variety. */
+const passwordStrength = (pwd) => {
+  if (!pwd) return { score: 0, label: '', color: 'bg-gray-200', text: 'text-gray-400' };
+  let score = 0;
+  if (pwd.length >= PWD_MIN) score++;
+  if (pwd.length >= 12) score++;
+  if (/[a-z]/.test(pwd) && /[A-Z]/.test(pwd)) score++;
+  if (/\d/.test(pwd)) score++;
+  if (/[^A-Za-z0-9]/.test(pwd)) score++;
+  score = Math.min(score, 4);
+  const meta = [
+    { label: 'Very weak', color: 'bg-red-400',    text: 'text-red-500' },
+    { label: 'Weak',      color: 'bg-orange-400', text: 'text-orange-500' },
+    { label: 'Fair',      color: 'bg-amber-400',  text: 'text-amber-500' },
+    { label: 'Good',      color: 'bg-lime-500',   text: 'text-lime-600' },
+    { label: 'Strong',    color: 'bg-green-500',  text: 'text-green-600' },
+  ][score];
+  return { score, ...meta };
+};
+
+/* Authentic multi-colour Google "G" mark for the OAuth button */
+const GoogleIcon = ({ className = 'h-4 w-4' }) => (
+  <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/>
+    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/>
+    <path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/>
+    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/>
+  </svg>
+);
+
 /* ─────────────────────────────────────────────────────── InputField */
 const InputField = ({
   label, type = 'text', value, onChange, placeholder,
-  icon: Icon, error, suffix, maxLength, pattern, inputMode,
+  icon: Icon, error, suffix, maxLength, pattern, inputMode, autoComplete,
 }) => {
   const [show, setShow] = useState(false);
   const realType = type === 'password' ? (show ? 'text' : 'password') : type;
@@ -46,6 +77,8 @@ const InputField = ({
           maxLength={maxLength}
           pattern={pattern}
           inputMode={inputMode}
+          autoComplete={autoComplete}
+          aria-invalid={error ? 'true' : undefined}
           className={`w-full ${Icon ? 'pl-10' : 'pl-4'} ${suffix ? 'pr-10' : 'pr-4'} py-3
             border-2 rounded-xl text-sm transition-all focus:outline-none
             ${error
@@ -188,11 +221,12 @@ const OtpLoginPanel = ({ onSuccess }) => {
         </div>
         <InputField
           label="Mobile Number"
+          autoComplete="tel"
           type="tel"
           icon={Smartphone}
           value={phone}
           onChange={e => { setPhone(e.target.value); setPhoneErr(''); }}
-          placeholder="98765 43210"
+          placeholder="98XXXXX000"
           error={phoneErr}
           maxLength={10}
           inputMode="numeric"
@@ -265,7 +299,7 @@ const OtpLoginPanel = ({ onSuccess }) => {
 
 /* ─────────────────────────────────────────────────────── Main Modal */
 const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
-  const { login, register, loading, error: authError, clearError } = useAuth();
+  const { login, register, applySession, loading, error: authError, clearError } = useAuth();
 
   const [tab,          setTab]          = useState(defaultTab);
   const [loginMethod,  setLoginMethod]  = useState('email'); // 'email' | 'mobile' | 'otp'
@@ -288,6 +322,9 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
     }
     return () => { document.body.style.overflow = ''; };
   }, [open]);
+
+  // Allow closing the auth modal with the Escape key.
+  useEscapeKey(open, () => onClose?.());
 
   useEffect(() => {
     if (open) {
@@ -380,7 +417,8 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
     }
   };
 
-  const handleOtpSuccess = (data) => {
+  const handleOtpSuccess = async (data) => {
+    await applySession(data);
     setSuccess('Signed in via OTP!');
     setTimeout(onClose, 750);
   };
@@ -517,7 +555,7 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
                           disabled={!!oauthLoading}
                           className="flex items-center justify-center gap-2.5 w-full py-2.5 border-2 border-gray-200 rounded-xl text-sm font-semibold hover:bg-gray-50 hover:shadow-sm disabled:opacity-50 transition-all text-gray-700"
                         >
-                          {oauthLoading === 'google' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Chrome className="h-4 w-4" />}
+                          {oauthLoading === 'google' ? <Loader2 className="h-4 w-4 animate-spin" /> : <GoogleIcon className="h-4 w-4" />}
                           {oauthLoading === 'google' ? 'Redirecting…' : 'Continue with Google'}
                         </button>
 
@@ -533,11 +571,12 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
                           {loginMethod === 'mobile' ? (
                             <InputField
                               label="Mobile Number *"
+                              autoComplete="tel"
                               type="tel"
                               icon={Phone}
                               value={form.phone}
                               onChange={ch('phone')}
-                              placeholder="98765 43210"
+                              placeholder="98XXXX0000"
                               error={errors.phone}
                               maxLength={10}
                               inputMode="numeric"
@@ -545,6 +584,7 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
                           ) : (
                             <InputField
                               label="Email Address *"
+                              autoComplete="email"
                               type="email"
                               icon={Mail}
                               value={form.email}
@@ -555,6 +595,7 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
                           )}
                           <InputField
                             label="Password *"
+                            autoComplete="current-password"
                             type="password"
                             icon={Lock}
                             value={form.password}
@@ -615,7 +656,7 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
                       disabled={!!oauthLoading}
                       className="flex items-center justify-center gap-2.5 w-full py-2.5 border-2 border-gray-200 rounded-xl text-sm font-semibold hover:bg-gray-50 hover:shadow-sm disabled:opacity-50 transition-all text-gray-700"
                     >
-                      {oauthLoading === 'google' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Chrome className="h-4 w-4" />}
+                      {oauthLoading === 'google' ? <Loader2 className="h-4 w-4 animate-spin" /> : <GoogleIcon className="h-4 w-4" />}
                       {oauthLoading === 'google' ? 'Redirecting…' : 'Sign up with Google'}
                     </button>
 
@@ -628,6 +669,7 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
                     <form onSubmit={handleSubmit} className="space-y-4" noValidate>
                       <InputField
                         label="Full Name *"
+                        autoComplete="name"
                         icon={User}
                         value={form.name}
                         onChange={ch('name')}
@@ -636,6 +678,7 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
                       />
                       <InputField
                         label="Email Address"
+                        autoComplete="email"
                         type="email"
                         icon={Mail}
                         value={form.email}
@@ -645,11 +688,12 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
                       />
                       <InputField
                         label="Mobile Number"
+                        autoComplete="tel"
                         type="tel"
                         icon={Phone}
                         value={form.phone}
                         onChange={ch('phone')}
-                        placeholder="98765 43210 (optional if email given)"
+                        placeholder="98XXXX0000 (optional if email given)"
                         error={errors.phone}
                         maxLength={10}
                         inputMode="numeric"
@@ -662,6 +706,7 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
 
                       <InputField
                         label="Password *"
+                        autoComplete="new-password"
                         type="password"
                         icon={Lock}
                         value={form.password}
@@ -672,6 +717,7 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
                       />
                       <InputField
                         label="Confirm Password *"
+                        autoComplete="new-password"
                         type="password"
                         icon={Lock}
                         value={form.confirm}
@@ -681,14 +727,25 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
                         suffix
                       />
 
-                      {/* Password strength hint */}
-                      {form.password.length > 0 && form.password.length < PWD_MIN && (
-                        <div className="flex gap-1">
-                          {[...Array(PWD_MIN)].map((_, i) => (
-                            <div key={i} className={`h-1 flex-1 rounded-full ${i < form.password.length ? 'bg-amber-400' : 'bg-gray-200'}`} />
-                          ))}
-                        </div>
-                      )}
+                      {/* Password strength meter */}
+                      {form.password.length > 0 && (() => {
+                        const s = passwordStrength(form.password);
+                        return (
+                          <div className="space-y-1.5">
+                            <div className="flex gap-1">
+                              {[0, 1, 2, 3].map((i) => (
+                                <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${i < s.score ? s.color : 'bg-gray-200'}`} />
+                              ))}
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className={`text-xs font-semibold ${s.text}`}>{s.label}</span>
+                              {form.password.length < PWD_MIN && (
+                                <span className="text-xs text-gray-400">At least {PWD_MIN} characters</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {(authError || success) && (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -718,6 +775,7 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
                   <form onSubmit={handleForgotPassword} className="space-y-4" noValidate>
                     <InputField
                       label="Email Address"
+                      autoComplete="email"
                       type="email"
                       icon={Mail}
                       value={form.email}

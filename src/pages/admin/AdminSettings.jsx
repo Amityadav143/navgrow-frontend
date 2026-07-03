@@ -9,6 +9,7 @@
  *
  * Licensed for: navgrow.org (Production Deployment Only)
  */
+import { siteSettingsApi } from '@/lib/api';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -76,13 +77,19 @@ const AdminSettings = () => {
     ...prev, [section]: { ...prev[section], [key]: val }
   }));
 
-  const save = () => {
+  const save = async () => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
-    // Dispatch event so components can re-read settings live
+    // Dispatch event so components re-read settings live
     window.dispatchEvent(new CustomEvent('ng:settings-updated', { detail: s }));
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
-    toast({ title: '✓ Settings saved', description: 'Changes take effect immediately.' });
+    // Persist to backend so settings apply for ALL visitors (not just this browser)
+    try {
+      await siteSettingsApi.save(JSON.stringify(s));
+      toast({ title: '✓ Settings saved', description: 'Live for all visitors.' });
+    } catch {
+      toast({ title: '✓ Saved locally', description: 'Could not reach server — applies on this device only.' });
+    }
   };
 
   const reset = () => {

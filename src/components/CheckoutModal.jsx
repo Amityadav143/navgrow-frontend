@@ -8,21 +8,24 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, MapPin, Phone, User, Mail, Building, CreditCard, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { ordersApi } from '@/lib/api';
+import { track } from '@/lib/analytics';
 import { useToast } from '@/components/ui/use-toast';
 
 const STATES = ['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal','Delhi'];
 
-const Field = ({ id, label, type='text', required, placeholder, value, onChange, options, error }) => (
+const Field = ({ id, label, type='text', required, placeholder, value, onChange, options, error, autoComplete, inputMode }) => (
   <div>
-    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">{label}{required && <span className="text-red-500 ml-1">*</span>}</label>
+    <label htmlFor={id} className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">{label}{required && <span className="text-red-500 ml-1">*</span>}</label>
     {options ? (
-      <select value={value} onChange={onChange} required={required}
+      <select id={id} value={value} onChange={onChange} required={required} autoComplete={autoComplete}
         className={`w-full px-4 py-2.5 border-2 rounded-xl text-sm focus:outline-none transition-colors bg-white ${error ? 'border-red-400' : 'border-gray-200 focus:border-blue-500'}`}>
         <option value="">Select {label}</option>
         {options.map(o => <option key={o}>{o}</option>)}
       </select>
     ) : (
-      <input type={type} value={value} onChange={onChange} required={required} placeholder={placeholder}
+      <input id={id} type={type} value={value} onChange={onChange} required={required} placeholder={placeholder}
+        autoComplete={autoComplete} inputMode={inputMode}
+        aria-invalid={error ? 'true' : undefined}
         className={`w-full px-4 py-2.5 border-2 rounded-xl text-sm focus:outline-none transition-colors ${error ? 'border-red-400' : 'border-gray-200 focus:border-blue-500'}`} />
     )}
     {error && <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><AlertCircle className="h-3 w-3" />{error}</p>}
@@ -90,6 +93,7 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
     if (!validateShipping()) return;
     setPaying(true);
     setStep(2);
+    try { track('checkout_start', { value: items.reduce((s,i)=>s+(Number(i.price)||0)*(i.qty||1),0) }); } catch {}
 
     try {
       // Create order on backend
@@ -131,6 +135,7 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature,
             });
+            try { track('order_placed', { label: order?.orderNumber, value: Number(order?.amount)/100 || undefined }); } catch {}
             clearCart();
             setForm({ name:'',email:'',phone:'',company:'',address1:'',address2:'',city:'',state:'West Bengal',pincode:'',notes:'',gstin:'' });
             setStep(3);
@@ -213,19 +218,19 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2"><Field id="name"    label="Full Name"     required value={form.name}    onChange={ch('name')}    placeholder="Your full name" error={errors.name} /></div>
-                  <Field id="email"   label="Email"        type="email" required value={form.email}   onChange={ch('email')}   placeholder="you@example.com" error={errors.email} />
-                  <Field id="phone"   label="Phone"        type="tel"   required value={form.phone}   onChange={ch('phone')}   placeholder="+91 xxxxx xxxxx" error={errors.phone} />
-                  <div className="col-span-2"><Field id="company" label="Company / Organisation" value={form.company} onChange={ch('company')} placeholder="Company / PSU / Railway Division" /></div>
+                  <div className="col-span-2"><Field id="name"    label="Full Name"     required value={form.name}    onChange={ch('name')}    placeholder="Your full name" error={errors.name} autoComplete="name" /></div>
+                  <Field id="email"   label="Email"        type="email" required value={form.email}   onChange={ch('email')}   placeholder="you@example.com" error={errors.email} autoComplete="email" inputMode="email" />
+                  <Field id="phone"   label="Phone"        type="tel"   required value={form.phone}   onChange={ch('phone')}   placeholder="+91 xxxxx xxxxx" error={errors.phone} autoComplete="tel" inputMode="tel" />
+                  <div className="col-span-2"><Field id="company" label="Company / Organisation" value={form.company} onChange={ch('company')} placeholder="Company / PSU / Railway Division" autoComplete="organization" /></div>
                   <div className="col-span-2">
                     <Field id="gstin" label="GSTIN (for B2B GST Invoice)" value={form.gstin} onChange={ch('gstin')} placeholder="22AAAAA0000A1Z5 — optional" />
                     <p className="text-[10px] text-gray-400 mt-1">Enter your 15-digit GSTIN to receive a GST-compliant tax invoice for input credit.</p>
                   </div>
-                  <div className="col-span-2"><Field id="address1" label="Address Line 1" required value={form.address1} onChange={ch('address1')} placeholder="Street, locality" error={errors.address1} /></div>
-                  <div className="col-span-2"><Field id="address2" label="Address Line 2" value={form.address2} onChange={ch('address2')} placeholder="Landmark (optional)" /></div>
-                  <Field id="city"    label="City"         required value={form.city}    onChange={ch('city')}    placeholder="Siliguri" error={errors.city} />
-                  <Field id="pincode" label="Pincode"      required value={form.pincode} onChange={ch('pincode')} placeholder="734001" error={errors.pincode} />
-                  <div className="col-span-2"><Field id="state" label="State" required value={form.state} onChange={ch('state')} options={STATES} error={errors.state} /></div>
+                  <div className="col-span-2"><Field id="address1" label="Address Line 1" required value={form.address1} onChange={ch('address1')} placeholder="Street, locality" error={errors.address1} autoComplete="address-line1" /></div>
+                  <div className="col-span-2"><Field id="address2" label="Address Line 2" value={form.address2} onChange={ch('address2')} placeholder="Landmark (optional)" autoComplete="address-line2" /></div>
+                  <Field id="city"    label="City"         required value={form.city}    onChange={ch('city')}    placeholder="Siliguri" error={errors.city} autoComplete="address-level2" />
+                  <Field id="pincode" label="Pincode"      required value={form.pincode} onChange={ch('pincode')} placeholder="XXXXXX" error={errors.pincode} autoComplete="postal-code" inputMode="numeric" />
+                  <div className="col-span-2"><Field id="state" label="State" required value={form.state} onChange={ch('state')} options={STATES} error={errors.state} autoComplete="address-level1" /></div>
                   <div className="col-span-2">
                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Notes</label>
                     <textarea value={form.notes} onChange={ch('notes')} rows={2} placeholder="Delivery instructions (optional)"

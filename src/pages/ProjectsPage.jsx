@@ -21,7 +21,7 @@ import useSeo from '@/hooks/useSeo';
 const projects = [
   {
     title: 'Rainwater Leakage Testing Plant For Electric Locomotives',
-    category: 'Infrastructure',
+    category: 'Civil & Infrastructure',
     location: 'Siliguri Diesel Loco Shed, West Bengal – 734003',
     year: '2025',
     client: 'Indian Railways',
@@ -30,28 +30,28 @@ const projects = [
   },
   {
     title: 'Fitment of Modified Hand Brake in Locomotives',
-    category: 'Infrastructure',
+    category: 'Mechanical Engineering',
     location: 'Siliguri Diesel Loco Shed, West Bengal – 734003',
     year: '2025–2026',
     client: 'Indian Railways',
     description: 'The modified hand brake assembly was installed in locomotives at the Siliguri Diesel Loco Shed to enhance operational safety and braking control during stationary conditions. The modification involved the fitment of an improved hand brake mechanism designed for better ergonomics, durability, and ease of manual operation.',
-    image: 'handbreak.png',
+    image: 'handbreak.jpg',
   },
   {
     title: 'Specialised Lube Oil Storage for Wabtec Locomotives',
-    category: 'Infrastructure',
+    category: 'Industrial Fabrication',
     client: 'Wabtec Locomotives Pvt. Ltd.',
     location: 'Siliguri, West Bengal – 734003',
     year: '2026',
     description: 'Modular mesh panel storage solutions providing maximum airflow and safety for the storage of volatile or temperature-sensitive locomotive fluids. Engineered specifically for Wabtec locomotive maintenance requirements.',
-    image: 'barricading.png',
+    image: 'barricading.jpg',
   },
 ];
 
-const categories = ['All', 'Infrastructure'];
+const categories = ['All', 'Civil & Infrastructure', 'Mechanical Engineering', 'Industrial Fabrication'];
 
 const ProjectsPage = () => {
-  useSeo({ title: 'Projects', description: 'Portfolio of completed railway and government engineering projects by Navgrow — Indian Railways loco shed works, Wabtec storage solutions, and more.', path: '/projects' });
+  useSeo({ title: 'Projects', description: 'Portfolio of completed engineering projects by Navgrow across civil infrastructure, mechanical, and industrial fabrication — from railway testing plants to Wabtec storage solutions.', path: '/projects' });
   const [active, setActive] = useState('All');
   const [selected, setSelected] = useState(null);
   const [allProjects, setAllProjects] = useState(projects);
@@ -64,7 +64,7 @@ const ProjectsPage = () => {
         setAllProjects(data.map(item => ({
           id: item.id,
           title: item.title || '',
-          category: item.category || 'Infrastructure',
+          category: item.category || 'Civil & Infrastructure',
           location: item.location || 'Siliguri, West Bengal',
           year: item.year || new Date().getFullYear().toString(),
           client: item.client || '',
@@ -144,7 +144,6 @@ const ProjectsPage = () => {
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       src={`/${project.image}`} onError={(e) => { e.target.onerror=null; e.target.src='/Railway_Infra.jpg'; }}
                       alt={project.title}
-                      loading="lazy" decoding="async"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-gray-900/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                     <button className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
