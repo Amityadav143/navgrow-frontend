@@ -4,6 +4,7 @@
  * Unauthorised reproduction, modification or distribution is strictly prohibited.
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import useBodyScrollLock from '@/hooks/useBodyScrollLock';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, MapPin, Phone, User, Mail, Building, CreditCard, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
@@ -37,6 +38,8 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
   const { toast } = useToast();
   const mountedRef = useRef(true);
   const [paying,  setPaying] = useState(false); // prevent double-submit
+  // Lock the page while this overlay is open (iOS-safe).
+  useBodyScrollLock(open);
   const [step, setStep]   = useState(1); // 1 = shipping, 2 = processing, 3 = success
 
   // Mount tracking
@@ -167,7 +170,7 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
         <motion.div className="fixed inset-0 z-[120] flex items-center justify-center p-4"
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
           <motion.div className="absolute inset-0 bg-gray-900/70 backdrop-blur-sm" onClick={step < 3 ? onClose : undefined} />
-          <motion.div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+          <motion.div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90dvh] overflow-y-auto overscroll-contain"
             initial={{ scale: 0.96, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, y: 16 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}>
 

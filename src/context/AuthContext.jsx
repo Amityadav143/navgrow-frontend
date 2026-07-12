@@ -75,8 +75,15 @@ export const AuthProvider = ({ children }) => {
   const enrichUser = useCallback(async (base) => {
     try {
       const { data } = await userApi.profile();
+      // The profile is authoritative for the account's role — without this,
+      // admins signing in via Google/OTP would be stuck as plain users.
+      const roles = data.role ? [`ROLE_${data.role}`] : (base.roles || []);
       return {
         ...base,
+        roles,
+        isAdmin:   roles.includes('ROLE_ADMIN'),
+        isManager: roles.includes('ROLE_MANAGER'),
+        isEditor:  roles.includes('ROLE_EDITOR'),
         fullName:  data.fullName  || base.fullName  || '',
         phone:     data.phone     || '',
         avatarUrl: data.avatarUrl || base.avatarUrl || '',

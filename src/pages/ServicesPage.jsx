@@ -227,12 +227,18 @@ const ServiceRow = ({ service, index, accent }) => {
           </ul>
         </div>
 
-        <Button asChild className="group">
-          <Link to="/contact" className="flex items-center">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button asChild className="group">
+            <Link to={`/services/${service.id}`} className="flex items-center">
+              Explore Full Service Details
+              <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </Link>
+          </Button>
+          <Link to="/contact"
+            className={`inline-flex items-center px-5 py-2.5 rounded-xl text-sm font-bold border-2 transition-colors ${isEmerald ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' : 'border-blue-200 text-blue-700 hover:bg-blue-50'}`}>
             Request a Consultation
-            <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
           </Link>
-        </Button>
+        </div>
       </div>
     </motion.div>
   );

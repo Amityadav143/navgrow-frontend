@@ -6,8 +6,17 @@
 import axios from 'axios';
 
 // ── Base instance ─────────────────────────────────────────────────────────────
+/**
+ * API base. In production builds default to the same-origin '/api' path
+ * (reverse-proxied to the backend), so a missing VITE_API_BASE_URL can
+ * never send users to localhost. Dev keeps the local backend default.
+ */
+export const API_BASE =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.PROD ? '/api' : 'http://localhost:8080/api');
+
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api',
+  baseURL: API_BASE,
   timeout: 30000, // 30s default; chat overrides to 45s
   headers: { 'Content-Type': 'application/json' },
 });
@@ -33,7 +42,7 @@ api.interceptors.response.use(
       if (refreshToken) {
         try {
           const { data } = await axios.post(
-            `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'}/auth/refresh`,
+            `${API_BASE}/auth/refresh`,
             null,
             { params: { refreshToken } },
           );
@@ -83,7 +92,7 @@ export const productsApi = {
 
 // ── Orders API ────────────────────────────────────────────────────────────────
 export const ordersApi = {
-  invoiceUrl:  (orderNumber) => `${api.defaults.baseURL}/orders/${orderNumber}/invoice`,
+  invoiceUrl:  (orderNumber, email) => `${api.defaults.baseURL}/orders/${orderNumber}/invoice?email=${encodeURIComponent(email || '')}`,
   create:        (d)      => api.post('/orders', d),
   verifyPayment: (d)      => api.post('/orders/payment/verify', d),
   track:         (num)    => api.get(`/orders/track/${num}`),
@@ -175,7 +184,6 @@ export const jobsApi = {
 // ── Gallery API ───────────────────────────────────────────────────────────────
 export const galleryApi = {
   list:   (p)      => api.get('/gallery', { params: p }),
-  get:    (id)     => api.get(`/gallery/${id}`),
   create: (d)      => api.post('/gallery', d),
   update: (id, d)  => api.put(`/gallery/${id}`, d),
   delete: (id)     => api.delete(`/gallery/${id}`),

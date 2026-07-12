@@ -10,10 +10,13 @@
  * Licensed for: navgrow.org (Production Deployment Only)
  */
 import React from 'react';
+import useBodyScrollLock from '@/hooks/useBodyScrollLock';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, MapPin, Calendar, User, Tag } from 'lucide-react';
 
 const ProjectModal = ({ project, onClose }) => {
+  // Lock the page while this overlay is open (iOS-safe).
+  useBodyScrollLock(!!project);
   if (!project) return null;
 
   return (
@@ -32,7 +35,7 @@ const ProjectModal = ({ project, onClose }) => {
 
         {/* Modal */}
         <motion.div
-          className="relative bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+          className="relative bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90dvh] overflow-y-auto overscroll-contain"
           initial={{ scale: 0.9, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 20 }}

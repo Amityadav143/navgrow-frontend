@@ -10,6 +10,7 @@
  * Licensed for: navgrow.org (Production Deployment Only)
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import useBodyScrollLock from '@/hooks/useBodyScrollLock';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, ArrowRight, Briefcase, Package, FileText, Users, Phone, Info, Map, Loader2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -19,12 +20,16 @@ const STATIC_INDEX = [
   { label: 'Home',                    path: '/',                      icon: Info,      cat: 'Pages' },
   { label: 'About Us',                path: '/about',                 icon: Info,      cat: 'Pages' },
   { label: 'Services',                path: '/services',              icon: Briefcase, cat: 'Pages' },
-  { label: 'Railway Infrastructure',  path: '/services#railway-infrastructure', icon: Briefcase, cat: 'Services' },
-  { label: 'Government Contracts',    path: '/services#government-contracts',   icon: Briefcase, cat: 'Services' },
-  { label: 'Maintenance Services',    path: '/services#maintenance',            icon: Briefcase, cat: 'Services' },
-  { label: 'Consulting Services',     path: '/services#consulting',             icon: Briefcase, cat: 'Services' },
-  { label: 'Safety & Compliance',     path: '/services#safety',                 icon: Briefcase, cat: 'Services' },
-  { label: 'Technology Solutions',    path: '/services#technology',             icon: Briefcase, cat: 'Services' },
+  { label: 'Railway Infrastructure',      path: '/services/railway-infrastructure', icon: Briefcase, cat: 'Services' },
+  { label: 'Industrial Engineering',      path: '/services/industrial-engineering', icon: Briefcase, cat: 'Services' },
+  { label: 'Civil & Construction',        path: '/services/civil-construction',     icon: Briefcase, cat: 'Services' },
+  { label: 'Government Contracts',        path: '/services/government-contracts',   icon: Briefcase, cat: 'Services' },
+  { label: 'Maintenance & AMC',           path: '/services/maintenance',            icon: Briefcase, cat: 'Services' },
+  { label: 'Rainwater Harvesting',        path: '/services/rainwater-harvesting',   icon: Briefcase, cat: 'Services' },
+  { label: 'Solar Energy Solutions',      path: '/services/solar-solutions',        icon: Briefcase, cat: 'Services' },
+  { label: 'Wastewater & Recycling',      path: '/services/wastewater-treatment',   icon: Briefcase, cat: 'Services' },
+  { label: 'Energy Efficiency & Audits',  path: '/services/energy-efficiency',      icon: Briefcase, cat: 'Services' },
+  { label: 'Green Building Consulting',   path: '/services/green-building',         icon: Briefcase, cat: 'Services' },
   { label: 'Projects',                path: '/projects',              icon: FileText,  cat: 'Pages' },
   { label: 'Shop',                    path: '/shop',                  icon: Package,   cat: 'Pages' },
   { label: 'Careers',                 path: '/careers',               icon: Users,     cat: 'Pages' },
@@ -37,6 +42,8 @@ const STATIC_INDEX = [
 
 export const useSearchModal = () => {
   const [open, setOpen] = useState(false);
+  // Lock the page while this overlay is open (iOS-safe).
+  useBodyScrollLock(open);
   useEffect(() => {
     const handler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); setOpen(o => !o); }
@@ -145,7 +152,7 @@ const SearchModal = ({ open, onClose }) => {
             </div>
 
             {/* Results */}
-            <div className="max-h-[60vh] overflow-y-auto py-2">
+            <div className="max-h-[60dvh] overflow-y-auto overscroll-contain py-2">
               {q.trim().length >= 2 && !loading && allResults.length === 0 ? (
                 <div className="text-center py-10 text-gray-400 text-sm">
                   <Search className="h-8 w-8 mx-auto mb-2 opacity-30"/>

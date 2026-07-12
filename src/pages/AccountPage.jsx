@@ -520,7 +520,7 @@ const AccountPage = () => {
                                     <Eye className="h-3.5 w-3.5"/> Track Order
                                   </Link>
                                   {(order.paymentStatus === 'PAID' || order.paymentStatus === 'CAPTURED') && (
-                                    <a href={ordersApi.invoiceUrl(order.orderNumber)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-gray-700">
+                                    <a href={ordersApi.invoiceUrl(order.orderNumber, order.customerEmail || user?.email)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-gray-700">
                                       <Download className="h-3.5 w-3.5"/> GST Invoice
                                     </a>
                                   )}

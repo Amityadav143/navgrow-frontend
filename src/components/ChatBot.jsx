@@ -729,7 +729,7 @@ const ChatBot = () => {
 
                   {/* Messages area */}
                   <div ref={scrollRef} onScroll={onScroll}
-                    className="overflow-y-auto bg-gray-950 px-3 py-4 space-y-3"
+                    className="overflow-y-auto overscroll-contain bg-gray-950 px-3 py-4 space-y-3"
                     style={{ minHeight: "240px", maxHeight: "390px" }}
                     role="log" aria-live="polite" aria-label="Chat messages">
 

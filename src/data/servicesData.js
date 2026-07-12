@@ -1,0 +1,448 @@
+/**
+ * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * CIN: U74999WB2022PTC256012 · navgrow.org · info@navgrow.org
+ *
+ * Single source of truth for the 10 service lines.
+ * Consumed by: ServiceDetailPage (/services/:slug), Navbar menu, Footer links.
+ * Icons are referenced by name and mapped to lucide components in the UI layer.
+ */
+
+export const SERVICES = [
+  /* ═══════════════ ENGINEERING (5) ═══════════════ */
+  {
+    slug: 'railway-infrastructure',
+    category: 'engineering',
+    icon: 'Train',
+    title: 'Railway Infrastructure',
+    menuTitle: 'Railway Infrastructure',
+    tagline: 'Approved-vendor railway engineering, delivered to RDSO standards.',
+    description:
+      'Specialised railway engineering for Indian Railways — locomotive modification, testing plants, shed works, and track infrastructure delivered to RDSO standards.',
+    image: '/smsystem.jpg',
+    imageAlt: 'Railway infrastructure and locomotive engineering project',
+    overview: [
+      'Railway work is where Navgrow earned its name. As an Indian Railway approved vendor, we execute locomotive modification programmes, specialised testing facilities, and shed infrastructure inside live, operating railway environments — where safety protocols, documentation, and RDSO conformity are non-negotiable.',
+      'Our delivered record includes the Rainwater Leakage Testing Plant for electric locomotives and the Modified Hand-Brake Fitment programme at Siliguri Diesel Loco Shed — both executed to Indian Railways technical specifications with complete inspection and completion documentation.',
+    ],
+    deliverables: [
+      'Locomotive Modification & Fitments — hand-brake fitment, retrofits, and improvements executed to Indian Railways technical specifications.',
+      'Testing Plants — rainwater leakage testing plants and specialised facilities for electric locomotives.',
+      'Diesel Loco Shed Works — shed construction, renovation, and infrastructure upgrades (NFR zone experience).',
+      'Track & Civil Works — track infrastructure, platforms, and allied civil works for railway facilities.',
+      'RDSO Compliance — all works aligned to RDSO guidelines and Indian Railways quality norms.',
+      'Inspection & Documentation — test certificates, inspection reports, and complete handover dossiers.',
+    ],
+    process: [
+      { step: '01', title: 'Scope & Specification Study', text: 'We study the tender/work order, RDSO drawings and site constraints, and confirm the technical specification with the division before mobilising.' },
+      { step: '02', title: 'Method & Safety Approval', text: 'Work methodology, materials, and safety plan are documented and approved — including block-working and live-shed protocols where applicable.' },
+      { step: '03', title: 'Execution Under Supervision', text: 'Qualified supervisors execute with stage-wise inspection, railway-witnessed testing, and daily progress reporting.' },
+      { step: '04', title: 'Testing & Handover Dossier', text: 'Final testing with railway officials, followed by test certificates, measurement books, and a complete completion dossier.' },
+    ],
+    outcomes: [
+      { title: 'Approved-Vendor Assurance', text: 'Work executed by a vendor already vetted and approved by Indian Railways.' },
+      { title: 'Zero-Surprise Compliance', text: 'RDSO norms and documentation designed in from day one — not chased at handover.' },
+      { title: 'Live-Environment Discipline', text: 'Proven ability to work inside operating sheds without disrupting operations.' },
+      { title: 'Audit-Ready Records', text: 'Every stage inspected, measured, and certified for departmental scrutiny.' },
+    ],
+    standards: ['Indian Railway Approved Vendor', 'RDSO Guidelines', 'IRS Specifications', 'Divisional Safety Protocols', 'Measurement-Book Documentation'],
+    faqs: [
+      { q: 'Are you an approved vendor for Indian Railways?', a: 'Yes. Navgrow Engineering Service Pvt. Ltd. is an Indian Railway approved vendor, with delivered works including a rainwater leakage testing plant and a hand-brake fitment programme at Siliguri Diesel Loco Shed.' },
+      { q: 'Can you work inside a live loco shed?', a: 'Yes. Our teams follow divisional safety protocols and shed working procedures, and have executed modification programmes inside operating sheds without disrupting maintenance schedules.' },
+      { q: 'Do you handle the testing and documentation?', a: 'Completely. Railway-witnessed testing, test certificates, inspection reports, and the full completion dossier are part of every railway engagement.' },
+    ],
+    related: ['industrial-engineering', 'government-contracts', 'maintenance'],
+  },
+  {
+    slug: 'industrial-engineering',
+    category: 'engineering',
+    icon: 'Factory',
+    title: 'Industrial Engineering',
+    menuTitle: 'Industrial Engineering',
+    tagline: 'Turnkey fabrication and plant engineering — trusted by global manufacturers.',
+    description:
+      'Turnkey industrial engineering and fabrication for manufacturing plants — from storage systems to mechanical fitment and plant support.',
+    image: '/barricading.jpg',
+    imageAlt: 'Industrial fabrication and engineering works',
+    overview: [
+      'From custom fabrication to mechanical retrofits, we deliver industrial engineering that keeps plants producing. Our benchmark reference is the industrial lube-oil storage system engineered and installed for Wabtec Corporation — a global rail-technology manufacturer with exacting quality requirements.',
+      'We work as an extension of your plant team: understanding the process constraint first, engineering the solution around uptime, and executing with ISO-aligned stage inspections so quality is verified while the work happens, not after.',
+    ],
+    deliverables: [
+      'Industrial Fabrication — custom fabrication and storage systems, including lube-oil storage solutions delivered for Wabtec.',
+      'Mechanical Fitment & Retrofitting — installation, modification, and upgrade of plant machinery and systems.',
+      'Plant Maintenance Support — engineering support for manufacturing and processing facilities.',
+      'Material Handling — design and installation of material-handling and storage infrastructure.',
+      'Quality Assurance — ISO-aligned quality processes with stage-wise inspection.',
+      'Safety Compliance — engineering delivered to industrial safety and statutory standards.',
+    ],
+    process: [
+      { step: '01', title: 'Plant Walkdown & Requirement Capture', text: 'We survey the installation area, utilities, and process interfaces, and freeze the functional requirement with your engineering team.' },
+      { step: '02', title: 'Design & Material Approval', text: 'Fabrication drawings, material specifications, and QAP are submitted for approval before a single plate is cut.' },
+      { step: '03', title: 'Fabrication with Stage Inspection', text: 'Controlled fabrication with fit-up, welding, and dimensional checks at each stage — witnessed where the client requires.' },
+      { step: '04', title: 'Erection, Testing & Handover', text: 'Site installation planned around production windows, followed by load/leak testing and documented handover.' },
+    ],
+    outcomes: [
+      { title: 'Uptime-First Execution', text: 'Installations planned around production schedules to minimise plant disruption.' },
+      { title: 'Global-Client Quality', text: 'The same QA discipline that satisfied Wabtec applied to every job.' },
+      { title: 'Single Accountable Partner', text: 'Design, fabrication, erection, and testing under one contract.' },
+      { title: 'Statutory Peace of Mind', text: 'Industrial safety and compliance requirements engineered in.' },
+    ],
+    standards: ['ISO-Aligned QAP', 'IS Welding & Fabrication Codes', 'Factory Act Safety Norms', 'Stage-Wise Inspection', 'Client-Witness Testing'],
+    faqs: [
+      { q: 'What industries do you serve?', a: 'Rail-technology manufacturing, general manufacturing, and processing facilities across North Bengal and Eastern India — including delivered work for Wabtec Corporation.' },
+      { q: 'Can you execute during a plant shutdown window?', a: 'Yes. We plan erection and tie-in work around your shutdown or low-production windows, with manpower scaled to complete inside the window.' },
+      { q: 'Do you provide fabrication drawings and QAP?', a: 'Yes — drawings, material specs, and a quality assurance plan are submitted for approval before fabrication begins.' },
+    ],
+    related: ['maintenance', 'civil-construction', 'railway-infrastructure'],
+  },
+  {
+    slug: 'civil-construction',
+    category: 'engineering',
+    icon: 'Building2',
+    title: 'Civil & Construction',
+    menuTitle: 'Civil & Construction',
+    tagline: 'Industrial-grade civil works — built to last, delivered on schedule.',
+    description:
+      'Structural and civil construction works for industrial, institutional, and infrastructure projects — built to last and delivered on schedule.',
+    image: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=1600&q=80',
+    imageAlt: 'Civil and structural construction project',
+    overview: [
+      'Our civil practice carries the same discipline as our railway work: engineered structures, honest schedules, and documentation that survives departmental audit. We build RCC and steel structures, foundations, and site infrastructure for industrial and institutional clients.',
+      'Because we also execute mechanical and railway packages, our civil teams understand interfaces other contractors miss — equipment foundations that match vendor drawings, trenches that respect cable routes, and finishes that stand up to industrial use.',
+    ],
+    deliverables: [
+      'Structural Construction — RCC and steel structures for industrial and institutional facilities.',
+      'Equipment Foundations — machine and plant foundations built to vendor drawings and tolerance.',
+      'Site Development — grading, drainage, internal roads, and allied site-infrastructure works.',
+      'Industrial Buildings — sheds, stores, utility buildings, and boundary/security infrastructure.',
+      'Renovation & Strengthening — repair, retrofitting, and structural strengthening of existing assets.',
+      'Bar-Chart Delivery — CPM-based scheduling with weekly progress reporting and measurement records.',
+    ],
+    process: [
+      { step: '01', title: 'Survey & Engineering', text: 'Site survey, soil considerations, and good-for-construction drawings aligned with structural design and vendor requirements.' },
+      { step: '02', title: 'Mobilisation & Schedule Freeze', text: 'Resources, materials, and a CPM schedule agreed with milestones your team can hold us to.' },
+      { step: '03', title: 'Construction with Stage QC', text: 'Reinforcement, shuttering, and pour approvals at every stage; cube tests and material certificates on record.' },
+      { step: '04', title: 'Finishing & Handover', text: 'Snag-list-driven finishing, as-built drawings, and complete measurement documentation at handover.' },
+    ],
+    outcomes: [
+      { title: 'Industrial-Duty Quality', text: 'Structures specified and finished for heavy daily use, not just handover day.' },
+      { title: 'Interface-Aware Execution', text: 'Civil works that fit the mechanical and electrical reality around them.' },
+      { title: 'Schedule Transparency', text: 'CPM schedule and weekly reporting — you always know where the job stands.' },
+      { title: 'Audit-Ready Records', text: 'Test certificates, measurement books, and as-builts included as standard.' },
+    ],
+    standards: ['IS 456 / IS 800 Design Codes', 'NBC Provisions', 'Cube & Material Testing', 'CPM Scheduling', 'As-Built Documentation'],
+    faqs: [
+      { q: 'What scale of civil work do you take on?', a: 'Industrial and institutional packages — equipment foundations, sheds, utility buildings, site development, and structural renovation. We size teams to the package rather than forcing one crew onto every job.' },
+      { q: 'Do you work alongside other contractors on site?', a: 'Routinely. Our supervisors coordinate interfaces with mechanical, electrical, and client teams, and our experience across disciplines makes those handoffs smoother.' },
+      { q: 'What quality records do we receive?', a: 'Stage-wise pour approvals, cube test results, material certificates, measurement books, and as-built drawings — a complete file for your audit.' },
+    ],
+    related: ['industrial-engineering', 'government-contracts', 'green-building'],
+  },
+  {
+    slug: 'government-contracts',
+    category: 'engineering',
+    icon: 'Landmark',
+    title: 'Government Contracts',
+    menuTitle: 'Government Contracts',
+    tagline: 'GeM & tender-ready execution with MSME advantage and compliant delivery.',
+    description:
+      'End-to-end execution of government and PSU contracts — from GeM and IREPS tendering to compliant, documented delivery.',
+    image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1600&q=80',
+    imageAlt: 'Government and PSU contract execution',
+    overview: [
+      'Government work rewards vendors who respect the process. Navgrow is DPIIT-recognised, MSME-registered, and an Indian Railway approved vendor — credentials that qualify us for public procurement and speak to how we execute: specification-first, documentation-complete, and on the record.',
+      'We participate through GeM, IREPS, and departmental tenders, and carry contracts from bid to final bill: EMD/PBG handling, work-order compliance, departmental inspections, measurement recording, and closure without loose ends.',
+    ],
+    deliverables: [
+      'Tender Participation — GeM, IREPS, and state/departmental tender response with compliant documentation.',
+      'Works Execution — engineering, civil, and supply contracts executed to specification and schedule.',
+      'Departmental Liaison — inspections, approvals, and correspondence handled professionally end-to-end.',
+      'Billing & Measurement — measurement books, running-account bills, and final-bill documentation.',
+      'Statutory Compliance — labour, safety, and statutory obligations met and evidenced.',
+      'MSME Advantage — procurement benefits and exemptions available to buyers working with an MSME vendor.',
+    ],
+    process: [
+      { step: '01', title: 'Bid & Compliance Review', text: 'We study the tender, confirm eligibility and technical fit, and bid only where we can deliver — no speculative paper.' },
+      { step: '02', title: 'Work-Order Mobilisation', text: 'Agreement formalities, EMD/PBG, site handover, and a schedule submitted to the department.' },
+      { step: '03', title: 'Execution & Departmental QC', text: 'Stage-wise execution with departmental inspections, hindrance records, and progress reporting.' },
+      { step: '04', title: 'Measurement, Billing & Closure', text: 'Joint measurement, RA/final bills, completion certificates, and defect-liability support.' },
+    ],
+    outcomes: [
+      { title: 'Procurement-Ready Vendor', text: 'DPIIT + MSME + railway approval — qualification hurdles already cleared.' },
+      { title: 'Process Discipline', text: 'Departmental procedure followed to the letter, from EMD to final bill.' },
+      { title: 'Clean Paper Trail', text: 'Every measurement, inspection, and approval documented and retrievable.' },
+      { title: 'No-Drama Closure', text: 'Contracts closed properly — completion certificates and DLP honoured.' },
+    ],
+    standards: ['GeM Registered', 'IREPS Participation', 'DPIIT Recognised', 'MSME / Udyam Registered', 'CPWD/State SOR Familiarity'],
+    faqs: [
+      { q: 'Which procurement platforms do you work on?', a: 'GeM and IREPS primarily, alongside state and departmental tenders. Our MSME registration also gives buyers access to public-procurement benefits.' },
+      { q: 'Can you handle the full departmental process?', a: 'Yes — from bid documentation and EMD/PBG through inspections, measurement books, RA bills, and final closure with completion certificates.' },
+      { q: 'Do you take subcontracted government work?', a: 'Selectively, where the prime contractor needs a compliant, documented execution partner and the scope matches our engineering strengths.' },
+    ],
+    related: ['railway-infrastructure', 'civil-construction', 'maintenance'],
+  },
+  {
+    slug: 'maintenance',
+    category: 'engineering',
+    icon: 'Wrench',
+    title: 'Maintenance & AMC',
+    menuTitle: 'Maintenance & AMC',
+    tagline: 'SLA-backed maintenance that keeps your assets earning.',
+    description:
+      'Preventive and corrective maintenance with defined SLAs — annual contracts that keep industrial and institutional assets reliable.',
+    image: 'https://images.unsplash.com/photo-1581092160562-40aa08e78837?w=1600&q=80',
+    imageAlt: 'Industrial maintenance and AMC services',
+    overview: [
+      'Everything we build, we can maintain — and much that others built, too. Our AMC practice combines scheduled preventive maintenance with rapid corrective response, so breakdowns get shorter and rarer over the life of the contract.',
+      'Each contract starts with an asset baseline and a maintenance calendar. You get defined SLAs, a named supervisor, service reports after every visit, and a spares philosophy agreed up front — no surprise invoices, no mystery downtime.',
+    ],
+    deliverables: [
+      'Annual Maintenance Contracts — preventive schedules with defined response and resolution SLAs.',
+      'Breakdown Response — corrective maintenance with priority mobilisation for contract clients.',
+      'Asset Baseline & Records — condition assessment, asset register, and history cards maintained.',
+      'Spares & Consumables Management — agreed spares philosophy with genuine/equivalent options.',
+      'Shutdown Support — planned shutdown maintenance executed inside your window.',
+      'Service Reporting — visit reports, pending-point tracking, and periodic contract reviews.',
+    ],
+    process: [
+      { step: '01', title: 'Asset Audit & Baseline', text: 'We survey the assets under contract, record condition, and build the register the AMC will run on.' },
+      { step: '02', title: 'Calendar & SLA Agreement', text: 'Preventive calendar, response/resolution SLAs, and spares philosophy agreed and signed.' },
+      { step: '03', title: 'Scheduled + Corrective Service', text: 'Preventive visits on calendar; breakdown calls answered on SLA with root-cause noted.' },
+      { step: '04', title: 'Review & Renewal', text: 'Periodic reviews of downtime, pending points, and asset health inform the renewal scope.' },
+    ],
+    outcomes: [
+      { title: 'Predictable Uptime', text: 'Preventive discipline that catches failures before they stop you.' },
+      { title: 'One Number to Call', text: 'A named supervisor and an SLA — not a new negotiation every breakdown.' },
+      { title: 'Falling Failure Rate', text: 'Root-cause habits mean the same fault should not return quarter after quarter.' },
+      { title: 'Budget Certainty', text: 'Contracted pricing and an agreed spares approach — finance can plan.' },
+    ],
+    standards: ['Defined Response SLAs', 'OEM-Aligned Procedures', 'Safety Work Permits', 'Service Report Trail', 'Periodic Contract Review'],
+    faqs: [
+      { q: 'What assets do you cover under AMC?', a: 'Industrial plant and equipment we or others have installed, building services, and the systems we deliver under our sustainability practice — solar plants, rainwater systems, and treatment units.' },
+      { q: 'What are typical SLAs?', a: 'SLAs are set per contract based on asset criticality — typically same-day or next-day response for breakdowns, with resolution targets agreed by fault class.' },
+      { q: 'Can AMC start on assets you did not install?', a: 'Yes. We begin with an asset audit and baseline; the first quarter usually clears the backlog of deferred maintenance before steady-state begins.' },
+    ],
+    related: ['industrial-engineering', 'solar-solutions', 'wastewater-treatment'],
+  },
+
+  /* ═══════════════ SUSTAINABILITY (5) ═══════════════ */
+  {
+    slug: 'rainwater-harvesting',
+    category: 'sustainability',
+    icon: 'CloudRain',
+    title: 'Rainwater Harvesting',
+    menuTitle: 'Rainwater Harvesting',
+    tagline: 'CGWA-compliant harvesting and recharge — turn rooftops into water security.',
+    description:
+      'Design and construction of rooftop harvesting and groundwater recharge systems — CGWA-compliant water security for campuses, plants, and institutions.',
+    image: 'https://images.unsplash.com/photo-1538300342682-cf57afb97285?w=1600&q=80',
+    imageAlt: 'Rainwater harvesting and groundwater recharge system',
+    overview: [
+      'Water stress is now a compliance issue as much as an environmental one: CGWA NOCs, state bye-laws, and industrial consents increasingly require demonstrable rainwater harvesting. We design and build systems that satisfy the regulator and actually work — sized to your catchment, soil, and demand.',
+      'Interestingly, our engineering pedigree here is literal: our delivered railway work includes a rainwater leakage testing plant for Indian Railways. We bring that same testing-grade discipline to filters, recharge structures, and storage that must perform monsoon after monsoon.',
+    ],
+    deliverables: [
+      'Rooftop Harvesting Systems — catchment assessment, first-flush arrangements, filtration, and storage design-build.',
+      'Groundwater Recharge — recharge pits, trenches, and shafts engineered to soil and aquifer conditions.',
+      'CGWA / Bye-Law Compliance — documentation and system design aligned to NOC and municipal requirements.',
+      'Storage & Reuse Integration — storage sizing and plumbing integration for flushing, gardening, and process reuse.',
+      'Metering & Monitoring — measurement points so harvested volumes can be evidenced, not estimated.',
+      'O&M / AMC — pre-monsoon servicing, filter media care, and desilting under annual contract.',
+    ],
+    process: [
+      { step: '01', title: 'Catchment & Demand Study', text: 'Roof/paved catchment measurement, rainfall data, soil percolation, and your reuse demand define the system.' },
+      { step: '02', title: 'Engineering & Compliance Design', text: 'Hydraulic sizing, structure drawings, and the documentation your CGWA/municipal file needs.' },
+      { step: '03', title: 'Construction & Commissioning', text: 'Civil and plumbing execution with quality checks, commissioned before the monsoon where possible.' },
+      { step: '04', title: 'Handover & Seasonal Care', text: 'As-builts, maintenance guidance, and optional AMC for pre-monsoon readiness every year.' },
+    ],
+    outcomes: [
+      { title: 'Compliance Evidence', text: 'Systems and documents that stand up to CGWA and municipal scrutiny.' },
+      { title: 'Real Water Savings', text: 'Harvested and recharged volumes you can meter and report.' },
+      { title: 'Monsoon-Proof Build', text: 'Structures engineered for silt, overflow, and Indian rainfall intensity.' },
+      { title: 'Year-After-Year Performance', text: 'AMC option keeps filters and recharge structures effective long-term.' },
+    ],
+    standards: ['CGWA Guidelines', 'State RWH Bye-Laws', 'CPCB Consent Support', 'IS Plumbing Codes', 'Metered Verification'],
+    faqs: [
+      { q: 'Is rainwater harvesting mandatory for us?', a: 'For many building categories and industrial consents it now is — requirements vary by state bye-law and CGWA jurisdiction. We assess your obligation as the first step and design to satisfy it.' },
+      { q: 'How much water can we realistically capture?', a: 'It depends on catchment area and local rainfall — we calculate it from your roof/paved area and rainfall data during the study, and design storage/recharge to match.' },
+      { q: 'Do these systems need maintenance?', a: 'Yes — first-flush units, filters, and recharge structures need pre-monsoon servicing. Our AMC covers cleaning, media care, and desilting so performance does not decay.' },
+    ],
+    related: ['wastewater-treatment', 'green-building', 'maintenance'],
+  },
+  {
+    slug: 'solar-solutions',
+    category: 'sustainability',
+    icon: 'Sun',
+    title: 'Solar Energy Solutions',
+    menuTitle: 'Solar Energy',
+    tagline: 'Rooftop and ground-mount solar with net-metering — engineered for ROI.',
+    description:
+      'Design-build rooftop, ground-mount, and hybrid solar plants with net-metering support — clean power engineered for payback.',
+    image: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=1600&q=80',
+    imageAlt: 'Rooftop solar energy installation',
+    overview: [
+      'Solar is an engineering project before it is an environmental statement — structures, cabling, protection, and grid paperwork decide whether the plant performs for 25 years or disappoints in 3. We bring industrial engineering discipline to every kWp we install.',
+      'From load study to net-metering commissioning, we handle the full path: MNRE/ALMM-compliant equipment, structural adequacy of your roof, DISCOM liaison, and generation monitoring — with an honest, data-based payback estimate before you commit.',
+    ],
+    deliverables: [
+      'Rooftop Solar Plants — design-build on RCC and metal roofs with structural verification.',
+      'Ground-Mount & Hybrid Systems — land-based arrays and solar-plus-storage configurations.',
+      'Net-Metering & DISCOM Liaison — application, inspection, and commissioning paperwork handled.',
+      'MNRE / ALMM-Compliant Equipment — approved modules and inverters with genuine warranties.',
+      'Monitoring & Reporting — generation monitoring so performance is visible, not assumed.',
+      'O&M / AMC — cleaning cycles, preventive checks, and inverter care to protect generation.',
+    ],
+    process: [
+      { step: '01', title: 'Load Study & Feasibility', text: 'Consumption analysis, roof/land assessment, shadow study, and a payback estimate you can take to finance.' },
+      { step: '02', title: 'Engineering & Approvals', text: 'Array layout, structure design, SLD, and net-metering application to your DISCOM.' },
+      { step: '03', title: 'Installation & Grid Commissioning', text: 'Mounting, stringing, protection, and earthing to code; DISCOM inspection and meter installation.' },
+      { step: '04', title: 'Monitoring & Care', text: 'Generation dashboard handover, performance baseline, and optional AMC for sustained output.' },
+    ],
+    outcomes: [
+      { title: 'Bankable Payback', text: 'ROI computed from your actual tariff and load — before you sign.' },
+      { title: 'Structure-Safe Install', text: 'Roof adequacy verified; mounting engineered, not improvised.' },
+      { title: 'Grid Paperwork Done', text: 'Net-metering approvals and DISCOM liaison handled end-to-end.' },
+      { title: 'Protected Generation', text: 'Monitoring plus AMC keeps output at design levels year after year.' },
+    ],
+    standards: ['MNRE Guidelines', 'ALMM-Listed Modules', 'IS/IEC Electrical Codes', 'DISCOM Net-Metering Rules', 'Earthing & LA Protection'],
+    faqs: [
+      { q: 'What payback period should we expect?', a: 'Typically a few years for commercial/industrial consumers depending on tariff and consumption profile — we compute it from your actual bills during feasibility rather than quoting a generic number.' },
+      { q: 'Will our roof take the load?', a: 'We verify structural adequacy before design. For metal roofs we use non-penetrative or purlin-appropriate mounting; for RCC we check load paths and waterproofing impact.' },
+      { q: 'Who handles net-metering?', a: 'We do — application, SLD submission, inspection coordination, and meter commissioning with your DISCOM are part of the scope.' },
+    ],
+    related: ['energy-efficiency', 'maintenance', 'green-building'],
+  },
+  {
+    slug: 'wastewater-treatment',
+    category: 'sustainability',
+    icon: 'Recycle',
+    title: 'Wastewater Treatment & Recycling',
+    menuTitle: 'Wastewater & Recycling',
+    tagline: 'STP/ETP design-build that turns effluent into compliance and reuse.',
+    description:
+      'Sewage and effluent treatment plants with recycling — CPCB/SPCB-compliant systems that convert wastewater into reusable water.',
+    image: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=1600&q=80',
+    imageAlt: 'Wastewater treatment and water recycling plant',
+    overview: [
+      'Discharge norms are tightening and water costs are rising — treatment and reuse now pay twice. We design and build STP/ETP systems sized to your load and consent conditions, with recycling streams for flushing, gardening, cooling, and process make-up wherever quality permits.',
+      'Our approach is operability-first: technologies chosen for your operator reality, not brochure appeal; instrumentation that makes compliance visible; and O&M support so the plant meets its outlet numbers every month, not just at commissioning.',
+    ],
+    deliverables: [
+      'Sewage Treatment Plants (STP) — design-build for campuses, housing, and institutions.',
+      'Effluent Treatment Plants (ETP) — industrial effluent systems engineered to your consent parameters.',
+      'Recycling & Reuse Streams — treated-water reuse for flushing, horticulture, cooling, and process.',
+      'Consent Compliance Support — documentation aligned to CPCB/SPCB consent-to-operate conditions.',
+      'Upgrades & Revamps — capacity and technology upgrades for underperforming existing plants.',
+      'O&M / AMC — chemical, biological, and mechanical care with outlet-quality reporting.',
+    ],
+    process: [
+      { step: '01', title: 'Load & Consent Analysis', text: 'Flow, characteristics, and your consent parameters define the treatment train — no over- or under-design.' },
+      { step: '02', title: 'Process & Layout Engineering', text: 'Technology selection, hydraulic design, and a layout that fits your site and operator access.' },
+      { step: '03', title: 'Construction & Commissioning', text: 'Civil, mechanical, and electrical execution; biomass stabilisation; performance demonstration at outlet.' },
+      { step: '04', title: 'Operation Support', text: 'Operator training, log formats, and optional O&M so outlet quality holds every month.' },
+    ],
+    outcomes: [
+      { title: 'Consent Confidence', text: 'Outlet parameters engineered to your CTO — with the records to prove it.' },
+      { title: 'Water Bill Relief', text: 'Every recycled kilolitre is fresh water you no longer buy.' },
+      { title: 'Operator-Friendly Plant', text: 'Designed for the team who will actually run it.' },
+      { title: 'Sustained Performance', text: 'O&M support keeps biology healthy and equipment reliable.' },
+    ],
+    standards: ['CPCB / SPCB Norms', 'Consent-to-Operate Parameters', 'IS Codes for Water Retaining Structures', 'Outlet Quality Reporting', 'Operator Training & SOPs'],
+    faqs: [
+      { q: 'STP or ETP — what do we need?', a: 'STPs treat domestic sewage; ETPs treat industrial effluent whose characteristics depend on your process. Many sites need both, or a combined scheme — the load analysis settles it.' },
+      { q: 'Can treated water really be reused?', a: 'Yes — flushing, horticulture, and cooling-tower make-up are common reuse streams. We design the polishing stage to the quality your reuse demands.' },
+      { q: 'Can you fix an existing underperforming plant?', a: 'Often. We audit the existing train, identify the failing stage, and propose a revamp — frequently far cheaper than a new plant.' },
+    ],
+    related: ['rainwater-harvesting', 'energy-efficiency', 'maintenance'],
+  },
+  {
+    slug: 'energy-efficiency',
+    category: 'sustainability',
+    icon: 'Gauge',
+    title: 'Energy Efficiency & Audits',
+    menuTitle: 'Energy Efficiency',
+    tagline: 'BEE-aligned audits and retrofits — the cheapest kilowatt is the one you stop wasting.',
+    description:
+      'Energy audits and efficiency retrofits aligned to BEE methodology — measured savings across power, lighting, HVAC, and utilities.',
+    image: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?w=1600&q=80',
+    imageAlt: 'Energy audit and efficiency retrofit',
+    overview: [
+      'Before adding generation, eliminate waste: an energy audit routinely finds double-digit percentage savings hiding in lighting, motors, compressed air, and HVAC. We audit to BEE-aligned methodology and — unlike report-only consultants — we can execute the retrofits ourselves.',
+      'Every recommendation comes with investment, savings, and payback, ranked so you can act on the quick wins immediately. Post-retrofit measurement closes the loop: savings are verified against the baseline, not assumed from datasheets.',
+    ],
+    deliverables: [
+      'Walk-Through & Detailed Energy Audits — BEE-methodology assessment of electrical and thermal systems.',
+      'Savings Roadmap — measure-wise investment, savings, and payback ranked for action.',
+      'Lighting & Motor Retrofits — LED conversions, efficient motors, VFDs, and controls.',
+      'HVAC & Utility Optimisation — cooling, compressed air, and pumping efficiency measures.',
+      'Power Quality & Metering — PF correction, harmonics attention, and sub-metering for visibility.',
+      'Measurement & Verification — post-retrofit M&V against the audited baseline.',
+    ],
+    process: [
+      { step: '01', title: 'Baseline & Data Capture', text: 'Bills, load profiles, and on-site measurement establish where energy actually goes.' },
+      { step: '02', title: 'Analysis & Roadmap', text: 'Losses quantified; measures ranked by payback with a clear implementation sequence.' },
+      { step: '03', title: 'Retrofit Execution', text: 'We implement approved measures — supply, installation, and commissioning under one team.' },
+      { step: '04', title: 'Verify & Sustain', text: 'M&V confirms savings; monitoring and periodic review keep them from eroding.' },
+    ],
+    outcomes: [
+      { title: 'Verified Savings', text: 'Reductions measured against baseline — not promised from brochures.' },
+      { title: 'Fast Paybacks First', text: 'Quick wins funded from their own savings, sequenced sensibly.' },
+      { title: 'One Team, Audit to Retrofit', text: 'No hand-off gap between recommendation and execution.' },
+      { title: 'Lower Carbon Footprint', text: 'Every avoided kWh supports your ESG reporting with real numbers.' },
+    ],
+    standards: ['BEE Audit Methodology', 'IS/IEC Electrical Standards', 'M&V Discipline', 'PF & Power-Quality Norms', 'Sub-Metered Baselines'],
+    faqs: [
+      { q: 'How much can we realistically save?', a: 'Facilities that have never been audited commonly find meaningful double-digit percentage opportunities; the audit quantifies yours measure-by-measure rather than promising a generic figure.' },
+      { q: 'Do you implement the recommendations too?', a: 'Yes — that is our difference. The same team that audits can execute lighting, motor, VFD, PF, and utility retrofits, then verify the savings.' },
+      { q: 'Will the audit disturb production?', a: 'No. Measurements are non-intrusive and scheduled around your operations; any switching tests are agreed in advance.' },
+    ],
+    related: ['solar-solutions', 'green-building', 'maintenance'],
+  },
+  {
+    slug: 'green-building',
+    category: 'sustainability',
+    icon: 'Leaf',
+    title: 'Green Building & Sustainability Consulting',
+    menuTitle: 'Green Building Consulting',
+    tagline: 'IGBC/GRIHA-aligned guidance from a firm that also builds.',
+    description:
+      'Sustainability consulting for buildings and campuses — green-rating guidance, water and energy integration, and ESG-ready documentation.',
+    image: 'https://images.unsplash.com/photo-1518005020951-eccb494ad742?w=1600&q=80',
+    imageAlt: 'Green building and sustainability consulting',
+    overview: [
+      'Green ratings and ESG expectations are reshaping how institutions build and operate. We advise on IGBC/GRIHA-aligned strategies for new projects and retrofits — and because we also engineer solar, water, and efficiency systems, our advice is buildable, costed, and grounded in site reality.',
+      'The result is an integrated sustainability plan: water balance (harvesting + recycling), energy strategy (efficiency first, then solar), material and waste guidance, and the documentation trail that ratings and ESG reports require.',
+    ],
+    deliverables: [
+      'Green-Rating Guidance — IGBC/GRIHA-aligned strategy, credit mapping, and documentation support.',
+      'Integrated Water Planning — harvesting, recycling, and reuse designed as one balanced system.',
+      'Energy Strategy — efficiency-first roadmaps with solar integration sized to real loads.',
+      'Retrofit Sustainability Plans — practical upgrade paths for existing buildings and campuses.',
+      'ESG & Compliance Documentation — evidence packs for ratings, consents, and corporate reporting.',
+      'Implementation Partnership — the unusual part: we can build what we recommend.',
+    ],
+    process: [
+      { step: '01', title: 'Baseline & Ambition', text: 'Current water/energy performance and your target — rating, compliance, or ESG commitment — set the brief.' },
+      { step: '02', title: 'Integrated Strategy', text: 'Water, energy, and material measures designed together, with credits/compliance mapped and costed.' },
+      { step: '03', title: 'Phased Implementation', text: 'Measures sequenced by payback and disruption; we execute the engineering scopes directly.' },
+      { step: '04', title: 'Documentation & Review', text: 'Evidence compiled for ratings/ESG; periodic reviews keep performance and paperwork current.' },
+    ],
+    outcomes: [
+      { title: 'Buildable Advice', text: 'Recommendations from a firm that also executes — no paper-only strategies.' },
+      { title: 'Ratings Without Chaos', text: 'Credits and documentation planned from day one, not reverse-engineered.' },
+      { title: 'One Integrated Plan', text: 'Water, energy, and efficiency working as a system, not silo projects.' },
+      { title: 'ESG-Ready Evidence', text: 'Metered, documented outcomes your reports can actually cite.' },
+    ],
+    standards: ['IGBC Frameworks', 'GRIHA Guidance', 'ECBC Awareness', 'CGWA/CPCB Alignment', 'ESG Reporting Support'],
+    faqs: [
+      { q: 'Do you certify buildings yourselves?', a: 'Certification is issued by the rating bodies (IGBC/GRIHA). We provide the strategy, engineering, and documentation support that gets a project through the process.' },
+      { q: 'Is this only for new construction?', a: 'No — retrofit sustainability is a large part of the practice: existing campuses gain efficiency, water systems, and solar in phased, low-disruption programmes.' },
+      { q: 'What makes your consulting different?', a: 'We build what we recommend. Solar, rainwater, treatment, and efficiency retrofits are in-house capabilities, so our advice is priced against real execution, not theory.' },
+    ],
+    related: ['energy-efficiency', 'rainwater-harvesting', 'solar-solutions'],
+  },
+];
+
+export const getService = (slug) => SERVICES.find((s) => s.slug === slug);
+export const engineeringServices = SERVICES.filter((s) => s.category === 'engineering');
+export const sustainabilityServices = SERVICES.filter((s) => s.category === 'sustainability');

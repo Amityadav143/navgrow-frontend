@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "vite preview"
+    "start": "vite preview",
+    "check:syntax": "node scripts/check-syntax.cjs",
+    "check:imports": "node scripts/check-imports.cjs",
+    "check": "npm run check:syntax && npm run check:imports"
   },
   "dependencies": {
     "@emailjs/browser": "^4.3.3",

@@ -18,13 +18,18 @@ const NAV = [
   { name: 'About',      path: '/about' },
   {
     name: 'Services', path: '/services',
+    /* Grouped: rendered as a two-column mega dropdown on desktop; flat list on mobile. */
     sub: [
-      { name: 'Railway Infrastructure', path: '/services#railway-infrastructure' },
-      { name: 'Government Contracts',   path: '/services#government-contracts' },
-      { name: 'Maintenance Services',   path: '/services#maintenance' },
-      { name: 'Consulting Services',    path: '/services#consulting' },
-      { name: 'Safety & Compliance',    path: '/services#safety' },
-      { name: 'Technology Solutions',   path: '/services#technology' },
+      { name: 'Railway Infrastructure',   path: '/services/railway-infrastructure',  group: 'Engineering' },
+      { name: 'Industrial Engineering',   path: '/services/industrial-engineering',  group: 'Engineering' },
+      { name: 'Civil & Construction',     path: '/services/civil-construction',      group: 'Engineering' },
+      { name: 'Government Contracts',     path: '/services/government-contracts',    group: 'Engineering' },
+      { name: 'Maintenance & AMC',        path: '/services/maintenance',             group: 'Engineering' },
+      { name: 'Rainwater Harvesting',     path: '/services/rainwater-harvesting',    group: 'Sustainability' },
+      { name: 'Solar Energy',             path: '/services/solar-solutions',         group: 'Sustainability' },
+      { name: 'Wastewater & Recycling',   path: '/services/wastewater-treatment',    group: 'Sustainability' },
+      { name: 'Energy Efficiency',        path: '/services/energy-efficiency',       group: 'Sustainability' },
+      { name: 'Green Building Consulting',path: '/services/green-building',          group: 'Sustainability' },
     ],
   },
   { name: 'Projects',    path: '/projects' },
@@ -152,13 +157,30 @@ const Navbar = ({ scrolled, onSearchOpen }) => {
                     <AnimatePresence>
                       {servicesOpen && (
                         <motion.div initial={{ opacity: 0, y: 8, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.96 }} transition={{ duration: 0.15 }}
-                          className="absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-50">
-                          {link.sub.map((s) => (
-                            <Link key={s.path} to={s.path} onClick={() => setServicesOpen(false)}
-                              className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:text-blue-600 hover:bg-blue-50 transition-colors">
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />{s.name}
-                            </Link>
-                          ))}
+                          className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-[560px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 z-50">
+                          <div className="grid grid-cols-2 gap-4">
+                            {['Engineering', 'Sustainability'].map((grp) => (
+                              <div key={grp}>
+                                <p className={cn('px-3 pb-2 text-[11px] font-extrabold uppercase tracking-wider',
+                                  grp === 'Engineering' ? 'text-blue-700' : 'text-emerald-700')}>
+                                  {grp === 'Engineering' ? 'Engineering Services' : 'Sustainability Solutions'}
+                                </p>
+                                {link.sub.filter((s) => s.group === grp).map((s) => (
+                                  <Link key={s.path} to={s.path} onClick={() => setServicesOpen(false)}
+                                    className={cn('flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-700 transition-colors',
+                                      grp === 'Engineering' ? 'hover:text-blue-700 hover:bg-blue-50' : 'hover:text-emerald-700 hover:bg-emerald-50')}>
+                                    <span className={cn('w-1.5 h-1.5 rounded-full shrink-0',
+                                      grp === 'Engineering' ? 'bg-blue-500' : 'bg-emerald-500')} />
+                                    {s.name}
+                                  </Link>
+                                ))}
+                              </div>
+                            ))}
+                          </div>
+                          <Link to="/services" onClick={() => setServicesOpen(false)}
+                            className="mt-3 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-gray-50 hover:bg-blue-50 text-sm font-bold text-gray-800 hover:text-blue-700 transition-colors border-t border-gray-100">
+                            View all 10 services →
+                          </Link>
                         </motion.div>
                       )}
                     </AnimatePresence>

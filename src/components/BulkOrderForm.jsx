@@ -14,6 +14,7 @@
  * Features: quantity tiers, volume discount calculator, GST invoice
  */
 import React, { useState, useCallback } from 'react';
+import useBodyScrollLock from '@/hooks/useBodyScrollLock';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Package, Calculator, Send, CheckCircle, Building, Phone, Mail, MapPin } from 'lucide-react';
 import { ordersApi } from '@/lib/api';
@@ -33,6 +34,8 @@ const getDiscount = (qty) => {
 };
 
 const BulkOrderForm = ({ product, open, onClose }) => {
+  // Lock the page while this overlay is open (iOS-safe).
+  useBodyScrollLock(open);
   const [qty,      setQty]      = useState(10);
   const [form,     setForm]     = useState({ name:'', phone:'', email:'', company:'', gstin:'', city:'', notes:'' });
   const [sending,  setSending]  = useState(false);

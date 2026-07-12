@@ -105,7 +105,7 @@ const HeroVisual = () => (
       <div className="px-5 pt-5 pb-3 flex items-center justify-between">
         <div>
           <p className="text-[11px] text-blue-300/70 font-semibold uppercase tracking-widest mb-0.5">
-            Project Dashboard · FY 2025–26
+            Project Dashboard · FY 2026–27
           </p>
           <h3 className="text-white font-extrabold text-lg leading-tight">
             Engineering Operations
@@ -147,7 +147,8 @@ const HeroVisual = () => (
       <div className="px-5 mb-4 space-y-2">
         {[
           { name: 'Locomotive Hand-Brake Modification', client: 'Indian Railways · NFR Zone',       status: 'IN PROGRESS', pct: 78, color: 'bg-blue-500'    },
-          { name: 'Industrial Lube-Oil Storage System',  client: 'Wabtec Corporation',                status: 'COMPLETED',   pct: 100,color: 'bg-green-500'   },
+          { name: 'Industrial Lube-Oil Storage Warehouse',  client: 'Wabtec Corporation',                status: 'COMPLETED',   pct: 100,color: 'bg-green-500'   },
+          { name: 'Rainwater Leakage Testing Plant For Electric Locomotives',          client: 'Indian Railways',      status: 'COMPLETED',   pct: 100, color: 'bg-green-500'   },
           { name: 'Rooftop Solar Installation',          client: 'Industrial Client · Siliguri',      status: 'IN REVIEW',   pct: 55, color: 'bg-amber-500'   },
         ].map((p, i) => (
           <motion.div key={p.name}
@@ -216,7 +217,7 @@ const HeroVisual = () => (
           <TrendingUp className="h-4 w-4 text-white"/>
         </div>
         <div>
-          <p className="text-xs font-extrabold text-gray-900">₹1.40 Cr</p>
+          <p className="text-xs font-extrabold text-gray-900">₹2.40 Cr</p>
           <p className="text-[10px] text-gray-500">FY26 Target</p>
         </div>
       </div>

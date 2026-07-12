@@ -11,6 +11,7 @@
  */
 import React, { useState } from 'react';
 import useEscapeKey from '@/hooks/useEscapeKey';
+import useBodyScrollLock from '@/hooks/useBodyScrollLock';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingCart, Minus, Plus, Trash2, Package, ArrowRight, Tag,
          CheckCircle, AlertTriangle, Mail, Send, FileText, Loader2 } from 'lucide-react';
@@ -207,6 +208,8 @@ const CartSidebar = () => {
 
   // Close the cart on Escape (only meaningful while it's open).
   useEscapeKey(cartOpen, () => setCartOpen(false));
+  // Lock the page while this overlay is open (iOS-safe).
+  useBodyScrollLock(cartOpen);
 
   const discount    = coupon?.discount || 0;
   const taxableAmt  = Math.max(0, totalAmount - discount);
@@ -269,7 +272,7 @@ const CartSidebar = () => {
               </div>
 
               {/* Items */}
-              <div className="flex-1 overflow-y-auto px-5 py-4">
+              <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">
                 {items.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center">
                     <Package className="h-20 w-20 text-gray-200 mb-4"/>

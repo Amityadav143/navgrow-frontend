@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useRfq } from '@/context/RfqContext';
 import useEscapeKey from '@/hooks/useEscapeKey';
+import useBodyScrollLock from '@/hooks/useBodyScrollLock';
 import { rfqApi } from '@/lib/api';
 import { track } from '@/lib/analytics';
 
@@ -83,6 +84,8 @@ const RfqDrawer = () => {
     setTimeout(() => { setStep(1); setRfqNumber(''); setErrors({}); }, 300);
   };
   useEscapeKey(drawerOpen, close);
+  // Lock the page while this overlay is open (iOS-safe).
+  useBodyScrollLock(drawerOpen);
 
   return (
     <AnimatePresence>
@@ -131,7 +134,7 @@ const RfqDrawer = () => {
             )}
 
             {/* Body */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto overscroll-contain">
               {/* STEP 1 — items */}
               {step === 1 && (
                 <div className="p-5">

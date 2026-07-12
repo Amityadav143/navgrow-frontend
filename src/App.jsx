@@ -19,6 +19,7 @@ import { AdminLayout } from '@/pages/admin/AdminDashboard';
 const HomePage           = React.lazy(() => import('@/pages/HomePage'));
 const AboutPage          = React.lazy(() => import('@/pages/AboutPage'));
 const ServicesPage       = React.lazy(() => import('@/pages/ServicesPage'));
+const ServiceDetailPage   = React.lazy(() => import('@/pages/ServiceDetailPage'));
 const ProjectsPage       = React.lazy(() => import('@/pages/ProjectsPage'));
 const ContactPage        = React.lazy(() => import('@/pages/ContactPage'));
 const ShopPage           = React.lazy(() => import('@/pages/ShopPage'));
@@ -212,6 +213,7 @@ function App() {
           <Route index                element={<W><HomePage /></W>} />
           <Route path="about"         element={<W><AboutPage /></W>} />
           <Route path="services"      element={<W><ServicesPage /></W>} />
+          <Route path="services/:slug" element={<W><ServiceDetailPage /></W>} />
           <Route path="projects"      element={<W><ProjectsPage /></W>} />
           <Route path="contact"       element={<W><ContactPage /></W>} />
           <Route path="shop"          element={<W><ShopPage /></W>} />

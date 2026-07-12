@@ -94,7 +94,7 @@ const Footer = () => {
           <div>
             <h4 className="text-white font-bold text-sm uppercase tracking-wider mb-5">Services</h4>
             <ul className="space-y-2.5">
-              {[['Railway Infrastructure','/services#railway-infrastructure'],['Government Contracts','/services#government-contracts'],['Maintenance','/services#maintenance'],['Consulting','/services#consulting'],['Safety & Compliance','/services#safety'],['Technology','/services#technology'],['Shop','/shop']].map(([l,t]) => (
+              {[['Railway Infrastructure','/services/railway-infrastructure'],['Industrial Engineering','/services/industrial-engineering'],['Civil & Construction','/services/civil-construction'],['Government Contracts','/services/government-contracts'],['Maintenance & AMC','/services/maintenance'],['Solar Energy','/services/solar-solutions'],['Rainwater Harvesting','/services/rainwater-harvesting'],['Wastewater & Recycling','/services/wastewater-treatment'],['Energy Efficiency','/services/energy-efficiency'],['Green Building','/services/green-building']].map(([l,t]) => (
                 <li key={t}><Link to={t} className="text-sm hover:text-blue-400 transition-colors flex items-center gap-1.5 group">
                   <span className="w-1 h-1 rounded-full bg-gray-700 group-hover:bg-blue-500 transition-colors shrink-0" />{l}
                 </Link></li>

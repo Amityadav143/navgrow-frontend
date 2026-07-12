@@ -18,7 +18,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import useEscapeKey from '@/hooks/useEscapeKey';
-import { authApi } from '@/lib/api';
+import useBodyScrollLock from '@/hooks/useBodyScrollLock';
+import { authApi, API_BASE } from '@/lib/api';
 
 /* ─────────────────────────────────────────────────────── helpers */
 const EMAIL_RE  = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -314,14 +315,8 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
 
   // Reset state when modal opens
   // Lock body scroll when modal is open so modal stays centred while page behind is frozen
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
-  }, [open]);
+  // Robust, iOS-safe page lock while the auth modal is open.
+  useBodyScrollLock(open);
 
   // Allow closing the auth modal with the Escape key.
   useEscapeKey(open, () => onClose?.());
@@ -425,7 +420,9 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
 
   const handleGoogleLogin = () => {
     setOauthLoading('google');
-    window.location.href = `${import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || ''}/oauth2/authorization/google`;
+    // OAuth endpoints live under the API context path (/api). Deriving from
+    // API_BASE keeps dev/prod consistent and can never point at localhost in prod.
+    window.location.href = `${API_BASE}/oauth2/authorization/google`;
   };
 
   const handleForgotPassword = async (e) => {
@@ -519,7 +516,7 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
               )}
 
               {/* ── Scrollable body ──────────────────────────────────────── */}
-              <div className="overflow-y-auto flex-1 px-6 py-5">
+              <div className="overflow-y-auto overscroll-contain flex-1 px-6 py-5">
 
                 {/* ── LOGIN form ───────────────────────────────────────── */}
                 {!forgotStep && tab === 'login' && (

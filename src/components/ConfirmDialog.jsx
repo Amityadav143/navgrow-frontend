@@ -10,6 +10,7 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, Trash2, X, CheckCircle, Info } from 'lucide-react';
+import useBodyScrollLock from '@/hooks/useBodyScrollLock';
 
 const ConfirmContext = createContext(null);
 
@@ -44,16 +45,16 @@ export const ConfirmProvider = ({ children }) => {
   }, []);
 
   // Lock body scroll + keyboard handling
+  useBodyScrollLock(!!state);
+
   useEffect(() => {
     if (!state) return;
-    document.body.style.overflow = 'hidden';
     const onKey = (e) => {
       if (e.key === 'Escape') close(false);
       if (e.key === 'Enter')  close(true);
     };
     window.addEventListener('keydown', onKey);
     return () => {
-      document.body.style.overflow = '';
       window.removeEventListener('keydown', onKey);
     };
   }, [state, close]);
