@@ -7,13 +7,18 @@ import axios from 'axios';
 
 // ── Base instance ─────────────────────────────────────────────────────────────
 /**
- * API base. In production builds default to the same-origin '/api' path
- * (reverse-proxied to the backend), so a missing VITE_API_BASE_URL can
- * never send users to localhost. Dev keeps the local backend default.
+ * API base resolution.
+ *  · Production builds: use VITE_API_BASE_URL unless it points at localhost —
+ *    a stray machine-local .env file must never ship a localhost URL to real
+ *    users (this exact bug once sent Google-login to http://localhost:8080).
+ *    Falls back to same-origin '/api' (reverse-proxied to the backend).
+ *  · Dev: VITE_API_BASE_URL or the local Spring Boot default.
  */
-export const API_BASE =
-  import.meta.env.VITE_API_BASE_URL ||
-  (import.meta.env.PROD ? '/api' : 'http://localhost:8080/api');
+const RAW_API_URL = import.meta.env.VITE_API_BASE_URL;
+const IS_LOCAL_URL = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:|\/|$)/i;
+export const API_BASE = import.meta.env.PROD
+  ? (RAW_API_URL && !IS_LOCAL_URL.test(RAW_API_URL) ? RAW_API_URL : '/api')
+  : (RAW_API_URL || 'http://localhost:8080/api');
 
 export const api = axios.create({
   baseURL: API_BASE,

@@ -118,7 +118,7 @@ const BulkOrderForm = ({ product, open, onClose }) => {
           initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}>
           <motion.div className="absolute inset-0 bg-gray-900/75 backdrop-blur-sm" onClick={onClose}/>
           <motion.div
-            className="relative bg-white w-full sm:max-w-xl sm:rounded-3xl shadow-2xl max-h-[95vh] overflow-y-auto rounded-t-3xl"
+            className="relative bg-white w-full sm:max-w-xl sm:rounded-3xl shadow-2xl max-h-[95dvh] overflow-y-auto rounded-t-3xl"
             initial={{ y:60, scale:.97 }} animate={{ y:0, scale:1 }} exit={{ y:60, scale:.97 }}
             transition={{ type:'spring', stiffness:300, damping:30 }}>
 
