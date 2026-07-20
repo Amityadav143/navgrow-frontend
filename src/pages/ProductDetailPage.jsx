@@ -245,10 +245,12 @@ const RelatedCard = ({ product }) => {
       <div className="p-3 flex flex-col flex-1">
         <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide mb-1">{product.cat}</p>
         <p className="font-bold text-gray-900 text-xs leading-snug mb-2 line-clamp-2 flex-1">{product.name}</p>
-        <div className="flex items-center gap-1 mb-2">
-          <Stars rating={product.rating} size="sm"/>
-          <span className="text-[10px] text-gray-400">({product.reviews})</span>
-        </div>
+        {product.rating != null && (
+          <div className="flex items-center gap-1 mb-2">
+            <Stars rating={product.rating} size="sm"/>
+            {product.reviews != null && <span className="text-[10px] text-gray-400">({product.reviews})</span>}
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <div>
             <span className="font-extrabold text-gray-900 text-sm">{fmt(product.price)}</span>
@@ -328,7 +330,29 @@ const ProductDetailPage = () => {
   }, [slug, staticProduct]);
 
   const product = staticProduct || apiProduct;
-  const related = staticProduct ? getRelated(staticProduct, 4) : [];
+  // Live related products from the API (same category); static data is only a
+  // fallback so admin-created products get a related section too.
+  const [liveRelated, setLiveRelated] = React.useState(null);
+  React.useEffect(() => {
+    if (!product?.id) { setLiveRelated(null); return; }
+    let cancelled = false;
+    productsApi.related(product.id, 4)
+      .then(r => {
+        if (cancelled || !Array.isArray(r.data)) return;
+        setLiveRelated(r.data.map(p => ({
+          id: p.id, slug: p.slug, name: p.name,
+          image: p.imageUrl, cat: p.category,
+          price: Number(p.price), mrp: p.mrp != null ? Number(p.mrp) : null,
+          badge: p.badge, stockQty: p.stockQty, gstRate: p.gstRate,
+        })));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [product?.id]);
+
+  const related = (liveRelated && liveRelated.length > 0)
+    ? liveRelated
+    : (staticProduct ? getRelated(staticProduct, 4) : []);
 
   /* ── state ── */
   const [imgIdx,      setImgIdx]    = useState(0);
@@ -449,7 +473,7 @@ const ProductDetailPage = () => {
     </div>
   );
 
-  const PLACEHOLDER = '/Railway_Infra.jpg';
+  const PLACEHOLDER = '/placeholder.jpg';
   const imageList = (product.images && product.images.length) ? product.images : (product.image ? [product.image] : []);
   const images    = imageList.length ? imageList : [PLACEHOLDER];
   const inCart    = items.some(i => i.id === product.id);
@@ -498,7 +522,7 @@ const ProductDetailPage = () => {
                   key={imgIdx}
                   src={images[imgIdx]}
                   alt={`${product.name} — view ${imgIdx+1}`}
-                  onError={(e) => { if (e.target.src !== window.location.origin + '/Railway_Infra.jpg') { e.target.onerror = null; e.target.src = '/Railway_Infra.jpg'; } }}
+                  onError={(e) => { if (e.target.src !== window.location.origin + '/placeholder.jpg') { e.target.onerror = null; e.target.src = '/placeholder.jpg'; } }}
                   initial={{ opacity:0, scale:1.02 }}
                   animate={{ opacity:1, scale: pinchZoom ? 1.35 : 1 }}
                   exit={{ opacity:0 }}

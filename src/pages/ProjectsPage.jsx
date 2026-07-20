@@ -69,7 +69,7 @@ const ProjectsPage = () => {
           year: item.year || new Date().getFullYear().toString(),
           client: item.client || '',
           description: item.description || '',
-          image: (item.imageUrl || item.image || 'Railway_Infra.jpg').replace(/^\//,''),
+          image: (item.imageUrl || item.image || 'placeholder.jpg').replace(/^\//,''),
         })));
       }
     }).catch(() => {}); // silently fall back to static
@@ -142,7 +142,7 @@ const ProjectsPage = () => {
                   <div className="aspect-[16/9] overflow-hidden relative">
                     <img loading="lazy" decoding="async"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      src={`/${project.image}`} onError={(e) => { e.target.onerror=null; e.target.src='/Railway_Infra.jpg'; }}
+                      src={`/${project.image}`} onError={(e) => { e.target.onerror=null; e.target.src='/placeholder.jpg'; }}
                       alt={project.title}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-gray-900/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />

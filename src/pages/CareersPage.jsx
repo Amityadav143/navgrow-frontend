@@ -86,12 +86,14 @@ const JobCard = ({ job }) => {
       {open && (
         <div className="px-5 pb-5 border-t border-gray-100 pt-4">
           <p className="text-gray-600 text-sm mb-4 leading-relaxed">{job.desc}</p>
-          <div className="mb-4">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Key Skills</p>
-            <div className="flex flex-wrap gap-2">
-              {job.skills.map(s => <span key={s} className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold">{s}</span>)}
+          {(job.skills?.length > 0) && (
+            <div className="mb-4">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Key Skills</p>
+              <div className="flex flex-wrap gap-2">
+                {job.skills.map(s => <span key={s} className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold">{s}</span>)}
+              </div>
             </div>
-          </div>
+          )}
           <a href={`mailto:info@navgrow.org?subject=Application: ${job.title}&body=Dear Navgrow Team,%0A%0AI am applying for the ${job.title} position.%0A%0AName:%0APhone:%0AExperience:%0A%0APlease find my CV attached.`}
             className="inline-flex items-center gap-2 px-5 py-2.5 btn-gold rounded-xl font-bold text-sm hover:opacity-90 transition-opacity">
             <Send className="h-4 w-4" /> Apply via Email
@@ -168,7 +170,19 @@ const CareersPage = () => {
   const { data: apiJobs } = useApi(() => jobsApi.list({ status: 'OPEN' }), [], { immediate: true });
   const liveJobs = React.useMemo(() => {
     const list = apiJobs?.content || (Array.isArray(apiJobs) ? apiJobs : null);
-    return list && list.length > 0 ? list : JOBS;
+    if (!list || list.length === 0) return JOBS;
+    // The API uses department/jobType/experience/description; the card was
+    // written for the static shape (dept/type/exp/desc). Normalise here so
+    // both shapes render, and default skills to [] — a job saved without
+    // skills used to crash the card on `skills.map` ("something went wrong").
+    return list.map(j => ({
+      ...j,
+      dept:   j.department || j.dept || '—',
+      type:   j.jobType    || j.type || 'Full-time',
+      exp:    j.experience || j.exp  || 'Any',
+      desc:   j.description|| j.desc || '',
+      skills: Array.isArray(j.skills) ? j.skills : [],
+    }));
   }, [apiJobs]);
 
   return (

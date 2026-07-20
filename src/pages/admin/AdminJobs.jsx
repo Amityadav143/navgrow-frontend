@@ -50,9 +50,17 @@ const JobInput = ({ label, fieldKey, type='text', required, placeholder, form, o
 );
 
 const JobForm = ({ initial, onSave, onCancel, saving }) => {
-  const [form, setForm] = useState(initial || {
+  const [form, setForm] = useState(() => initial ? {
+    ...initial,
+    // API → form: skills array becomes an editable comma string; active derives
+    // from the status enum; the deadline drops its time part for <input type=date>.
+    skills: Array.isArray(initial.skills) ? initial.skills.join(', ') : (initial.skills || ''),
+    active: initial.status ? initial.status === 'OPEN' : (initial.active ?? true),
+    applicationDeadline: initial.applicationDeadline ? String(initial.applicationDeadline).slice(0, 10) : '',
+    salaryFrom: initial.salaryFrom ?? '', salaryTo: initial.salaryTo ?? '',
+  } : {
     title:'', department:'Engineering', location:'Siliguri, WB', jobType:'Full-time',
-    experience:'', salaryFrom:'', salaryTo:'', description:'', requirements:'',
+    experience:'', salaryFrom:'', salaryTo:'', description:'', skills:'',
     benefits:'', applicationDeadline:'', openings:1, active:true,
   });
   const onChange = useCallback((key, value) => setForm(prev => ({ ...prev, [key]: value })), []);
@@ -100,8 +108,22 @@ const JobForm = ({ initial, onSave, onCancel, saving }) => {
           <input type="checkbox" id="job-active" checked={form.active} onChange={e=>onChange('active',e.target.checked)} className="w-4 h-4 accent-blue-500"/>
           <label htmlFor="job-active" className="text-sm text-gray-300 cursor-pointer font-medium">Active (visible to job seekers)</label>
         </div>
+        <div className="col-span-2">
+          <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">
+            Key Skills <span className="text-gray-600 normal-case font-medium">(comma-separated — shown as tags on the careers page)</span>
+          </label>
+          <input value={form.skills??''} onChange={e=>onChange('skills',e.target.value)}
+            placeholder="e.g. AutoCAD, Site supervision, RDSO standards, Safety compliance"
+            className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 placeholder-gray-600"/>
+          {String(form.skills||'').trim() && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {String(form.skills).split(',').map(t=>t.trim()).filter(Boolean).map(t=>(
+                <span key={t} className="px-2.5 py-0.5 bg-blue-900/50 text-blue-300 rounded-full text-[11px] font-semibold">{t}</span>
+              ))}
+            </div>
+          )}
+        </div>
         {[{k:'description',label:'Job Description *',ph:'Role overview and responsibilities…',req:true},
-          {k:'requirements',label:'Requirements & Skills',ph:'Required qualifications, skills, certifications…'},
           {k:'benefits',label:'Benefits & Perks',ph:'Health insurance, travel allowance, PF…'}
         ].map(f=>(
           <div key={f.k} className="col-span-2">
@@ -139,12 +161,12 @@ const ApplicationsPanel = ({ jobId, jobTitle, onClose }) => {
               {items.map(app => (
                 <div key={app.id} className="bg-gray-900 rounded-xl p-4 flex items-start justify-between gap-4">
                   <div>
-                    <p className="font-bold text-white">{app.fullName}</p>
+                    <p className="font-bold text-white">{app.name || app.fullName}</p>
                     <p className="text-xs text-gray-400">{app.email} · {app.phone}</p>
-                    <p className="text-xs text-gray-500 mt-1">{app.coverLetter?.slice(0,120)}…</p>
+                    <p className="text-xs text-gray-500 mt-1">{(app.coverNote || app.coverLetter || '').slice(0,120) || 'No cover note'}</p>
                   </div>
                   <div className="flex flex-col items-end gap-2 shrink-0">
-                    <span className="text-xs text-gray-500">{app.appliedAt?new Date(app.appliedAt).toLocaleDateString('en-IN'):'—'}</span>
+                    <span className="text-xs text-gray-500">{(app.createdAt||app.appliedAt)?new Date(app.createdAt||app.appliedAt).toLocaleDateString('en-IN'):'—'}</span>
                     {app.resumeUrl && (
                       <a href={app.resumeUrl} target="_blank" rel="noopener noreferrer"
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700">
@@ -170,7 +192,13 @@ const AdminJobs = () => {
   const [viewApps, setViewApps]       = useState(null);
   const [search, setSearch]           = useState('');
 
-  const { items, loading, refetch } = usePaginated(jobsApi.list, { size: 50 });
+  // /jobs/manage returns every status (the public /jobs hides CLOSED roles,
+  // which made toggled-off jobs vanish from the panel).
+  const { items: rawItems, loading, refetch } = usePaginated(jobsApi.manage, { size: 50 });
+  const items = React.useMemo(
+    () => rawItems.map(j => ({ ...j, active: j.status ? j.status === 'OPEN' : !!j.active })),
+    [rawItems]
+  );
   const [create, {loading:creating}]  = useMutation(jobsApi.create);
   const [update, {loading:updating}]  = useMutation(jobsApi.update);
   const [remove]                      = useMutation(jobsApi.delete);
@@ -179,6 +207,10 @@ const AdminJobs = () => {
   const handleSave = async (form) => {
     const payload = {
       ...form,
+      // The backend persists skills as text[] — send a real array, never the
+      // raw comma string (that mismatch is why skills came back null).
+      skills: String(form.skills || '').split(',').map(t=>t.trim()).filter(Boolean),
+      status: form.active ? 'OPEN' : 'CLOSED',
       salaryFrom:  form.salaryFrom ? Number(form.salaryFrom) : null,
       salaryTo:    form.salaryTo   ? Number(form.salaryTo)   : null,
       openings:    Number(form.openings)||1,
@@ -242,6 +274,14 @@ const AdminJobs = () => {
                   {job.salaryFrom&&<span>₹{Number(job.salaryFrom).toLocaleString('en-IN')}–{Number(job.salaryTo||0).toLocaleString('en-IN')}/mo</span>}
                   <span className="flex items-center gap-1"><Users className="h-3 w-3"/>{job.applicationCount||0} applicants</span>
                 </div>
+                {Array.isArray(job.skills) && job.skills.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {job.skills.slice(0,6).map(sk => (
+                      <span key={sk} className="px-2 py-0.5 bg-gray-700 text-gray-300 rounded-full text-[10px] font-semibold">{sk}</span>
+                    ))}
+                    {job.skills.length > 6 && <span className="text-[10px] text-gray-500">+{job.skills.length-6} more</span>}
+                  </div>
+                )}
               </div>
               <div className="flex gap-2">
                 <button onClick={() => setViewApps(job)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-900/50 text-blue-400 rounded-lg text-xs font-bold hover:bg-blue-900 transition-colors">

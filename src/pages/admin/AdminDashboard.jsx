@@ -15,7 +15,8 @@ import { Link, Outlet, useLocation, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard, Package, ShoppingCart, MessageSquare, FileText,
   Users, Newspaper, Image, Briefcase, Tag, ChevronRight, Bell, Settings,
-  TrendingUp, AlertCircle, CheckCircle, Clock, BarChart2, ClipboardList } from 'lucide-react';
+  TrendingUp, AlertCircle, CheckCircle, Clock, BarChart2, ClipboardList, Layers, FileDown,
+} from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useApi } from '@/hooks/useApi';
 import { analyticsApi } from '@/lib/api';
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { path: '/admin/orders',    label: 'Orders',         icon: ShoppingCart,                group: 'Commerce' },
   { path: '/admin/products',  label: 'Products',       icon: Package,                     group: 'Commerce' },
   { path: '/admin/quotes',    label: 'Quote Requests', icon: FileText,                    group: 'Commerce' },
+  { path: '/admin/catalogue-leads', label: 'Catalogue Leads', icon: FileDown,             group: 'Commerce' },
   { path: '/admin/rfqs',      label: 'RFQ Pipeline',   icon: ClipboardList,               group: 'Commerce' },
   { path: '/admin/coupons',   label: 'Coupons',        icon: Tag,                         group: 'Commerce' },
   // CRM
@@ -38,6 +40,7 @@ const NAV_ITEMS = [
   { path: '/admin/gallery',   label: 'Gallery',        icon: Image,                       group: 'Content' },
   { path: '/admin/jobs',      label: 'Careers / Jobs', icon: Briefcase,                   group: 'Content' },
   { path: '/admin/tenders',   label: 'Tenders',        icon: Tag,                         group: 'Content' },
+  { path: '/admin/catalog',   label: 'Categories & Services', icon: Layers,               group: 'Content' },
   // System
   { path: '/admin/settings',  label: 'Site Settings',  icon: Settings,                    group: 'System' },
   { path: '/admin/audit',     label: 'Audit Log',      icon: BarChart2,                   group: 'System' },
@@ -142,6 +145,7 @@ const AdminHome = () => {
     { label: 'New Quote Requests',    value: stats?.newQuotes,            icon: FileText, color: 'bg-violet-600', sub: 'awaiting review' },
     { label: 'Newsletter Subscribers',value: stats?.newsletterSubscribers,icon: Users,  color: 'bg-cyan-600', sub: 'active' },
     { label: 'New Applications',      value: stats?.newApplications,      icon: Briefcase, color: 'bg-rose-600', sub: 'job applicants' },
+    { label: 'Catalogue Leads',       value: stats?.totalCatalogueLeads,  icon: FileDown, color: 'bg-amber-600', sub: `${stats?.newCatalogueLeads || 0} new` },
   ];
 
   return (
@@ -273,6 +277,7 @@ const AdminHome = () => {
               { to: '/admin/tenders',  label: 'Tenders',      icon: Tag,       color: 'bg-violet-50 text-violet-600' },
               { to: '/admin/contacts', label: 'View Messages',icon: MessageSquare, color: 'bg-green-50 text-green-600' },
               { to: '/admin/quotes',   label: 'View Quotes',  icon: FileText,  color: 'bg-rose-50 text-rose-600' },
+              { to: '/admin/catalogue-leads', label: 'Catalogue Leads', icon: FileDown, color: 'bg-amber-50 text-amber-600' },
               { to: '/admin/jobs',     label: 'Manage Jobs',  icon: Briefcase, color: 'bg-cyan-50 text-cyan-600' },
             ].map(({ to, label, icon: Icon, color }) => (
               <Link key={to} to={to}

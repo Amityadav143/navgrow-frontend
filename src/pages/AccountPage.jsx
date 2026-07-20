@@ -240,6 +240,15 @@ const AccountPage = () => {
     () => ordersApi.myOrders({ page:0, size:50 }), [isLoggedIn], { immediate: isLoggedIn }
   );
 
+  // Stable profile field updater for ProfileInputField.
+  // MUST live above the `if (!isLoggedIn) return …` guard: hooks after a
+  // conditional return violate the Rules of Hooks, and signing out flipped
+  // isLoggedIn mid-render — React then threw "Rendered fewer hooks than
+  // expected", which the root ErrorBoundary surfaced as "Something went wrong".
+  const handleProfileChange = React.useCallback((k, v) => {
+    setProfile(p => ({ ...p, [k]: v }));
+  }, []);
+
   useEffect(() => {
     if (!isLoggedIn) return;
     // Load profile
@@ -366,10 +375,6 @@ const AccountPage = () => {
     setAddresses(prev => prev.filter(a => a.id !== id));
   };
 
-  // Stable profile field updater for ProfileInputField
-  const handleProfileChange = React.useCallback((k, v) => {
-    setProfile(p => ({ ...p, [k]: v }));
-  }, []);
 
   const handleReorder = (order) => {
     if (!order.orderItems?.length) return;

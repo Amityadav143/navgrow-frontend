@@ -13,6 +13,7 @@ import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Edit2, Trash2, X, CheckCircle, AlertTriangle, Image } from 'lucide-react';
 import { galleryApi } from '@/lib/api';
+import ImageUploadInput from '@/components/admin/ImageUploadInput';
 import { usePaginated, useMutation } from '@/hooks/useApi';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -98,9 +99,8 @@ const AdminGallery = () => {
                   className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 placeholder-gray-600"/>
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Image URL</label>
-                <input value={form.imageUrl} onChange={e=>ch('imageUrl',e.target.value)} placeholder="https://…"
-                  className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"/>
+                <ImageUploadInput label="Image" value={form.imageUrl}
+                  onChange={(url) => ch('imageUrl', url)} />
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Category</label>

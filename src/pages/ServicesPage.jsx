@@ -31,8 +31,8 @@ const engineeringServices = [
       'RDSO Compliance – All works aligned to RDSO guidelines and Indian Railways quality norms.',
       'Inspection & Documentation – Test certificates, inspection reports, and completion documentation.',
     ],
-    image: '/smsystem.jpg',
-    imageAlt: 'Railway infrastructure and locomotive engineering project',
+    image: '/ng_railway_infra.png',
+    imageAlt: 'Engineers carrying out infrastructure works',
   },
   {
     id: 'industrial-engineering',
@@ -63,8 +63,8 @@ const engineeringServices = [
       'Project Management – End-to-end planning, scheduling, and supervision.',
       'Compliance & Safety – Works executed to relevant IS codes and safety standards.',
     ],
-    image: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=1000&q=80',
-    imageAlt: 'Civil and construction engineering site',
+    image: '/ng_civil_const.png',
+    imageAlt: 'Active building construction site with scaffolding and formwork',
   },
   {
     id: 'government-contracts',
@@ -79,8 +79,8 @@ const engineeringServices = [
       'MSME Advantage – Priority access and benefits as a registered MSME enterprise.',
       'Post-Award Support – Reporting, inspections, and handover documentation.',
     ],
-    image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1000&q=80',
-    imageAlt: 'Government contract and tender documentation',
+    image: '/ng_govt_contracts.png',
+    imageAlt: 'Site engineer in safety helmet signing inspection documents',
   },
   {
     id: 'maintenance',
@@ -95,8 +95,8 @@ const engineeringServices = [
       'Spares & Support – Sourcing and replacement of critical spares.',
       'Monthly Reporting – Transparent performance and maintenance reporting.',
     ],
-    image: 'https://images.unsplash.com/photo-1581092160562-40aa08e78837?w=1000&q=80',
-    imageAlt: 'Industrial maintenance and servicing',
+    image: '/ng_amc.png',
+    imageAlt: 'Maintenance technician servicing equipment with power tools',
   },
 ];
 
@@ -114,7 +114,7 @@ const sustainabilityServices = [
       'Water Audit & Feasibility – Site assessment, runoff calculation, and ROI-backed system recommendations.',
       'Operation & Maintenance – Annual contracts for cleaning, monitoring, and assured system performance.',
     ],
-    image: 'https://images.unsplash.com/photo-1538300342682-cf57afb97285?w=1000&q=80',
+    image: '/ng_rainwater_harvesting.png',
     imageAlt: 'Rainwater harvesting and water collection system',
   },
   {
@@ -146,8 +146,8 @@ const sustainabilityServices = [
       'Pollution-Control Compliance – Systems engineered to meet CPCB / SPCB discharge standards and consent requirements.',
       'Retrofitting & Upgrades – Capacity expansion and modernisation of existing treatment infrastructure.',
     ],
-    image: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=1000&q=80',
-    imageAlt: 'Wastewater treatment and water recycling facility',
+    image: '/ng_water_treatment.png',
+    imageAlt: 'Circular clarifier tanks at a wastewater treatment plant',
   },
   {
     id: 'energy-efficiency',

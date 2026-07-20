@@ -20,6 +20,7 @@ import {
   List, Type, AlignLeft, Heading,
 } from 'lucide-react';
 import { newsApi } from '@/lib/api';
+import ImageUploadInput, { MultiImageUploadButton } from '@/components/admin/ImageUploadInput';
 import { usePaginated, useMutation } from '@/hooks/useApi';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -147,12 +148,10 @@ const ArticleForm = ({ initial, onSave, onCancel, saving }) => {
                 <option value="ARCHIVED">📁 Archived</option>
               </select>
             </div>
-            {/* Image URL */}
+            {/* Cover Image — paste a URL or upload from device */}
             <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Cover Image URL</label>
-              <input value={form.imageUrl} onChange={ch('imageUrl')} placeholder="https://…"
-                className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500"/>
-              {form.imageUrl && <img loading="lazy" decoding="async" src={form.imageUrl} alt="" className="mt-2 h-20 w-full object-cover rounded-xl" onError={e=>{e.target.style.display='none'}}/>}
+              <ImageUploadInput label="Cover Image" value={form.imageUrl}
+                onChange={(url) => setForm(p => ({ ...p, imageUrl: url }))} />
             </div>
             {/* Gallery Images */}
             <div className="md:col-span-2">
@@ -160,6 +159,7 @@ const ArticleForm = ({ initial, onSave, onCancel, saving }) => {
               <textarea value={form.imageUrls} onChange={ch('imageUrls')} rows={3}
                 placeholder={"https://…/photo-2.jpg\nhttps://…/photo-3.jpg"}
                 className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 resize-y placeholder-gray-600"/>
+              <MultiImageUploadButton onUploaded={(url) => setForm(p => ({ ...p, imageUrls: (p.imageUrls ? p.imageUrls.replace(/\n+$/,'') + '\n' : '') + url }))} />
               {form.imageUrls && form.imageUrls.split('\n').map(u=>u.trim()).filter(Boolean).length > 0 && (
                 <div className="flex gap-2 mt-2 flex-wrap">
                   {form.imageUrls.split('\n').map(u=>u.trim()).filter(Boolean).slice(0,6).map((u,i)=>(
@@ -225,7 +225,10 @@ const AdminNews = () => {
   const [editing,  setEditing]  = useState(null);
   const [search,   setSearch]   = useState('');
 
-  const { items, loading, refetch } = usePaginated(newsApi.list, { size: 50 });
+  // /news/manage returns DRAFT + PUBLISHED + ARCHIVED. The public /news list
+  // only serves PUBLISHED — using it here made drafts "disappear" from the
+  // panel the moment they were saved.
+  const { items, loading, refetch } = usePaginated(newsApi.manage, { size: 50 });
   const [create, { loading: creating }] = useMutation(newsApi.create);
   const [update, { loading: updating }] = useMutation(newsApi.update);
   const [remove]                        = useMutation(newsApi.delete);
@@ -241,8 +244,25 @@ const AdminNews = () => {
       ? await update(editing.id, data)
       : await create(data);
     if (res.error) { toast({ title: 'Failed', description: res.error, variant: 'destructive' }); return; }
-    toast({ title: editing ? '✓ Article updated' : '✓ Article published' });
+    const published = data.status === 'PUBLISHED';
+    toast({
+      title: editing
+        ? (published ? '✓ Article updated & live' : '✓ Draft updated')
+        : (published ? '✓ Article published — now live on the News page' : '✓ Draft saved (not public yet)'),
+    });
     setShowForm(false); setEditing(null); refetch();
+  };
+
+  const handleToggleStatus = async (article) => {
+    const next = article.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED';
+    const res = await update(article.id, {
+      title: article.title, content: article.content, excerpt: article.excerpt,
+      category: article.category, imageUrl: article.imageUrl, imageUrls: article.imageUrls,
+      tags: article.tags || [], status: next,
+    });
+    if (res.error) { toast({ title: 'Failed', description: res.error, variant: 'destructive' }); return; }
+    toast({ title: next === 'PUBLISHED' ? '✓ Published — now live on the News page' : '✓ Unpublished (draft)' });
+    refetch();
   };
 
   const handleDelete = async (id, title) => {
@@ -328,10 +348,15 @@ const AdminNews = () => {
                       <td className="px-4 py-3 text-xs text-gray-500">{a.authorName || '—'}</td>
                       <td className="px-4 py-3 text-xs text-gray-500">{a.viewCount || 0}</td>
                       <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
-                        {a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}) : '—'}
+                        {(a.publishedAt || a.createdAt) ? new Date(a.publishedAt || a.createdAt).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}) : '—'}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => handleToggleStatus(a)}
+                            className={`p-1.5 rounded-lg transition-colors ${a.status==='PUBLISHED' ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}
+                            title={a.status==='PUBLISHED' ? 'Unpublish (back to draft)' : 'Publish now'}>
+                            <Globe className="h-3.5 w-3.5"/>
+                          </button>
                           <button onClick={() => { setEditing(a); setShowForm(false); }}
                             className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" title="Edit">
                             <Edit2 className="h-3.5 w-3.5"/>

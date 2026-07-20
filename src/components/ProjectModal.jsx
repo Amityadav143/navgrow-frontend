@@ -44,7 +44,7 @@ const ProjectModal = ({ project, onClose }) => {
           {/* Image */}
           <div className="relative h-64 overflow-hidden rounded-t-3xl">
             <img loading="lazy" decoding="async"
-              src={`/${project.image}`} onError={(e) => { e.target.onerror=null; e.target.src='/Railway_Infra.jpg'; }}
+              src={`/${project.image}`} onError={(e) => { e.target.onerror=null; e.target.src='/placeholder.jpg'; }}
               alt={project.title}
               className="w-full h-full object-cover"
             />

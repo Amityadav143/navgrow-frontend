@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Calculator, Train, Building, Wrench, Users, Shield, Cpu, Building2,
   CheckCircle, ArrowRight, Phone, MessageCircle, Send, RotateCcw,
-  ChevronDown, Info,
+  ChevronDown, Info, AlertCircle, Mail,
 } from 'lucide-react';
 import PageHero from '@/components/PageHero';
 import useSeo from '@/hooks/useSeo';
@@ -115,21 +115,35 @@ const QuoteCalculatorPage = () => {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
 
-  const sendQuote = async () => {
+  const [reference, setReference] = useState('');
+  const [sentVia, setSentVia] = useState('api'); // 'api' | 'mailto'
+
+  const addonNames = addons.map(id => ADDONS.find(a => a.id === id)?.label).filter(Boolean);
+
+  const validate = () => {
     if (!form.name || !form.email || !form.phone) {
       setSendError('Please fill in your name, email and phone number.');
-      return;
+      return false;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
       setSendError('Please enter a valid email address.');
-      return;
+      return false;
     }
-    setSending(true); setSendError('');
-    const addonNames = addons.map(id => ADDONS.find(a => a.id === id)?.label).filter(Boolean);
+    return true;
+  };
 
-    // Try backend API first (triggers professional HTML email template)
+  /**
+   * Primary flow — submits the estimate as a formal quote request. It is
+   * stored in the database, appears instantly in Admin → Quote Requests, and
+   * notifies the Navgrow team by email. (Previously the API call failed
+   * silently and dropped into a mailto: fallback, so nothing ever reached the
+   * admin dashboard.)
+   */
+  const sendQuote = async () => {
+    if (!validate()) return;
+    setSending(true); setSendError('');
     try {
-      await quotesApi.submit({
+      const { data } = await quotesApi.submit({
         name:        form.name,
         email:       form.email,
         phone:       form.phone,
@@ -140,57 +154,64 @@ const QuoteCalculatorPage = () => {
         serviceName: svc?.label,
         scope:       scp?.label,
         duration:    dur?.label,
-        addOns:      addonNames.join(', '),
+        addons:      addonNames,
         estLow:      Math.round(low),
         estHigh:     Math.round(high),
         notes:       form.notes || '',
-        // Rich details for professional email
         urgency:     form.urgency || 'standard',
       });
+      setReference(data?.reference || '');
+      setSentVia('api');
       setSubmitted(true);
     } catch (err) {
-      // Fallback: open pre-filled professional email in mail client
-      const subject = encodeURIComponent(
-        `[Quote Request] ${svc?.label} – ${scp?.label} Scope — ${form.company || form.name}`
+      setSendError(
+        err.response?.data?.message
+        || 'Could not reach our server. Please try again, or use "Send via Email App" below.'
       );
-      const body = encodeURIComponent([
-        'Dear Navgrow Engineering Team,',
-        '',
-        'I would like to request a formal quotation for the following project:',
-        '',
-        '─── PROJECT DETAILS ───────────────────────────────',
-        `Service Type  : ${svc?.label}`,
-        `Project Scope : ${scp?.label} (${scp?.desc})`,
-        `Duration      : ${dur?.label}`,
-        addonNames.length ? `Add-ons       : ${addonNames.join(', ')}` : '',
-        `Indicative Est: ${fmt(low)} – ${fmt(high)} (ex-GST)`,
-        '',
-        '─── CONTACT INFORMATION ────────────────────────────',
-        `Name          : ${form.name}`,
-        `Email         : ${form.email}`,
-        `Phone         : ${form.phone}`,
-        form.company ? `Company       : ${form.company}` : '',
-        form.city    ? `Location      : ${form.city}` : '',
-        form.industry? `Industry      : ${form.industry}` : '',
-        '',
-        '─── ADDITIONAL NOTES ───────────────────────────────',
-        form.notes || 'No additional notes.',
-        '',
-        'Please send a formal quotation with full cost breakup, GST details,',
-        'timeline, and terms at your earliest convenience.',
-        '',
-        'Thank you,',
-        form.name,
-      ].filter(l => l !== null && l !== undefined).join('\n'));
-      try {
-        window.location.href = `mailto:info@navgrow.org?subject=${subject}&body=${body}`;
-        setSubmitted(true);
-      } catch {
-        setSendError('Unable to send. Please email directly: info@navgrow.org');
-      } finally {
-        setSending(false);
-      }
+    } finally {
+      setSending(false);
     }
+  };
+
+  /** Secondary, explicit fallback — opens the visitor's mail client pre-filled. */
+  const sendViaEmailApp = () => {
+    if (!validate()) return;
+    setSendError('');
+    const subject = encodeURIComponent(
+      `[Quote Request] ${svc?.label} – ${scp?.label} Scope — ${form.company || form.name}`
+    );
+    const body = encodeURIComponent([
+      'Dear Navgrow Engineering Team,',
+      '',
+      'I would like to request a formal quotation for the following project:',
+      '',
+      '─── PROJECT DETAILS ───────────────────────────────',
+      `Service Type  : ${svc?.label}`,
+      `Project Scope : ${scp?.label} (${scp?.desc})`,
+      `Duration      : ${dur?.label}`,
+      addonNames.length ? `Add-ons       : ${addonNames.join(', ')}` : '',
+      `Indicative Est: ${fmt(low)} – ${fmt(high)} (ex-GST)`,
+      '',
+      '─── CONTACT INFORMATION ────────────────────────────',
+      `Name          : ${form.name}`,
+      `Email         : ${form.email}`,
+      `Phone         : ${form.phone}`,
+      form.company ? `Company       : ${form.company}` : '',
+      form.city    ? `Location      : ${form.city}` : '',
+      form.industry? `Industry      : ${form.industry}` : '',
+      '',
+      '─── ADDITIONAL NOTES ───────────────────────────────',
+      form.notes || 'No additional notes.',
+      '',
+      'Please send a formal quotation with full cost breakup, GST details,',
+      'timeline, and terms at your earliest convenience.',
+      '',
+      'Thank you,',
+      form.name,
+    ].filter(l => l !== null && l !== undefined).join('\n'));
+    window.location.href = `mailto:info@navgrow.org?subject=${subject}&body=${body}`;
+    setSentVia('mailto');
+    setSubmitted(true);
   };
 
   return (
@@ -357,10 +378,19 @@ const QuoteCalculatorPage = () => {
                   </div>
                 </div>
 
+                {sendError && (
+                  <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3 mb-3">
+                    <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                    <span>{sendError}</span>
+                  </div>
+                )}
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <button onClick={sendQuote}
-                    className="flex-1 flex items-center justify-center gap-2 py-3.5 brand-gradient text-white font-bold rounded-xl shadow-md hover:opacity-90">
-                    <Send className="h-4 w-4" /> Email This Estimate
+                  <button onClick={sendQuote} disabled={sending}
+                    className="flex-1 flex items-center justify-center gap-2 py-3.5 brand-gradient text-white font-bold rounded-xl shadow-md hover:opacity-90 disabled:opacity-60">
+                    {sending
+                      ? <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      : <Send className="h-4 w-4" />}
+                    {sending ? 'Sending…' : 'Send Request to Navgrow'}
                   </button>
                   <a href={`https://wa.me/918927070972?text=${encodeURIComponent(`Hi, I used the Quote Calculator and got an estimate of ${fmt(low)} – ${fmt(high)} for ${svc?.label} (${scp?.label} scope). Can we discuss?`)}`}
                     target="_blank" rel="noopener noreferrer"
@@ -368,6 +398,10 @@ const QuoteCalculatorPage = () => {
                     <MessageCircle className="h-4 w-4" /> Discuss on WhatsApp
                   </a>
                 </div>
+                <button onClick={sendViaEmailApp}
+                  className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-gray-500 hover:text-gray-700 border-2 border-dashed border-gray-200 hover:border-gray-300 rounded-xl transition-colors">
+                  <Mail className="h-3.5 w-3.5" /> Prefer your own mail app? Send via Email instead
+                </button>
                 <div className="flex items-center justify-between mt-4">
                   <button onClick={() => setStep(2)} className="text-sm text-gray-400 hover:text-gray-600">← Edit Add-ons</button>
                   <button onClick={reset} className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-600">
@@ -383,8 +417,24 @@ const QuoteCalculatorPage = () => {
                 <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-5">
                   <CheckCircle className="h-10 w-10 text-green-600" />
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">Estimate Sent!</h3>
-                <p className="text-gray-500 mb-6">Your mail app opened with the full estimate. We'll respond with a formal quotation within 24 hours.</p>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  {sentVia === 'api' ? 'Request Sent to Navgrow!' : 'Email Drafted!'}
+                </h3>
+                {sentVia === 'api' ? (
+                  <>
+                    <p className="text-gray-500 mb-2">
+                      Your estimate is now with our team — it appears in our dashboard and we've emailed you a copy.
+                      We'll respond with a formal quotation within 24 hours.
+                    </p>
+                    {reference && (
+                      <p className="text-xs text-gray-400 mb-6 font-mono">Reference: {reference}</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-gray-500 mb-6">
+                    Your mail app opened with the full estimate — hit send there to reach us at info@navgrow.org.
+                  </p>
+                )}
                 <button onClick={reset} className="inline-flex items-center gap-2 px-7 py-3 brand-gradient text-white font-bold rounded-xl">
                   <RotateCcw className="h-4 w-4" /> Calculate Another
                 </button>

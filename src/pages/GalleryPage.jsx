@@ -21,15 +21,15 @@ const PHOTOS = [
   { id: 1,  cat: 'Projects',   src: '/wltpsguj.jpeg',    title: 'Rainwater Leakage Testing Plant',          location: 'Siliguri Diesel Loco Shed',  year: '2025' },
   { id: 2,  cat: 'Projects',   src: '/handbreak.jpg',    title: 'Modified Hand Brake Fitment',              location: 'Siliguri Diesel Loco Shed',  year: '2025' },
   { id: 3,  cat: 'Projects',   src: '/barricading.jpg',  title: 'Lube Oil Storage Solutions',               location: 'Siliguri, West Bengal',      year: '2026' },
-  { id: 4,  cat: 'Projects',   src: '/Railway_Infra.jpg',title: 'Railway Infrastructure Work',              location: 'North Bengal Zone',          year: '2025' },
+  { id: 4,  cat: 'Projects',   src: 'https://images.unsplash.com/photo-1678803262992-d79d06dd5d96?auto=format&fit=crop&w=1600&q=80',title: 'Railway Infrastructure Work',              location: 'North Bengal Zone',          year: '2025' },
   { id: 5,  cat: 'Certifications', src: '/DPIIT.png',    title: 'DPIIT Startup India Recognition',         location: 'Government of India',        year: '2023' },
   { id: 6,  cat: 'Certifications', src: '/makeinindia.png', title: 'Make in India Registration',           location: 'Government of India',        year: '2024' },
   { id: 7,  cat: 'Certifications', src: '/msme.png',     title: 'MSME Registration Certificate',           location: 'Ministry of MSME, India',    year: '2023' },
-  { id: 8,  cat: 'Team',       src: '/Railway_Infra.jpg', title: 'Site Safety Briefing',    location: 'Project Site, Siliguri',    year: '2025' },
+  { id: 8,  cat: 'Team',       src: 'https://images.unsplash.com/photo-1659353588754-e5e54789c118?auto=format&fit=crop&w=1600&q=80', title: 'Site Safety Briefing',    location: 'Project Site, Siliguri',    year: '2025' },
   { id: 9,  cat: 'Projects',   src: '/barricading.jpg', title: 'Track Inspection Works',       location: 'NE Railway Zone',           year: '2025' },
   { id: 10, cat: 'Team',       src: '/handbreak.jpg', title: 'Engineering Team at Work',  location: 'Siliguri Workshop',         year: '2026' },
   { id: 11, cat: 'Projects',   src: '/wltpsguj.jpeg', title: 'Quality Inspection',        location: 'Diesel Loco Shed',          year: '2025' },
-  { id: 12, cat: 'Team',       src: '/smsystem.jpg', title: 'Equipment Calibration',     location: 'Navgrow Workshop',          year: '2026' },
+  { id: 12, cat: 'Team',       src: 'https://images.unsplash.com/photo-1610259998914-d1b9afe0dc55?auto=format&fit=crop&w=1600&q=80', title: 'Equipment Calibration',     location: 'Navgrow Workshop',          year: '2026' },
 ];
 
 const CATS = ['All', 'Projects', 'Team', 'Certifications'];
@@ -52,7 +52,7 @@ const LightBox = ({ photo, total, onClose, onPrev, onNext }) => (
       <motion.img key={photo.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
         src={photo.src} alt={photo.title}
         className="w-full max-h-[70vh] object-contain rounded-2xl"
-        onError={(e) => { e.target.onerror=null; e.target.src='/Railway_Infra.jpg'; }} />
+        onError={(e) => { e.target.onerror=null; e.target.src='/placeholder.jpg'; }} />
       <div className="mt-4 text-center">
         <h3 className="font-bold text-white text-xl">{photo.title}</h3>
         <p className="text-gray-400 text-sm mt-1 flex items-center justify-center gap-1.5">
@@ -83,7 +83,7 @@ const GalleryPage = () => {
         setAllPhotos(data.map(item => ({
           id: item.id,
           cat: item.category || 'Projects',
-          src: item.imageUrl || item.image || '/Railway_Infra.jpg',
+          src: item.imageUrl || item.image || '/placeholder.jpg',
           title: item.title || '',
           location: item.location || 'Navgrow Engineering',
           year: item.year || new Date().getFullYear().toString(),
@@ -125,7 +125,7 @@ const GalleryPage = () => {
                 className="group relative overflow-hidden rounded-2xl cursor-pointer bg-gray-200 aspect-square shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
                 onClick={() => setLightbox(i)}>
                 <img src={photo.src} alt={photo.title} loading="lazy" decoding="async"
-                  onError={(e) => { e.target.onerror=null; e.target.src='/Railway_Infra.jpg'; }}
+                  onError={(e) => { e.target.onerror=null; e.target.src='/placeholder.jpg'; }}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                 <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 via-gray-900/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-2 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-300">

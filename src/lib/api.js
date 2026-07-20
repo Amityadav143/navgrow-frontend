@@ -4,6 +4,7 @@
  * Unauthorised reproduction, modification or distribution is strictly prohibited.
  */
 import axios from 'axios';
+import { toast } from '@/components/ui/use-toast';
 
 // ── Base instance ─────────────────────────────────────────────────────────────
 /**
@@ -37,6 +38,28 @@ api.interceptors.request.use(
 );
 
 // ── Response interceptor — handle 401 (token refresh) ────────────────────────
+// Global error safety net — toast ONLY for network failures and 5xx server
+// errors (with the X-Request-Id reference when present). 4xx are owned by the
+// calling page/form, and 401 is owned by the silent token-refresh flow below.
+// Deduped so a burst of failing calls shows a single toast.
+let _lastErrToastAt = 0;
+function surfaceUnexpectedError(error) {
+  try {
+    if (error.config?.skipErrorToast) return;
+    const now = Date.now();
+    if (now - _lastErrToastAt < 5000) return;
+    const status = error.response?.status;
+    if (!error.response) {
+      _lastErrToastAt = now;
+      toast({ title: 'Connection problem', description: 'Could not reach the server. Check your internet connection and try again.', variant: 'destructive' });
+    } else if (status >= 500) {
+      _lastErrToastAt = now;
+      const ref = error.response.headers?.['x-request-id'];
+      toast({ title: 'Server error', description: `Something went wrong on our side. Please try again${ref ? ` (ref: ${ref})` : ''}.`, variant: 'destructive' });
+    }
+  } catch { /* the safety net itself must never throw */ }
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -63,6 +86,7 @@ api.interceptors.response.use(
         }
       }
     }
+    surfaceUnexpectedError(error);
     return Promise.reject(error);
   },
 );
@@ -82,6 +106,7 @@ export const authApi = {
 
 // ── Products API ──────────────────────────────────────────────────────────────
 export const productsApi = {
+  related: (id, limit = 4) => api.get(`/products/${id}/related`, { params: { limit } }),
   list:       (params) => api.get('/products', { params }),
   get:        (slug)   => api.get(`/products/${slug}`),
   featured:   ()       => api.get('/products/featured'),
@@ -124,6 +149,19 @@ export const quotesApi = {
   updateStatus:(id, st, amt) => api.patch(`/quotes/${id}/status`, null, { params: { status: st, quotedAmount: amt } }),
 };
 
+// ── Catalogue download + lead capture ─────────────────────────────────────────
+export const catalogueApi = {
+  // Public: capture the lead, returns { message, reference, downloadUrl }
+  capture:      (d)      => api.post('/catalogue/leads', d),
+  // Absolute URL to stream the PDF (used for the actual download link)
+  downloadUrl:  ()       => `${API_BASE}/catalogue/download`,
+  // Admin
+  listLeads:    (params) => api.get('/catalogue/leads', { params }),
+  leadStats:    ()       => api.get('/catalogue/leads/stats'),
+  updateLead:   (id, params) => api.patch(`/catalogue/leads/${id}/status`, null, { params }),
+  deleteLead:   (id)     => api.delete(`/catalogue/leads/${id}`),
+};
+
 
 // ── RFQ (Request for Quote) API ───────────────────────────────────────────────
 export const rfqApi = {
@@ -158,6 +196,7 @@ export const projectsApi = {
 // ── News API ──────────────────────────────────────────────────────────────────
 export const newsApi = {
   list:   (params) => api.get('/news', { params }),
+  manage: (params) => api.get('/news/manage', { params }),
   get:    (slug)   => api.get(`/news/${slug}`),
   create: (d)      => api.post('/news', d),
   update: (id, d)  => api.put(`/news/${id}`, d),
@@ -167,6 +206,7 @@ export const newsApi = {
 // ── Tenders API ───────────────────────────────────────────────────────────────
 export const tendersApi = {
   list:    ()      => api.get('/tenders'),
+  manage:  ()      => api.get('/tenders/manage'),
   featured:()      => api.get('/tenders/featured'),
   create:  (d)     => api.post('/tenders', d),
   update:  (id, d) => api.put(`/tenders/${id}`, d),
@@ -176,6 +216,7 @@ export const tendersApi = {
 // ── Jobs API ──────────────────────────────────────────────────────────────────
 export const jobsApi = {
   list:           (p)      => api.get('/jobs', { params: p }),
+  manage:         ()       => api.get('/jobs/manage'),
   get:            (id)     => api.get(`/jobs/${id}`),
   apply:          (id, d)  => api.post(`/jobs/${id}/apply`, d),
   applications:   (id, p)  => api.get(`/jobs/${id}/applications`, { params: p }),
@@ -242,6 +283,7 @@ export const adminUsersApi = {
 
 // ── Analytics API ─────────────────────────────────────────────────────────────
 export const analyticsApi = {
+  track: (event) => api.post('/analytics/track', event, { skipErrorToast: true }),
   dashboard:    () => api.get('/admin/analytics/dashboard'),
   recentOrders: () => api.get('/admin/analytics/recent-orders'),
   funnel:       (days) => api.get('/admin/analytics/funnel', { params: { days: days || 30 } }),
@@ -273,4 +315,23 @@ export const siteSettingsApi = {
 
 export const debounce = (fn, ms = 300) => {
   let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+};
+
+// ── File uploads (admin) ──────────────────────────────────────────────────────
+export const filesApi = {
+  /** Uploads an image/PDF; resolves to { url, fileName, originalName, size, kind }. */
+  upload: (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/files/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+};
+
+// ── Catalog (admin-managed categories & services) ─────────────────────────────
+export const catalogApi = {
+  list:   (type)   => api.get('/catalog', { params: { type } }),
+  manage: (type)   => api.get('/catalog/manage', { params: type ? { type } : {} }),
+  create: (d)      => api.post('/catalog', d),
+  update: (id, d)  => api.put(`/catalog/${id}`, d),
+  delete: (id)     => api.delete(`/catalog/${id}`),
 };

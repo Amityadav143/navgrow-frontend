@@ -18,7 +18,7 @@ export const SERVICES = [
     tagline: 'Approved-vendor railway engineering, delivered to RDSO standards.',
     description:
       'Specialised railway engineering for Indian Railways — locomotive modification, testing plants, shed works, and track infrastructure delivered to RDSO standards.',
-    image: '/smsystem.jpg',
+    image: '/ng_railway_infra.png',
     imageAlt: 'Railway infrastructure and locomotive engineering project',
     overview: [
       'Railway work is where Navgrow earned its name. As an Indian Railway approved vendor, we execute locomotive modification programmes, specialised testing facilities, and shed infrastructure inside live, operating railway environments — where safety protocols, documentation, and RDSO conformity are non-negotiable.',
@@ -104,7 +104,7 @@ export const SERVICES = [
     tagline: 'Industrial-grade civil works — built to last, delivered on schedule.',
     description:
       'Structural and civil construction works for industrial, institutional, and infrastructure projects — built to last and delivered on schedule.',
-    image: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=1600&q=80',
+    image: '/ng_civil_const.png',
     imageAlt: 'Civil and structural construction project',
     overview: [
       'Our civil practice carries the same discipline as our railway work: engineered structures, honest schedules, and documentation that survives departmental audit. We build RCC and steel structures, foundations, and site infrastructure for industrial and institutional clients.',
@@ -147,7 +147,7 @@ export const SERVICES = [
     tagline: 'GeM & tender-ready execution with MSME advantage and compliant delivery.',
     description:
       'End-to-end execution of government and PSU contracts — from GeM and IREPS tendering to compliant, documented delivery.',
-    image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1600&q=80',
+    image: '/ng_govt_contracts.png',
     imageAlt: 'Government and PSU contract execution',
     overview: [
       'Government work rewards vendors who respect the process. Navgrow is DPIIT-recognised, MSME-registered, and an Indian Railway approved vendor — credentials that qualify us for public procurement and speak to how we execute: specification-first, documentation-complete, and on the record.',
@@ -190,7 +190,7 @@ export const SERVICES = [
     tagline: 'SLA-backed maintenance that keeps your assets earning.',
     description:
       'Preventive and corrective maintenance with defined SLAs — annual contracts that keep industrial and institutional assets reliable.',
-    image: 'https://images.unsplash.com/photo-1581092160562-40aa08e78837?w=1600&q=80',
+    image: 'ng_amc.png',
     imageAlt: 'Industrial maintenance and AMC services',
     overview: [
       'Everything we build, we can maintain — and much that others built, too. Our AMC practice combines scheduled preventive maintenance with rapid corrective response, so breakdowns get shorter and rarer over the life of the contract.',
@@ -235,7 +235,7 @@ export const SERVICES = [
     tagline: 'CGWA-compliant harvesting and recharge — turn rooftops into water security.',
     description:
       'Design and construction of rooftop harvesting and groundwater recharge systems — CGWA-compliant water security for campuses, plants, and institutions.',
-    image: 'https://images.unsplash.com/photo-1538300342682-cf57afb97285?w=1600&q=80',
+    image: '/ng_rainwater_harvesting.png',
     imageAlt: 'Rainwater harvesting and groundwater recharge system',
     overview: [
       'Water stress is now a compliance issue as much as an environmental one: CGWA NOCs, state bye-laws, and industrial consents increasingly require demonstrable rainwater harvesting. We design and build systems that satisfy the regulator and actually work — sized to your catchment, soil, and demand.',
@@ -321,7 +321,7 @@ export const SERVICES = [
     tagline: 'STP/ETP design-build that turns effluent into compliance and reuse.',
     description:
       'Sewage and effluent treatment plants with recycling — CPCB/SPCB-compliant systems that convert wastewater into reusable water.',
-    image: 'https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=1600&q=80',
+    image: '/ng_water_treatment.png',
     imageAlt: 'Wastewater treatment and water recycling plant',
     overview: [
       'Discharge norms are tightening and water costs are rising — treatment and reuse now pay twice. We design and build STP/ETP systems sized to your load and consent conditions, with recycling streams for flushing, gardening, cooling, and process make-up wherever quality permits.',

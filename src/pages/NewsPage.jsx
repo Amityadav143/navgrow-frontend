@@ -56,7 +56,7 @@ const STATIC_NEWS = [
   {
     id: '5', slug: 'navgrow-online-engineering-shop-launch', cat: 'Company News',
     category: 'Company News', date: 'August 2025', publishedAt: '2025-08-01',
-    imageUrl: '/Railway_Infra.jpg', authorName: 'Navgrow Team', viewCount: 312,
+    imageUrl: '/placeholder.jpg', authorName: 'Navgrow Team', viewCount: 312,
     title: 'Navgrow Online Engineering Shop Now Live',
     excerpt: 'We have launched our B2B online engineering supply store at navgrow.org/shop with 20+ ISI-certified safety equipment, railway tools, and PPE products.',
     tags: ['E-commerce', 'Shop Launch', 'B2B'],
@@ -88,11 +88,11 @@ const FeaturedCard = ({ item }) => (
       <Link to={`/news/${item.slug || item.id}`} className="block">
         <div className="aspect-[16/9] lg:aspect-auto lg:h-full overflow-hidden">
           <img
-            src={item.imageUrl || '/Railway_Infra.jpg'}
+            src={item.imageUrl || '/placeholder.jpg'}
             alt={item.title}
             loading="lazy"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 min-h-[260px]"
-            onError={e => { e.target.src = '/Railway_Infra.jpg'; }}
+            onError={e => { e.target.src = '/placeholder.jpg'; }}
           />
         </div>
       </Link>
@@ -144,11 +144,11 @@ const NewsCard = ({ item, index }) => (
     {/* Image */}
     <Link to={`/news/${item.slug || item.id}`} className="block overflow-hidden aspect-[16/9] bg-gray-100">
       <img
-        src={item.imageUrl || '/Railway_Infra.jpg'}
+        src={item.imageUrl || '/placeholder.jpg'}
         alt={item.title}
         loading="lazy"
         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-        onError={e => { e.target.src = '/Railway_Infra.jpg'; }}
+        onError={e => { e.target.src = '/placeholder.jpg'; }}
       />
     </Link>
 

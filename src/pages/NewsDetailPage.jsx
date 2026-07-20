@@ -172,7 +172,7 @@ const NewsDetailPage = () => {
             className="rounded-3xl overflow-hidden mb-8 shadow-xl aspect-[16/7]">
             <img loading="lazy" decoding="async" src={article.imageUrl} alt={article.title}
               className="w-full h-full object-cover"
-              onError={e => { e.target.src = '/Railway_Infra.jpg'; }} />
+              onError={e => { e.target.src = '/placeholder.jpg'; }} />
           </motion.div>
         )}
 

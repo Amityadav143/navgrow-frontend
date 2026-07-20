@@ -56,6 +56,8 @@ const AdminAuditLog      = React.lazy(() => import('@/pages/admin/AdminAuditLog'
 const AdminGallery       = React.lazy(() => import('@/pages/admin/AdminGallery'));
 const AdminProjects      = React.lazy(() => import('@/pages/admin/AdminProjects'));
 const AdminTenders       = React.lazy(() => import('@/pages/admin/AdminTenders'));
+const AdminCatalog       = React.lazy(() => import('@/pages/admin/AdminCatalog'));
+const AdminCatalogueLeads = React.lazy(() => import('@/pages/admin/AdminCatalogueLeads'));
 const NewsDetailPage     = React.lazy(() => import('@/pages/NewsDetailPage'));
 
 const PageLoader = () => (
@@ -203,6 +205,8 @@ function App() {
           <Route path="gallery"   element={<W><AdminGallery /></W>} />
           <Route path="projects"  element={<W><AdminProjects /></W>} />
           <Route path="tenders"   element={<W><AdminTenders /></W>} />
+          <Route path="catalog"   element={<W><AdminCatalog /></W>} />
+          <Route path="catalogue-leads" element={<W><AdminCatalogueLeads /></W>} />
         </Route>
 
         {/* ── Editor routes ── */}

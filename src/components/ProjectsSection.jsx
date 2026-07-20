@@ -89,7 +89,7 @@ const ProjectsSection = () => {
                 <div className="aspect-[4/3] overflow-hidden">
                   <img loading="lazy" decoding="async"
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                    src={`/${project.image}`} onError={(e) => { e.target.onerror=null; e.target.src='/Railway_Infra.jpg'; }}
+                    src={`/${project.image}`} onError={(e) => { e.target.onerror=null; e.target.src='/placeholder.jpg'; }}
                     alt={`${project.title}`}
                     loading="lazy"
                     decoding="async"

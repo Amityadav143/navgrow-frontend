@@ -6,13 +6,15 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { newsletterApi } from '@/lib/api';
-import { Mail, Phone, MapPin, Facebook, Twitter, Linkedin, Instagram, Youtube, Send, ExternalLink } from 'lucide-react';
+import { Mail, Phone, MapPin, Facebook, Twitter, Linkedin, Instagram, Youtube, Send, ExternalLink, FileDown } from 'lucide-react';
+import CatalogueDownloadModal from '@/components/CatalogueDownloadModal';
 
 const Footer = () => {
   const year = new Date().getFullYear();
   const [email, setEmail] = useState('');
   const [subDone, setSubDone] = useState(false);
   const [subLoading, setSubLoading] = useState(false);
+  const [catalogueOpen, setCatalogueOpen] = useState(false);
 
   return (
     <footer className="bg-gray-950 text-gray-400">
@@ -76,6 +78,14 @@ const Footer = () => {
                   </form>
                 )}
             </div>
+
+            {/* Download catalogue */}
+            <button
+              onClick={() => setCatalogueOpen(true)}
+              className="mt-6 inline-flex items-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-gray-900 font-bold text-sm rounded-xl transition-colors shadow-sm"
+            >
+              <FileDown className="h-4 w-4" /> Download Company Catalogue
+            </button>
           </div>
 
           {/* Company */}
@@ -130,6 +140,8 @@ const Footer = () => {
           </div>
         </div>
       </div>
+
+      <CatalogueDownloadModal open={catalogueOpen} onClose={() => setCatalogueOpen(false)} source="footer" />
     </footer>
   );
 };

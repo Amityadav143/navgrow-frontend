@@ -86,12 +86,12 @@ const AboutPage = () => {
             >
               <div className="rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/20 aspect-[4/3] bg-gradient-to-br from-blue-800 to-blue-900">
                 <img
-                  src="/smsystem.jpg"
-                  alt="Navgrow Engineering project — engineering and infrastructure works"
+                  src="/ng_about_main.png"
+                  alt="Navgrow engineer beside a locomotive on the tracks"
                   className="w-full h-full object-cover"
                   loading="eager"
                   decoding="async"
-                  onError={(e) => { e.target.onerror = null; e.target.src = '/Railway_Infra.jpg'; }}
+                  onError={(e) => { e.target.onerror = null; e.target.src = '/handbreak.jpg'; }}
                 />
               </div>
               {/* floating credential card */}
@@ -178,7 +178,7 @@ const AboutPage = () => {
                   src="/handbreak.jpg"
                   loading="lazy"
                   decoding="async"
-                  onError={(e) => { e.target.onerror = null; e.target.src = '/Railway_Infra.jpg'; }}
+                  onError={(e) => { e.target.onerror = null; e.target.src = '/placeholder.jpg'; }}
                 />
               </div>
               <div className="absolute -bottom-6 -left-6 bg-blue-700 rounded-xl p-4 shadow-lg">

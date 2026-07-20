@@ -19,6 +19,8 @@ import { productsApi } from '@/lib/api';
 import { usePaginated, useMutation } from '@/hooks/useApi';
 import { useToast } from '@/components/ui/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import ImageUploadInput from '@/components/admin/ImageUploadInput';
+import { filesApi } from '@/lib/api';
 
 const CATEGORIES = [
   'Safety Equipment','Railway Tools','Maintenance Supplies',
@@ -58,7 +60,7 @@ function productsToCSV(products) {
 // Full RFC-4180-style parser: handles quoted fields containing commas,
 // embedded newlines, and escaped "" quotes — so Excel / Google Sheets
 // exports (including \r\n line endings) import cleanly.
-function parseCSV(text) {
+function parseCSV(text, delimiter = ',') {
   const rows = [];
   let row = [], cur = '', inQ = false;
   // normalise BOM
@@ -72,7 +74,7 @@ function parseCSV(text) {
       } else cur += ch;
     } else if (ch === '"') {
       inQ = true;
-    } else if (ch === ',') {
+    } else if (ch === delimiter) {
       row.push(cur); cur = '';
     } else if (ch === '\n' || ch === '\r') {
       // handle \r\n as a single break; ignore lone \r before \n
@@ -87,14 +89,69 @@ function parseCSV(text) {
   return rows.filter(r => r.some(c => c.trim() !== ''));
 }
 
-function csvToProducts(csvText) {
-  const rows = parseCSV(csvText);
+// Canonicalise a header for matching: lowercase, strip spaces/underscores/
+// hyphens and anything non-alphanumeric — so "Product Name", "product_name"
+// and "NAME " all resolve to the same key.
+function normHeader(h) {
+  return String(h || '').replace(/^\uFEFF/, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+// Common spreadsheet spellings → our canonical column names. Real-world CSVs
+// exported from Excel/Sheets capitalise or rename headers, which previously
+// failed hard with "CSV is missing required column(s): name, category, price".
+const HEADER_ALIASES = {
+  name: 'name', productname: 'name', product: 'name', title: 'name', itemname: 'name',
+  category: 'category', productcategory: 'category', cat: 'category', type: 'category',
+  price: 'price', sellingprice: 'price', saleprice: 'price', rate: 'price', amount: 'price', unitprice: 'price',
+  mrp: 'mrp', listprice: 'mrp', maximumretailprice: 'mrp',
+  gstrate: 'gstRate', gst: 'gstRate', tax: 'gstRate', taxrate: 'gstRate',
+  stockqty: 'stockQty', stock: 'stockQty', quantity: 'stockQty', qty: 'stockQty', inventory: 'stockQty',
+  minorderqty: 'minOrderQty', moq: 'minOrderQty', minimumorderquantity: 'minOrderQty',
+  description: 'description', desc: 'description', details: 'description',
+  imageurl: 'imageUrl', image: 'imageUrl', photo: 'imageUrl', picture: 'imageUrl', img: 'imageUrl',
+  imageurls: 'imageUrls', images: 'imageUrls', gallery: 'imageUrls',
+  badge: 'badge', label: 'badge',
+  featured: 'featured', isfeatured: 'featured',
+  tagline: 'tagline', summary: 'summary', warranty: 'warranty',
+  features: 'features', benefits: 'benefits', applications: 'applications',
+  specifications: 'specifications', specs: 'specifications',
+};
+
+// Detect the delimiter from the header line — Excel in many locales exports
+// semicolon-separated "CSV"; tab-separated exports are also common.
+export function detectDelimiter(text) {
+  const firstLine = text.split(/\r?\n/, 1)[0] || '';
+  const counts = [[',', 0], [';', 0], ['\t', 0]].map(([d]) => {
+    let n = 0, inQ = false;
+    for (const ch of firstLine) {
+      if (ch === '"') inQ = !inQ;
+      else if (!inQ && ch === d) n++;
+    }
+    return [d, n];
+  });
+  counts.sort((a, b) => b[1] - a[1]);
+  return counts[0][1] > 0 ? counts[0][0] : ',';
+}
+
+export function csvToProducts(csvText) {
+  const delimiter = detectDelimiter(csvText);
+  const rows = parseCSV(csvText, delimiter);
   if (rows.length < 2) throw new Error('CSV must have a header row and at least one data row');
-  const headers = rows[0].map(h => h.trim());
-  const idx = Object.fromEntries(headers.map((h, i) => [h, i]));
+  const idx = {};
+  rows[0].forEach((h, i) => {
+    const canonical = HEADER_ALIASES[normHeader(h)];
+    if (canonical && !(canonical in idx)) idx[canonical] = i;
+  });
   // make sure the mandatory columns are present
   const missing = CSV_REQUIRED.filter(c => !(c in idx));
-  if (missing.length) throw new Error(`CSV is missing required column(s): ${missing.join(', ')}`);
+  if (missing.length) {
+    throw new Error(
+      `CSV is missing required column(s): ${missing.join(', ')}. ` +
+      `Found headers: ${rows[0].map(h => `"${String(h).trim()}"`).join(', ')}. ` +
+      `Tip: headers are matched case-insensitively — "Name", "Product Name", "Price", "Selling Price", "Category" all work. ` +
+      `Use "Download Template" for a ready-made file.`
+    );
+  }
 
   const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
   const get = (cells, key) => (idx[key] != null ? (cells[idx[key]] ?? '').trim() : '');
@@ -122,6 +179,40 @@ function csvToProducts(csvText) {
     imageUrls:      get(cells, 'imageUrls').replace(/\\n/g, '\n'),
   }));
 }
+
+
+/* ── Gallery upload — uploads one or more files, appends their URLs ───────── */
+const GalleryUploadButton = ({ onUploaded }) => {
+  const ref = React.useRef(null);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState('');
+  const handle = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+    setBusy(true); setErr('');
+    for (const f of files) {
+      try {
+        const { data } = await filesApi.upload(f);
+        onUploaded(data.url);
+      } catch (ex) {
+        setErr(ex.response?.data?.message || `Upload failed for ${f.name}`);
+        break;
+      }
+    }
+    setBusy(false);
+  };
+  return (
+    <div className="mt-2">
+      <button type="button" onClick={() => ref.current?.click()} disabled={busy}
+        className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg text-xs font-bold disabled:opacity-60 transition-colors">
+        <Upload className="h-3.5 w-3.5"/>{busy ? 'Uploading…' : 'Upload images & add to gallery'}
+      </button>
+      <input ref={ref} type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif" onChange={handle} className="hidden"/>
+      {err && <p className="text-red-400 text-xs mt-1">{err}</p>}
+    </div>
+  );
+};
 
 /* ── Confirm dialog ──────────────────────────────────────────────────────── */
 const ConfirmDialog = ({ message, onConfirm, onCancel, danger=true }) => (
@@ -166,7 +257,7 @@ const FormInput = ({ label, fieldKey, type='text', required, placeholder, form, 
 );
 
 /* ── Product form — Input defined OUTSIDE to fix cursor jump bug ─────────── */
-const ProductForm = ({ initial, onSave, onCancel, saving }) => {
+const ProductForm = ({ initial, onSave, onCancel, saving, categories = CATEGORIES }) => {
   const DEFAULTS = {
     name:'', category:'Safety Equipment', price:'', mrp:'', gstRate:'18',
     stockQty:'0', minOrderQty:'1', description:'', imageUrl:'', badge:'', featured:false, sku:'', active:true,
@@ -205,7 +296,10 @@ const ProductForm = ({ initial, onSave, onCancel, saving }) => {
           <FormInput label="Stock Qty"    fieldKey="stockQty" type="number" placeholder="100" form={form} onChange={handleChange} />
           <FormInput label="Min Order Qty" fieldKey="minOrderQty" type="number" placeholder="1" form={form} onChange={handleChange} />
           <FormInput label="Badge"        fieldKey="badge"    placeholder="Bestseller / New / 26% OFF" form={form} onChange={handleChange} />
-          <FormInput label="Image URL"    fieldKey="imageUrl" placeholder="https://…" form={form} onChange={handleChange} full />
+          <div className="col-span-2">
+            <ImageUploadInput label="Main Product Image" value={form.imageUrl}
+              onChange={(url) => handleChange('imageUrl', url)} />
+          </div>
 
           {/* Category */}
           <div>
@@ -214,7 +308,7 @@ const ProductForm = ({ initial, onSave, onCancel, saving }) => {
             </label>
             <select required value={form.category} onChange={e => handleChange('category', e.target.value)}
               className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500">
-              {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+              {categories.map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
 
@@ -296,6 +390,7 @@ const ProductForm = ({ initial, onSave, onCancel, saving }) => {
             <textarea value={form.imageUrls} onChange={e => handleChange('imageUrls', e.target.value)}
               rows={3} placeholder={"https://…/photo-2.jpg\nhttps://…/photo-3.jpg"}
               className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 resize-y placeholder-gray-600"/>
+            <GalleryUploadButton onUploaded={(url) => handleChange('imageUrls', (form.imageUrls ? form.imageUrls.replace(/\n+$/,'') + '\n' : '') + url)} />
             {form.imageUrls && form.imageUrls.split('\n').map(u=>u.trim()).filter(Boolean).length > 0 && (
               <div className="flex gap-2 mt-2 flex-wrap">
                 {form.imageUrls.split('\n').map(u=>u.trim()).filter(Boolean).slice(0,8).map((u,i)=>(
@@ -315,14 +410,6 @@ const ProductForm = ({ initial, onSave, onCancel, saving }) => {
             </label>
           </div>
 
-          {/* Image preview */}
-          {form.imageUrl && (
-            <div className="col-span-2">
-              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Image Preview</label>
-              <img loading="lazy" decoding="async" src={form.imageUrl} alt="Preview" className="h-24 w-24 object-cover rounded-xl border border-gray-700"
-                onError={e => { e.target.style.display='none'; }}/>
-            </div>
-          )}
         </div>
 
         <div className="flex gap-3 pt-2">
@@ -507,6 +594,18 @@ const AdminProducts = () => {
   const [catFilter,  setCatFilter]  = useState('');
   const [confirm,    setConfirm]    = useState(null); // { msg, onConfirm }
 
+  // Live category list — admin-defined Catalog categories merged with any
+  // legacy categories already used on products; static list as offline fallback.
+  const [liveCategories, setLiveCategories] = React.useState(CATEGORIES);
+  React.useEffect(() => {
+    productsApi.categories()
+      .then(r => {
+        const merged = [...new Set([...(Array.isArray(r.data) ? r.data : []), ...CATEGORIES])];
+        if (merged.length) setLiveCategories(merged);
+      })
+      .catch(() => {});
+  }, []);
+
   const { items, loading, setFilter, refetch } = usePaginated(productsApi.list, { size: 50 });
   const [create, { loading: creating }] = useMutation(productsApi.create);
   const [update, { loading: updating }] = useMutation(productsApi.update);
@@ -674,6 +773,7 @@ const AdminProducts = () => {
             onSave={handleSave}
             onCancel={() => { setShowForm(false); setEditing(null); }}
             saving={creating || updating}
+            categories={liveCategories}
           />
         )}
       </AnimatePresence>

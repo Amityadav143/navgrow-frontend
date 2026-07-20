@@ -6,12 +6,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, ChevronDown, Phone, ShoppingCart, Search, Heart, User, LogOut, Settings, Package, FileText } from 'lucide-react';
+import { Menu, X, ChevronDown, Phone, ShoppingCart, Search, Heart, User, LogOut, Settings, Package, FileText, FileDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCart } from '@/context/CartContext';
 import { useRfq } from '@/context/RfqContext';
 import { useAuth } from '@/context/AuthContext';
 import AuthModal from '@/components/AuthModal';
+import CatalogueDownloadModal from '@/components/CatalogueDownloadModal';
 
 const NAV = [
   { name: 'Home',       path: '/' },
@@ -126,8 +127,11 @@ const Navbar = ({ scrolled, onSearchOpen }) => {
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
   const [servicesOpen, setServicesOpen] = useState(false);
   const [authOpen, setAuthOpen]         = useState(false);
+  const [catalogueOpen, setCatalogueOpen] = useState(false);
   const { totalItems, setCartOpen } = useCart();
   const { totalItems: rfqCount, setDrawerOpen: setRfqOpen } = useRfq();
+  const { user, isLoggedIn, isAdmin, logout } = useAuth();
+  const navigate = useNavigate();
   const onDark = false;
   // Promo note shown at top
 
@@ -284,14 +288,55 @@ const Navbar = ({ scrolled, onSearchOpen }) => {
                   </div>
                 ))}
                 <div className="pt-4 border-t border-gray-100 mt-2 flex flex-col gap-2">
+                  <button
+                    onClick={() => { setMobileOpen(false); setCatalogueOpen(true); }}
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-amber-500 hover:bg-amber-400 text-gray-900 font-bold rounded-xl transition-colors"
+                  >
+                    <FileDown className="h-4 w-4" /> Download Catalogue
+                  </button>
+                  {isLoggedIn ? (
+                    <>
+                      {/* Signed-in header */}
+                      <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 rounded-xl">
+                        <div className="w-9 h-9 rounded-full brand-gradient flex items-center justify-center text-white text-sm font-bold shrink-0">
+                          {(user?.fullName || user?.email || 'U')[0].toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-gray-900 truncate">{user?.fullName || user?.email}</p>
+                          <p className="text-[11px] text-gray-500 truncate">{isAdmin ? 'Administrator' : 'Customer'}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Link to="/account" onClick={() => setMobileOpen(false)}
+                          className="flex items-center justify-center gap-2 py-3 text-sm font-semibold text-gray-700 border-2 border-gray-200 rounded-xl">
+                          <User className="h-4 w-4 text-blue-600" /> My Account
+                        </Link>
+                        <Link to="/account/orders" onClick={() => setMobileOpen(false)}
+                          className="flex items-center justify-center gap-2 py-3 text-sm font-semibold text-gray-700 border-2 border-gray-200 rounded-xl">
+                          <Package className="h-4 w-4 text-blue-600" /> My Orders
+                        </Link>
+                      </div>
+                      {isAdmin && (
+                        <Link to="/admin" onClick={() => setMobileOpen(false)}
+                          className="flex items-center justify-center gap-2 py-3 text-sm font-bold text-blue-700 border-2 border-blue-200 bg-blue-50 rounded-xl">
+                          <Settings className="h-4 w-4" /> Admin Dashboard
+                        </Link>
+                      )}
+                      <button onClick={() => { setMobileOpen(false); logout(); navigate('/'); }}
+                        className="flex items-center justify-center gap-2 py-3 text-sm font-bold text-red-500 border-2 border-red-200 rounded-xl">
+                        <LogOut className="h-4 w-4" /> Sign Out
+                      </button>
+                    </>
+                  ) : (
+                    <button onClick={() => { setMobileOpen(false); setAuthOpen(true); }}
+                      className="flex items-center justify-center gap-2 py-3 text-sm font-semibold text-gray-700 border-2 border-gray-200 rounded-xl">
+                      <User className="h-4 w-4 text-blue-600" /> Sign In / Register
+                    </button>
+                  )}
                   <a href="tel:+918927070972" onClick={() => setMobileOpen(false)}
                     className="flex items-center justify-center gap-2 py-3 text-sm font-semibold text-gray-700 border-2 border-gray-200 rounded-xl">
                     <Phone className="h-4 w-4 text-blue-600" /> +91 89270 70972
                   </a>
-                  <button onClick={() => { setMobileOpen(false); setAuthOpen(true); }}
-                    className="flex items-center justify-center gap-2 py-3 text-sm font-semibold text-gray-700 border-2 border-gray-200 rounded-xl">
-                    <User className="h-4 w-4 text-blue-600" /> Sign In / Register
-                  </button>
                   <Link to="/contact" onClick={() => setMobileOpen(false)}
                     className="flex items-center justify-center py-3 rounded-xl font-bold text-white brand-gradient shadow-md">
                     Get a Quote
@@ -304,6 +349,7 @@ const Navbar = ({ scrolled, onSearchOpen }) => {
       </div>
 
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+      <CatalogueDownloadModal open={catalogueOpen} onClose={() => setCatalogueOpen(false)} source="navbar" />
     </>
   );
 };
