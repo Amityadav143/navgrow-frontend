@@ -124,7 +124,7 @@ const GalleryPage = () => {
               <motion.div key={photo.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.04 }}
                 className="group relative overflow-hidden rounded-2xl cursor-pointer bg-gray-200 aspect-square shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
                 onClick={() => setLightbox(i)}>
-                <img src={photo.src} alt={photo.title} loading="lazy" decoding="async"
+                <img src={photo.src} alt={photo.title} loading="lazy" decoding="async" width={400} height={400}
                   onError={(e) => { e.target.onerror=null; e.target.src='/placeholder.jpg'; }}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                 <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 via-gray-900/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />

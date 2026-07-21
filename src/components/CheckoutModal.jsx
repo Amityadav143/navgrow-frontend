@@ -122,9 +122,13 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
       if (!loaded) throw new Error('Razorpay SDK failed to load');
 
       const options = {
-        key:       import.meta.env.VITE_RAZORPAY_KEY_ID,
+        // Prefer the key returned by the backend (guaranteed to match the account
+        // that created this order); fall back to the build-time env var only if the
+        // backend didn't supply one. This prevents the "id provided does not exist"
+        // error that occurs when the checkout key and the order-creation key differ.
+        key:       order.razorpayKeyId || import.meta.env.VITE_RAZORPAY_KEY_ID,
         amount:    order.amount,
-        currency:  'INR',
+        currency:  order.currency || 'INR',
         name:      'Navgrow Engineering',
         description:'Engineering Products',
         order_id:  order.razorpayOrderId,

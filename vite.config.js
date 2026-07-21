@@ -222,13 +222,33 @@ export default defineConfig({
 		},
 	},
 	build: {
+		// Emit source maps so Search Console / DevTools can map minified first-party
+		// JS (fixes "Missing source maps for large first-party JavaScript").
+		sourcemap: true,
+		// Trim the main bundle: split large, stable vendor libraries into their own
+		// long-cacheable chunks so the initial payload is smaller and parses faster
+		// (addresses "reduce unused JavaScript" and "reduce JS parse/compile time").
+		chunkSizeWarningLimit: 900,
 		rollupOptions: {
 			external: [
 				'@babel/parser',
 				'@babel/traverse',
 				'@babel/generator',
 				'@babel/types'
-			]
+			],
+			output: {
+				manualChunks(id) {
+					if (id.includes('node_modules')) {
+						if (id.includes('react-dom')) return 'vendor-react-dom';
+						if (id.includes('/react/') || id.includes('react-router')) return 'vendor-react';
+						if (id.includes('framer-motion')) return 'vendor-motion';
+						if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts';
+						if (id.includes('lucide-react')) return 'vendor-icons';
+						if (id.includes('axios')) return 'vendor-axios';
+						return 'vendor';
+					}
+				}
+			}
 		}
 	}
 });

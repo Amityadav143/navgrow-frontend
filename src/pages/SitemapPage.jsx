@@ -123,6 +123,29 @@ const SitemapPage = () => {
             </motion.div>
           ))}
         </div>
+
+        {/* XML sitemap for search engines / Google Search Console */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+          className="mt-8 bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center shrink-0">
+            <FileText className="h-6 w-6 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-gray-900 text-lg">XML Sitemap</h3>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Machine-readable sitemap for search engines. Submit this URL in Google Search Console.
+            </p>
+            <a href="/sitemap.xml" target="_blank" rel="noopener noreferrer"
+              className="inline-block mt-2 text-sm font-mono text-blue-600 hover:text-blue-700 break-all">
+              https://navgrow.org/sitemap.xml
+            </a>
+          </div>
+          <a href="/sitemap.xml" target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-semibold rounded-xl text-sm transition-colors shrink-0">
+            <FileText className="h-4 w-4" /> View XML Sitemap
+          </a>
+        </motion.div>
       </div>
     </section>
     </>

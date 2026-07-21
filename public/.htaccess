@@ -1,19 +1,65 @@
+# ==========================================================================
+# Navgrow Engineering — Apache config (Hostinger)
+# SPA routing + correct MIME types + long-lived caching for performance.
+# ==========================================================================
+
+<IfModule mod_mime.c>
+  # Serve sitemap/robots/feed with the RIGHT content type. Without this the
+  # host can mislabel sitemap.xml and Search Console reports it as an HTML page.
+  AddType application/xml            .xml
+  AddType text/plain                 .txt
+  AddType application/manifest+json  .webmanifest
+  AddType image/svg+xml              .svg
+  AddType font/woff2                 .woff2
+</IfModule>
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
+
+  # Never rewrite real files (sitemap.xml, robots.txt, assets, llms.txt, ...)
+  # or directories -- only fall back to the SPA for virtual routes.
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Explicitly short-circuit the crawler files so nothing can shadow them.
+  RewriteRule ^(sitemap\.xml|sitemap-index\.xml|robots\.txt|llms\.txt)$ - [L]
+
+  # SPA fallback for everything else.
   RewriteRule ^ index.html [L]
 </IfModule>
 
 <IfModule mod_headers.c>
-  Header set X-Powered-By "Hostinger Horizons"
+  Header set X-Powered-By "Navgrow"
 
-  # Cache everything on CDN by default
-  Header set Cache-Control "public, s-maxage=604800, max-age=0"
-  
-  # Cache in browser all assets
-  <If "%{REQUEST_URI} =~ m#^/assets/.*$#">
-    Header set Cache-Control "public, max-age=604800"
-  </If>
+  # --- Hashed build assets (immutable): cache hard for a year --------------
+  <FilesMatch "\.(js|css|woff2?|ttf|eot|otf)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+
+  # --- Images: long cache, revalidate ------------------------------------
+  <FilesMatch "\.(png|jpe?g|gif|webp|avif|svg|ico)$">
+    Header set Cache-Control "public, max-age=2592000"
+  </FilesMatch>
+
+  # --- HTML entrypoint: always revalidate so deploys are picked up --------
+  <FilesMatch "\.(html)$">
+    Header set Cache-Control "public, max-age=0, must-revalidate"
+  </FilesMatch>
+
+  # --- Crawler files: short cache -----------------------------------------
+  <FilesMatch "(sitemap.*\.xml|robots\.txt|llms\.txt)$">
+    Header set Cache-Control "public, max-age=3600"
+  </FilesMatch>
+
+  # Security headers
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Compression -- smaller transfers, faster LCP.
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css application/javascript application/json application/xml image/svg+xml
 </IfModule>
