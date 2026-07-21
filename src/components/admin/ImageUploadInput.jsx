@@ -46,7 +46,16 @@ const ImageUploadInput = ({
       const { data } = await filesApi.upload(file);
       onChange(data.url);
     } catch (err) {
-      setError(err.response?.data?.message || 'Upload failed. Check your connection and try again.');
+      const status = err.response?.status;
+      if (status === 413) {
+        setError('File is too large for the server to accept. Please use an image under 8 MB.');
+      } else if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else if (err.code === 'ERR_NETWORK') {
+        setError('Upload failed — could not reach the server. Check your connection and try again.');
+      } else {
+        setError('Upload failed. Please try again.');
+      }
     } finally {
       setUploading(false);
     }
