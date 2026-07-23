@@ -141,8 +141,8 @@ const RfqDrawer = () => {
                   {items.length === 0 ? (
                     <div className="text-center py-16">
                       <Package className="h-12 w-12 text-gray-200 mx-auto mb-3" />
-                      <p className="text-gray-400 font-medium">No items yet</p>
-                      <p className="text-gray-400 text-sm mt-1">Add products to request a bulk quote.</p>
+                      <p className="text-gray-500 font-medium">No items yet</p>
+                      <p className="text-gray-500 text-sm mt-1">Add products to request a bulk quote.</p>
                     </div>
                   ) : (
                     <div className="space-y-3">

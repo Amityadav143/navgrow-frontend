@@ -808,7 +808,7 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
                     <p className="text-gray-500 text-sm leading-relaxed">
                       Click the link in your email to set a new password. It expires in 1 hour.
                     </p>
-                    <p className="text-gray-400 text-xs">Didn't receive it? Check your spam folder.</p>
+                    <p className="text-gray-500 text-xs">Didn't receive it? Check your spam folder.</p>
                     <button type="button" onClick={() => { setForgotStep('email'); setErrors({}); setSuccess(''); }}
                       className="w-full py-2.5 text-blue-600 text-sm font-semibold hover:underline">
                       Send another link

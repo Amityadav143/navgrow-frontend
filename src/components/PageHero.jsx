@@ -19,7 +19,7 @@ import { ChevronRight } from 'lucide-react';
  * Props: chip, title (JSX), subtitle, breadcrumbs [{label, path}]
  */
 const PageHero = ({ chip, title, subtitle, breadcrumbs = [] }) => (
-  <section className="pt-10 pb-14 bg-gradient-to-br from-blue-950 to-indigo-900 relative overflow-hidden">
+  <section className="on-dark pt-10 pb-14 bg-gradient-to-br from-blue-950 to-indigo-900 relative overflow-hidden">
     <div className="absolute inset-0 opacity-10"
       style={{ backgroundImage: 'radial-gradient(white 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
     <div className="absolute top-0 right-0 w-96 h-96 rounded-full bg-blue-500/10 blur-3xl" />

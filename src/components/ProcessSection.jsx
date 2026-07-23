@@ -59,7 +59,7 @@ const ProcessSection = () => (
               <div className="w-24 h-24 rounded-full bg-white border-2 border-blue-100 shadow-lg flex items-center justify-center">
                 <Icon className="h-9 w-9 text-blue-700" />
               </div>
-              <div className="absolute -top-1 -right-1 w-9 h-9 rounded-full gold-gradient flex items-center justify-center text-white text-xs font-extrabold shadow-md">
+              <div className="absolute -top-1 -right-1 w-9 h-9 rounded-full gold-gradient flex items-center justify-center text-[#1A1206] text-xs font-extrabold shadow-md">
                 {n}
               </div>
             </div>

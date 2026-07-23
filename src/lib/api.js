@@ -149,6 +149,31 @@ export const quotesApi = {
   updateStatus:(id, st, amt) => api.patch(`/quotes/${id}/status`, null, { params: { status: st, quotedAmount: amt } }),
 };
 
+// ── Delivery serviceability & zones ─────────────────────────────────────────
+export const deliveryApi = {
+  // Public: is this pincode serviceable, at what charge, by when
+  check:      (pincode, orderValue) =>
+                api.get('/delivery/check', { params: { pincode, orderValue } }),
+  // Admin
+  zones:      ()        => api.get('/delivery/zones'),
+  createZone: (d)       => api.post('/delivery/zones', d),
+  updateZone: (id, d)   => api.put(`/delivery/zones/${id}`, d),
+  deleteZone: (id)      => api.delete(`/delivery/zones/${id}`),
+  testZone:   (pincode, orderValue) =>
+                api.get('/delivery/zones/test', { params: { pincode, orderValue } }),
+};
+
+// ── Category tax rules (admin: HSN/SAC + GST per category) ───────────────────
+export const taxRulesApi = {
+  list:    ()          => api.get('/tax-rules'),
+  create:  (d)         => api.post('/tax-rules', d),
+  update:  (id, d)     => api.put(`/tax-rules/${id}`, d),
+  remove:  (id)        => api.delete(`/tax-rules/${id}`),
+  // onlyMissing=false forces every product in the category onto the rule
+  apply:   (id, onlyMissing = true) =>
+             api.post(`/tax-rules/${id}/apply`, null, { params: { onlyMissing } }),
+};
+
 // ── Catalogue download + lead capture ─────────────────────────────────────────
 export const catalogueApi = {
   // Public: capture the lead, returns { message, reference, downloadUrl }

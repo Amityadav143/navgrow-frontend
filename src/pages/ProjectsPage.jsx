@@ -92,7 +92,7 @@ const ProjectsPage = () => {
               Portfolio
             </div>
             <h1 className="mb-4 text-white">
-              Our <span className="gradient-text">Projects</span>
+              Our <span className="gradient-text-light">Projects</span>
             </h1>
             <p className="text-blue-200 text-lg">
               Real projects delivered for Indian Railways and industrial clients across North Bengal.
@@ -176,7 +176,7 @@ const ProjectsPage = () => {
 
           {visible.length === 0 && (
             <div className="text-center py-20">
-              <p className="text-gray-400 text-lg">No projects in this category yet.</p>
+              <p className="text-gray-500 text-lg">No projects in this category yet.</p>
             </div>
           )}
         </div>

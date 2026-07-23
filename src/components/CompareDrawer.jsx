@@ -19,6 +19,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Scale, ChevronDown, ChevronUp, Star, ShoppingCart, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '@/context/CartContext';
+import { toCartItem } from '@/lib/cartItem';
 
 const CompareContext = createContext(null);
 
@@ -180,7 +181,7 @@ const CompareDrawer = () => {
                         <td key={p.id} className="px-4 py-4">
                           <div className="flex flex-col gap-2">
                             <button
-                              onClick={() => addItem({ id:p.id, name:p.name, price:p.price, image:p.image })}
+                              onClick={() => addItem(toCartItem(p))}
                               className={`flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all border-2 ${
                                 inCart ? 'border-green-400 bg-green-50 text-green-700' : 'border-blue-300 text-blue-600 hover:bg-blue-600 hover:text-white hover:border-blue-600'
                               }`}>

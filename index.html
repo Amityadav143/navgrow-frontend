@@ -54,10 +54,26 @@
   <meta name="apple-mobile-web-app-title"        content="Navgrow" />
 
   <!-- ── Performance hints ─────────────────────────────────────────────── -->
+  <!-- Both font hosts need a warm connection: googleapis serves the CSS,
+       gstatic serves the font files (crossorigin, so it must be declared). -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://images.unsplash.com" crossorigin />
   <link rel="dns-prefetch" href="https://api.razorpay.com" />
   <link rel="dns-prefetch" href="https://checkout.razorpay.com" />
+
+  <!-- Fonts, loaded off the critical path.
+       Fetched as a preload (non-render-blocking) and promoted to a stylesheet
+       once it arrives, so first paint is never held up waiting for fonts.
+       display=swap means text renders immediately in the fallback face.
+       Weight 300 is deliberately omitted — nothing in the UI uses it. -->
+  <link rel="preload" as="style"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        onload="this.onload=null;this.rel='stylesheet'" />
+  <noscript>
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" />
+  </noscript>
 
   <!-- ── Structured Data: Organization ────────────────────────────────── -->
   <script type="application/ld+json">

@@ -7,19 +7,19 @@ import { productsApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
 import { ProductCardSkeleton } from '@/components/Skeleton';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, ShoppingCart, Star, CheckCircle, X, Package,
   Tag, Zap, Shield, Truck, RotateCcw, Headphones, Filter, Heart, Clock, FileText } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useRfq } from '@/context/RfqContext';
-import CheckoutModal from '@/components/CheckoutModal';
 import { ALL_PRODUCTS as PRODUCTS } from '@/lib/productData';
 import { debounce } from '@/lib/api';
 import CtaSection from '@/components/CtaSection';
 import { useCompare } from '@/components/CompareDrawer';
 import useSeo from '@/hooks/useSeo';
+import { toCartItem } from '@/lib/cartItem';
 
 const CATS    = ['All', ...Array.from(new Set(PRODUCTS.map(p => p.cat)))];
 const SORTS   = ['Featured', 'Price: Low to High', 'Price: High to Low', 'Top Rated', 'Most Reviewed'];
@@ -127,7 +127,7 @@ const ProductCard = ({ product, onBuyNow }) => {
         {/* Actions */}
         <div className="grid grid-cols-2 gap-2">
           <button
-            onClick={() => addItem({ id: product.id, name: product.name, price: product.price, image: product.image, stockQty: product.stockQty, gstRate: product.gstRate })}
+            onClick={() => addItem(toCartItem(product))}
             className={`flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
               inCart
                 ? 'border-green-400 bg-green-50 text-green-700'
@@ -241,7 +241,7 @@ const ProductDetail = ({ product, onClose, onBuyNow }) => {
               </div>
 
               <button
-                onClick={() => { addItem({ id: product.id, name: product.name, price: product.price, image: product.image, stockQty: product.stockQty, gstRate: product.gstRate, qty }); onClose(); }}
+                onClick={() => { addItem(toCartItem(product, { qty })); onClose(); }}
                 className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all border-2 ${
                   inCart ? 'border-green-400 bg-green-50 text-green-700' : 'border-blue-200 text-blue-600 hover:border-blue-400 hover:bg-blue-50'
                 }`}
@@ -251,7 +251,7 @@ const ProductDetail = ({ product, onClose, onBuyNow }) => {
               </button>
 
               <button
-                onClick={() => { addItem({ id: product.id, name: product.name, price: product.price, image: product.image, stockQty: product.stockQty, gstRate: product.gstRate }); onClose(); onBuyNow(product); }}
+                onClick={() => { addItem(toCartItem(product)); onClose(); onBuyNow(product); }}
                 className="flex items-center gap-2 px-6 py-3 rounded-xl brand-gradient text-white font-bold shadow-md hover:opacity-90 text-sm"
               >
                 <Zap className="h-4 w-4" />
@@ -297,7 +297,7 @@ const RecentlyViewed = () => {
                   <p className="text-xs text-blue-600 font-bold uppercase tracking-wide mb-0.5">{p.cat}</p>
                   <Link to={`/shop/${p.slug}`} className="text-xs font-bold text-gray-900 line-clamp-2 hover:text-blue-600 block mb-2">{p.name}</Link>
                   <p className="text-sm font-extrabold text-gray-900 mb-2">₹{p.price?.toLocaleString('en-IN')}</p>
-                  <button onClick={() => addItem({ id: p.id, name: p.name, price: p.price, image: p.image })}
+                  <button onClick={() => addItem(toCartItem(p))}
                     className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all ${
                       inCart ? 'bg-green-100 text-green-700 border border-green-200' : 'brand-gradient text-white hover:opacity-90'
                     }`}>
@@ -348,8 +348,8 @@ const ShopPage = () => {
   const [sort, setSort]           = useState('Featured');
   const [priceMin, setPriceMin]     = useState('');
   const [priceMax, setPriceMax]     = useState('');
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
   const { totalItems, setCartOpen, addItem, clearCart } = useCart();
+  const navigate = useNavigate();
 
   // Scroll to products grid when filter/sort changes (skip initial mount)
   const gridRef     = useRef(null);
@@ -363,9 +363,8 @@ const ShopPage = () => {
 
 
   const handleBuyNow = (product) => {
-    // Don't clear cart — just ensure this product is in it
-    addItem({ id: product.id, name: product.name, price: product.price, image: product.image });
-    setCheckoutOpen(true);
+    addItem(toCartItem(product));
+    navigate('/checkout');
   };
 
   const filtered = useMemo(() => {
@@ -403,7 +402,7 @@ const ShopPage = () => {
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold mb-5 border border-blue-400/30 text-blue-200">
               <Package className="h-4 w-4" /> Industrial & Railway Supply Store
             </div>
-            <h1 className="mb-3 text-white">Engineering <span className="gradient-text">Shop</span></h1>
+            <h1 className="mb-3 text-white">Engineering <span className="gradient-text-light">Shop</span></h1>
             <p className="text-blue-200 text-lg mb-7">
               Quality safety equipment, railway tools, maintenance supplies & PPE.
               <br className="hidden sm:block" />
@@ -446,7 +445,7 @@ const ShopPage = () => {
         <div className="container mx-auto px-4">
 
           {/* Filter bar */}
-          <div ref={gridRef} className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-6">
+          <div ref={gridRef} className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between mb-6">
             <div className="flex flex-wrap gap-2">
               {ACTIVE_CATS.map(c => (
                 <button key={c} onClick={() => setCat(c)}
@@ -457,28 +456,28 @@ const ShopPage = () => {
               ))}
             </div>
 
-            <div className="flex items-center gap-3 shrink-0">
-              <span className="text-sm text-gray-500 hidden sm:block">{filtered.length} products</span>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:shrink-0">
+              <span className="text-sm text-gray-500 hidden sm:block order-1">{filtered.length} products</span>
               <select value={sort} onChange={e => setSort(e.target.value)}
-                className="px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-blue-400 cursor-pointer">
+                className="flex-1 min-w-[130px] sm:flex-none px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-blue-400 cursor-pointer order-2">
                 {SORTS.map(o => <option key={o}>{o}</option>)}
               </select>
-              <div className="flex items-center gap-1.5">
-                <input type="number" value={priceMin} onChange={e => setPriceMin(e.target.value)}
-                  placeholder="Min ₹" className="w-20 px-2 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-blue-400 text-center"/>
+              <div className="flex items-center gap-1.5 order-3">
+                <input type="number" inputMode="numeric" value={priceMin} onChange={e => setPriceMin(e.target.value)}
+                  placeholder="Min ₹" className="w-[72px] sm:w-20 px-2 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-blue-400 text-center"/>
                 <span className="text-gray-400 text-xs">–</span>
-                <input type="number" value={priceMax} onChange={e => setPriceMax(e.target.value)}
-                  placeholder="Max ₹" className="w-20 px-2 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-blue-400 text-center"/>
+                <input type="number" inputMode="numeric" value={priceMax} onChange={e => setPriceMax(e.target.value)}
+                  placeholder="Max ₹" className="w-[72px] sm:w-20 px-2 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:border-blue-400 text-center"/>
                 {(priceMin || priceMax) && (
-                  <button onClick={() => { setPriceMin(''); setPriceMax(''); }}
-                    className="text-gray-400 hover:text-red-500 transition-colors">
+                  <button onClick={() => { setPriceMin(''); setPriceMax(''); }} aria-label="Clear price filter"
+                    className="text-gray-400 hover:text-red-500 transition-colors shrink-0">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
               {totalItems > 0 && (
-                <button onClick={() => setCartOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 brand-gradient text-white rounded-xl text-sm font-bold shadow-md hover:opacity-90">
+                <button onClick={() => setCartOpen(true)} aria-label={`Open cart, ${totalItems} items`}
+                  className="flex items-center gap-2 px-4 py-2 brand-gradient text-white rounded-xl text-sm font-bold shadow-md hover:opacity-90 order-4 shrink-0">
                   <ShoppingCart className="h-4 w-4" /> ({totalItems})
                 </button>
               )}
@@ -489,7 +488,7 @@ const ShopPage = () => {
           {filtered.length === 0 ? (
             <div className="text-center py-24">
               <Package className="h-16 w-16 text-gray-200 mx-auto mb-4" />
-              <p className="text-gray-400 font-medium text-lg">No products match your search.</p>
+              <p className="text-gray-500 font-medium text-lg">No products match your search.</p>
               <button onClick={() => { setSearch(''); setDebouncedSearch(''); setCat('All'); setPriceMin(''); setPriceMax(''); }} className="mt-4 text-blue-600 text-sm underline">Clear filters</button>
             </div>
           ) : (
@@ -539,7 +538,6 @@ const ShopPage = () => {
       <CtaSection />
 
       {/* Modals */}
-      <CheckoutModal open={checkoutOpen} onClose={() => setCheckoutOpen(false)} />
     </>
   );
 };

@@ -58,6 +58,9 @@ const AdminProjects      = React.lazy(() => import('@/pages/admin/AdminProjects'
 const AdminTenders       = React.lazy(() => import('@/pages/admin/AdminTenders'));
 const AdminCatalog       = React.lazy(() => import('@/pages/admin/AdminCatalog'));
 const AdminCatalogueLeads = React.lazy(() => import('@/pages/admin/AdminCatalogueLeads'));
+const CheckoutPage       = React.lazy(() => import('@/pages/CheckoutPage'));
+const AdminTaxRules      = React.lazy(() => import('@/pages/admin/AdminTaxRules'));
+const AdminDeliveryZones = React.lazy(() => import('@/pages/admin/AdminDeliveryZones'));
 const NewsDetailPage     = React.lazy(() => import('@/pages/NewsDetailPage'));
 
 const PageLoader = () => (
@@ -207,6 +210,8 @@ function App() {
           <Route path="tenders"   element={<W><AdminTenders /></W>} />
           <Route path="catalog"   element={<W><AdminCatalog /></W>} />
           <Route path="catalogue-leads" element={<W><AdminCatalogueLeads /></W>} />
+          <Route path="tax-rules" element={<W><AdminTaxRules /></W>} />
+          <Route path="delivery-zones" element={<W><AdminDeliveryZones /></W>} />
         </Route>
 
         {/* ── Editor routes ── */}
@@ -222,6 +227,7 @@ function App() {
           <Route path="contact"       element={<W><ContactPage /></W>} />
           <Route path="shop"          element={<W><ShopPage /></W>} />
           <Route path="shop/:slug"    element={<W><ProductDetailPage /></W>} />
+          <Route path="checkout"      element={<W><CheckoutPage /></W>} />
           <Route path="wishlist"      element={<W><WishlistPage /></W>} />
           <Route path="careers"       element={<W><CareersPage /></W>} />
           <Route path="news"          element={<W><NewsPage /></W>} />

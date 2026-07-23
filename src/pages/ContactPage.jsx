@@ -56,7 +56,7 @@ const ContactPage = () => {
             <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
             Let's Talk
           </div>
-          <h1 className="mb-4 text-white">Get in <span className="gradient-text">Touch</span></h1>
+          <h1 className="mb-4 text-white">Get in <span className="gradient-text-light">Touch</span></h1>
           <p className="text-blue-200 text-lg">
             Have a project in mind? Our team is ready to assist with your railway and government contract needs.
           </p>

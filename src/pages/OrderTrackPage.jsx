@@ -96,12 +96,12 @@ const OrderTrackPage = () => {
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <p className="text-sm text-gray-400 mb-1">Order Number</p>
+                    <p className="text-sm text-gray-500 mb-1">Order Number</p>
                     <p className="text-xl font-extrabold text-gray-900">#{order.orderNumber}</p>
                     <p className="text-sm text-gray-500 mt-1">{new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm text-gray-400 mb-1">Total</p>
+                    <p className="text-sm text-gray-500 mb-1">Total</p>
                     <p className="text-2xl font-extrabold text-gray-900">₹{order.grandTotal?.toLocaleString('en-IN')}</p>
                     <span className={`inline-block mt-1 px-3 py-0.5 rounded-full text-xs font-bold ${
                       order.paymentStatus === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'

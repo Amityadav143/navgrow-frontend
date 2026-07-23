@@ -9,7 +9,16 @@
  *
  * Licensed for: navgrow.org (Production Deployment Only)
  */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+/*
+ * Web fonts are intentionally NOT imported here.
+ *
+ * An @import inside the main stylesheet serialises the critical path: the
+ * browser must download and parse this file before it can even discover the
+ * Google Fonts URL, then parse that before fetching the font files — a
+ * render-blocking chain three levels deep that delays First Contentful Paint.
+ * The stylesheet is instead preloaded and applied asynchronously from
+ * index.html, so it never blocks first paint.
+ */
 
 @tailwind base;
 @tailwind components;
@@ -123,12 +132,12 @@
 
 /* Primary: Royal blue */
 .brand-gradient {
-  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 40%, #2563eb 100%);
+  background: linear-gradient(135deg, #0B1F3F 0%, #1e3a8a 100%);
 }
 
-/* Gold accent gradient */
+/* Gold accent — warm amber gold */
 .gold-gradient {
-  background: linear-gradient(135deg, #b45309 0%, #d97706 50%, #f59e0b 100%);
+  background: linear-gradient(135deg, #D97706 0%, #F59E0B 100%);
 }
 
 /* Blue → Gold hero diagonal */
@@ -173,21 +182,35 @@
 ═══════════════════════════════════════════════════════════════════════════ */
 
 /* Blue text gradient */
+/* Default: for light backgrounds. Both stops clear AA on white. */
 .gradient-text {
   @apply bg-clip-text text-transparent;
-  background-image: linear-gradient(135deg, #1e40af, #2563eb, #3b82f6);
+  background-image: linear-gradient(135deg, #1e40af, #2563eb);
+}
+
+/* For dark backgrounds. The navy stops above measure ~1.1:1 on a blue-950 hero,
+   i.e. invisible, so anything sitting on dark uses these lighter blues instead. */
+.gradient-text-light {
+  @apply bg-clip-text text-transparent;
+  background-image: linear-gradient(135deg, #60A5FA, #93C5FD);
+}
+
+/* Dark hero sections opt in once and every gradient heading inside them is
+   corrected, so individual pages do not each have to remember. */
+.on-dark .gradient-text {
+  background-image: linear-gradient(135deg, #60A5FA, #93C5FD);
 }
 
 /* Gold text gradient — for highlights and accents */
 .gradient-text-gold {
   @apply bg-clip-text text-transparent;
-  background-image: linear-gradient(135deg, #b45309, #d97706, #f59e0b);
+  background-image: linear-gradient(135deg, #B45309, #D97706);
 }
 
 /* Blue-to-gold text gradient — premium headings */
 .gradient-text-royal {
   @apply bg-clip-text text-transparent;
-  background-image: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #f59e0b 100%);
+  background-image: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -350,10 +373,10 @@
 
 /* ── Button variants ── */
 .btn-gold {
-  background: linear-gradient(135deg, #b45309 0%, #d97706 50%, #f59e0b 100%);
-  color: white;
+  background: linear-gradient(135deg, #D97706 0%, #F59E0B 100%);
+  color: #1A1206;
   font-weight: 700;
-  box-shadow: 0 4px 16px rgba(217,119,6,0.35);
+  box-shadow: 0 4px 14px rgba(217,119,6,0.28);
   transition: opacity 0.2s, transform 0.15s;
 }
 .btn-gold:hover { opacity: 0.92; transform: translateY(-1px); }
@@ -592,18 +615,6 @@ code, pre, kbd, .font-mono {
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 
 /* Text gradient variants */
-.gradient-text-gold {
-  background: linear-gradient(135deg, #d97706, #f59e0b, #d97706);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-.gradient-text-royal {
-  background: linear-gradient(135deg, #1d4ed8, #7c3aed);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
 
 /* Hero metrics card hover */
 @keyframes float-up {

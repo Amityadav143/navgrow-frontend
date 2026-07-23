@@ -208,7 +208,7 @@ export default function CatalogueDownloadModal({ open, onClose, source = 'websit
                     ? <><Loader2 className="h-4 w-4 animate-spin" /> Preparing your download…</>
                     : <><Download className="h-4 w-4" /> Get the Catalogue</>}
                 </button>
-                <p className="text-[11px] text-gray-400 text-center mt-3">
+                <p className="text-[11px] text-gray-500 text-center mt-3">
                   By downloading, you agree to be contacted by Navgrow regarding your enquiry. We never share your details.
                 </p>
               </div>

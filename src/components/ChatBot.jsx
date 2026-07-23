@@ -596,8 +596,18 @@ const ChatBot = () => {
   }, [sendMessage]);
 
   const handleInput = useCallback((e) => {
-    const val = e.target.value.slice(0, MAX_INPUT); setInput(val);
-    e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 116) + "px";
+    const el = e.target;
+    setInput(el.value.slice(0, MAX_INPUT));
+    // Auto-grow the textarea. Resetting the height and then reading scrollHeight
+    // is a write -> read -> write sequence that forces a synchronous reflow on
+    // every keystroke; deferring it to the next animation frame keeps that work
+    // off the input handler, and we only write when the height actually changes.
+    requestAnimationFrame(() => {
+      if (!el.isConnected) return;
+      el.style.height = "auto";
+      const next = Math.min(el.scrollHeight, 116) + "px";
+      if (el.style.height !== next) el.style.height = next;
+    });
   }, []);
 
   const handleLeadSubmit = useCallback(({ name, phone }) => {

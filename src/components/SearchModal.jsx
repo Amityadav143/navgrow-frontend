@@ -147,7 +147,7 @@ const SearchModal = ({ open, onClose }) => {
               />
               {q
                 ? <button onClick={() => { setQ(''); setProducts([]); setNews([]); }} className="text-gray-400 hover:text-gray-600 transition-colors"><X className="h-4 w-4"/></button>
-                : <kbd className="hidden sm:block px-2 py-1 bg-gray-100 text-gray-400 text-xs rounded-lg font-mono">⌘K</kbd>
+                : <kbd className="hidden sm:block px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-lg font-mono">⌘K</kbd>
               }
             </div>
 
@@ -187,7 +187,7 @@ const SearchModal = ({ open, onClose }) => {
             </div>
 
             {/* Footer */}
-            <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50 text-xs text-gray-400 flex items-center gap-4">
+            <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50 text-xs text-gray-600 flex items-center gap-4">
               <span><kbd className="px-1.5 py-0.5 bg-white border border-gray-200 rounded font-mono">↑↓</kbd> navigate</span>
               <span><kbd className="px-1.5 py-0.5 bg-white border border-gray-200 rounded font-mono">↵</kbd> open</span>
               <span><kbd className="px-1.5 py-0.5 bg-white border border-gray-200 rounded font-mono">Esc</kbd> close</span>

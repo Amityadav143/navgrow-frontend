@@ -159,11 +159,18 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
     }
   };
 
-  // Compute totals directly from cart items
+  // Compute totals directly from cart items — GST is summed PER LINE ITEM on each
+  // product's own slab (5/12/18/28%), matching the authoritative server calculation
+  // and the cart. A flat 18% here would show a breakdown that disagrees with both.
   const cartSubtotal = items.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0);
   const discount     = orderData?.discount || 0;
   const taxableAmount= Math.max(0, cartSubtotal - discount);
-  const gst          = taxableAmount * 0.18;
+  const grossGst     = items.reduce((sum, i) => {
+    const rate = (typeof i.gstRate === 'number' && i.gstRate > 0) ? i.gstRate : 18;
+    return sum + (i.price || 0) * (i.qty || 1) * (rate / 100);
+  }, 0);
+  // Scale GST down proportionally if a discount applies.
+  const gst          = cartSubtotal > 0 ? grossGst * (taxableAmount / cartSubtotal) : 0;
   const shipping     = cartSubtotal >= 5000 ? 0 : 150;
   const grandTotal   = orderData?.grandTotal || (taxableAmount + gst + shipping);
   const itemCount    = items.reduce((s, i) => s + (i.qty || 1), 0);
@@ -217,11 +224,31 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
                       </div>
                     ))}
                   </div>
-                  <div className="border-t border-blue-200 mt-3 pt-3 flex items-center justify-between">
-                    <p className="text-sm font-bold text-blue-900">Total Payable</p>
-                    <p className="text-xl font-extrabold text-blue-900">₹{Math.round(grandTotal).toLocaleString('en-IN')}</p>
+                  <div className="border-t border-blue-200 mt-3 pt-3 space-y-1.5">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Subtotal</span>
+                      <span className="font-semibold text-gray-900">₹{Math.round(cartSubtotal).toLocaleString('en-IN')}</span>
+                    </div>
+                    {discount > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-green-600">Discount</span>
+                        <span className="font-semibold text-green-600">−₹{Number(discount).toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">GST</span>
+                      <span className="font-semibold text-gray-900">₹{Math.round(gst).toLocaleString('en-IN')}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Shipping</span>
+                      <span className="font-semibold text-gray-900">{shipping === 0 ? <span className="text-green-600">FREE</span> : `₹${shipping}`}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-blue-200">
+                      <p className="text-sm font-bold text-blue-900">Total Payable</p>
+                      <p className="text-xl font-extrabold text-blue-900">₹{Math.round(grandTotal).toLocaleString('en-IN')}</p>
+                    </div>
                   </div>
-                  {discount > 0 && <p className="text-xs text-green-600 font-semibold text-right mt-1">You save ₹{Number(discount).toLocaleString('en-IN')}</p>}
+                  {shipping > 0 && <p className="text-[11px] text-gray-500 mt-2">Add ₹{(5000 - cartSubtotal).toLocaleString('en-IN')} more for FREE shipping</p>}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

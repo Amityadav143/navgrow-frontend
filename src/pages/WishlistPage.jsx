@@ -37,7 +37,7 @@ const WishlistPage = () => {
               className="text-center py-24 bg-white rounded-3xl border border-gray-100 shadow-sm">
               <Heart className="h-16 w-16 text-gray-200 mx-auto mb-4" />
               <h3 className="text-xl font-bold text-gray-500 mb-2">Your wishlist is empty</h3>
-              <p className="text-gray-400 text-sm mb-6">Browse our shop and click the heart icon to save products.</p>
+              <p className="text-gray-500 text-sm mb-6">Browse our shop and click the heart icon to save products.</p>
               <Link to="/shop" className="inline-flex items-center gap-2 px-6 py-3 btn-gold rounded-xl font-bold shadow-md hover:opacity-90">
                 Browse Shop <ArrowRight className="h-4 w-4" />
               </Link>

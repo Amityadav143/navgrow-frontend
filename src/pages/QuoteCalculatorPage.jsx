@@ -272,12 +272,12 @@ const QuoteCalculatorPage = () => {
 
                 <div className="mb-6">
                   <p className="text-sm font-bold text-gray-700 mb-3">Project Scope</p>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-2 sm:gap-3">
                     {SCOPES.map(({ id, label, desc }) => (
                       <button key={id} onClick={() => setScope(id)}
-                        className={`p-4 rounded-2xl border-2 text-center transition-all ${scope === id ? 'border-blue-500 bg-blue-50 shadow-md' : 'border-gray-200 hover:border-blue-200'}`}>
-                        <p className={`font-bold ${scope === id ? 'text-blue-700' : 'text-gray-900'}`}>{label}</p>
-                        <p className="text-xs text-gray-400 mt-1">{desc}</p>
+                        className={`p-3 sm:p-4 rounded-2xl border-2 text-center transition-all ${scope === id ? 'border-blue-500 bg-blue-50 shadow-md' : 'border-gray-200 hover:border-blue-200'}`}>
+                        <p className={`font-bold text-sm sm:text-base ${scope === id ? 'text-blue-700' : 'text-gray-900'}`}>{label}</p>
+                        <p className="text-[11px] sm:text-xs text-gray-400 mt-1 leading-tight">{desc}</p>
                       </button>
                     ))}
                   </div>

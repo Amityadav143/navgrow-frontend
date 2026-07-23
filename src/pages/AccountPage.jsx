@@ -380,7 +380,17 @@ const AccountPage = () => {
     if (!order.orderItems?.length) return;
     let added = 0;
     order.orderItems.forEach(item => {
-      addItem({ id: item.productId || item.id, name: item.productName || 'Product', price: Number(item.unitPrice || item.price || 0), image: item.imageUrl || '' });
+      // Reorder must carry the line's own tax data. Without gstRate/hsn the cart
+      // falls back to 18%, so reordering a 12% item showed the wrong tax.
+      addItem({
+        id:       item.productId || item.id,
+        name:     item.productName || 'Product',
+        price:    Number(item.unitPrice || item.price || 0),
+        image:    item.imageUrl || '',
+        qty:      item.quantity || 1,
+        gstRate:  item.gstRate != null ? Number(item.gstRate) : undefined,
+        hsn:      item.hsnCode || item.hsn || undefined,
+      });
       added++;
     });
     if (added > 0) { setCartOpen(true); }
@@ -601,7 +611,7 @@ const AccountPage = () => {
                               <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Email Address</p>
                               <p className="text-sm font-semibold text-gray-700">{user?.email}</p>
                             </div>
-                            <span className="ml-auto text-xs text-gray-400 bg-gray-200 px-2 py-0.5 rounded-full">Verified</span>
+                            <span className="ml-auto text-xs text-gray-600 bg-gray-200 px-2 py-0.5 rounded-full">Verified</span>
                           </div>
                           {profileMsg.text && (
                             <div className={`flex items-center gap-2 p-3 rounded-xl text-sm ${profileMsg.type==='success'?'bg-green-50 text-green-700 border border-green-200':'bg-red-50 text-red-700 border border-red-200'}`}>

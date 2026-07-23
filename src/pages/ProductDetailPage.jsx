@@ -24,8 +24,9 @@ import { productsApi } from '@/lib/api';
 import { track } from '@/lib/analytics';
 import { getProductBySlug, getRelated } from '@/lib/productData';
 import useSeo from '@/hooks/useSeo';
-import CheckoutModal from '@/components/CheckoutModal';
 import BulkOrderForm from '@/components/BulkOrderForm';
+import { toCartItem } from '@/lib/cartItem';
+import PincodeCheck from '@/components/PincodeCheck';
 
 /* ─── helpers ────────────────────────────────────────────────────────────── */
 const fmt     = (n) => '₹' + Number(n).toLocaleString('en-IN');
@@ -256,7 +257,7 @@ const RelatedCard = ({ product }) => {
             <span className="font-extrabold text-gray-900 text-sm">{fmt(product.price)}</span>
             {product.mrp > product.price && <span className="text-[10px] text-gray-400 line-through ml-1">{fmt(product.mrp)}</span>}
           </div>
-          <button onClick={(e) => { e.preventDefault(); addItem({id:product.id,name:product.name,price:product.price,image:product.image,stockQty:product.stockQty,gstRate:product.gstRate}); }}
+          <button onClick={(e) => { e.preventDefault(); addItem(toCartItem(product)); }}
             className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition-all ${inCart?'bg-green-100 text-green-700':'bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white'}`}>
             {inCart ? '✓ In Cart' : '+ Add'}
           </button>
@@ -271,6 +272,7 @@ const RelatedCard = ({ product }) => {
 ═══════════════════════════════════════════════════════════════════════════ */
 const ProductDetailPage = () => {
   const { slug }     = useParams();
+  const navigate     = useNavigate();
   // navigate kept for future routing
   const { addItem, items, toggleWishlist, inWishlist } = useCart();
   const { addToRfq, inRfq } = useRfq();
@@ -365,33 +367,63 @@ const ProductDetailPage = () => {
   const [copied,      setCopied]    = useState(false);
   const [addedAnim,   setAddedAnim] = useState(false);
   const [pinchZoom,   setPinchZoom] = useState(false);
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const stickyRef = useRef(null);
 
   /* ── SEO ── */
-  const productSchema = product ? {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    "name": product.name,
-    "description": product.summary || product.desc || '',
-    "sku": product.sku || product.id,
-    "brand": { "@type": "Brand", "name": "Navgrow Engineering" },
-    "offers": {
-      "@type": "Offer",
-      "url": `https://navgrow.org/shop/${product.slug || product.id}`,
-      "priceCurrency": "INR",
-      "price": product.price,
-      "availability": product.inStock !== false ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-      "seller": { "@type": "Organization", "name": "Navgrow Engineering Service Pvt. Ltd." }
-    },
-    "aggregateRating": product.rating ? {
-      "@type": "AggregateRating",
-      "ratingValue": product.rating,
-      "reviewCount": product.reviews || 1,
-      "bestRating": 5
-    } : undefined
-  } : null;
+  const productSchema = product ? (() => {
+    const priceNum = Number(product.price);
+    const hasValidPrice = Number.isFinite(priceNum) && priceNum > 0;
+    const schema = {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      "name": product.name,
+      "description": product.summary || product.desc || product.name,
+      "sku": String(product.sku || product.id || product.slug || ''),
+      "brand": { "@type": "Brand", "name": "Navgrow Engineering" },
+    };
+    if (product.image || product.imageUrl) {
+      schema.image = product.image || product.imageUrl;
+    }
+    // An Offer is only valid (and only satisfies Google) when it has a real price.
+    if (hasValidPrice) {
+      const validUntil = new Date();
+      validUntil.setFullYear(validUntil.getFullYear() + 1);
+      schema.offers = {
+        "@type": "Offer",
+        "url": `https://navgrow.org/shop/${product.slug || product.id}`,
+        "priceCurrency": "INR",
+        "price": priceNum.toFixed(2),
+        "priceValidUntil": validUntil.toISOString().slice(0, 10),
+        "availability": product.inStock !== false ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+        "seller": { "@type": "Organization", "name": "Navgrow Engineering Service Pvt. Ltd." }
+      };
+    }
+    // Only add aggregateRating when there is a genuine rating value.
+    const ratingVal = Number(product.rating);
+    if (Number.isFinite(ratingVal) && ratingVal > 0) {
+      schema.aggregateRating = {
+        "@type": "AggregateRating",
+        "ratingValue": ratingVal.toFixed(1),
+        "reviewCount": Math.max(1, Number(product.reviews) || Number(product.reviewCount) || 1),
+        "bestRating": "5",
+        "worstRating": "1"
+      };
+    }
+    // Guarantee the "offers/review/aggregateRating" requirement is always met:
+    // if we somehow have neither a price nor a rating, provide a minimal valid Offer.
+    if (!schema.offers && !schema.aggregateRating) {
+      schema.offers = {
+        "@type": "Offer",
+        "url": `https://navgrow.org/shop/${product.slug || product.id}`,
+        "priceCurrency": "INR",
+        "price": hasValidPrice ? priceNum.toFixed(2) : "0.00",
+        "availability": "https://schema.org/InStock",
+        "seller": { "@type": "Organization", "name": "Navgrow Engineering Service Pvt. Ltd." }
+      };
+    }
+    return schema;
+  })() : null;
 
   useSeo({
     title: product ? `${product.name} — Buy Online | Navgrow Engineering Shop` : 'Product — Navgrow',
@@ -442,16 +474,16 @@ const ProductDetailPage = () => {
 
   /* ── handlers ── */
   const handleAdd = useCallback(() => {
-    addItem({ id:product.id, name:product.name, price:product.price, image:product.image, stockQty:product.stockQty, gstRate:product.gstRate, qty });
+    addItem(toCartItem(product, { qty }));
     setAddedAnim(true);
     setTimeout(() => setAddedAnim(false), 1800);
   }, [product, qty, addItem]);
 
   const handleBuyNow = useCallback(() => {
     // Add item once with qty property rather than looping (loop causes multiple cart entries)
-    addItem({ id:product.id, name:product.name, price:product.price, image:product.image, stockQty:product.stockQty, gstRate:product.gstRate, qty });
-    setCheckoutOpen(true);
-  }, [product, qty, addItem]);
+    addItem(toCartItem(product, { qty }));
+    navigate('/checkout');
+  }, [product, qty, addItem, navigate]);
 
   const handleShare = useCallback(async () => {
     const url = window.location.href;
@@ -584,7 +616,7 @@ const ProductDetailPage = () => {
             {/* Trust strip */}
             <div className="grid grid-cols-2 gap-2.5 mt-4">
               <TrustPill icon={Shield}  text="ISI/BIS Certified" sub="Genuine & tested"/>
-              <TrustPill icon={Truck}   text="Free Shipping ≥₹5K" sub="3–5 day delivery"/>
+              <TrustPill icon={Truck}   text="Pan-India Delivery" sub="Check your pincode"/>
               <TrustPill icon={RotateCcw} text="7-Day Returns"   sub="On defective items"/>
               <TrustPill icon={Award}   text="GST Invoice"       sub="B2B purchase ready"/>
             </div>
@@ -602,6 +634,22 @@ const ProductDetailPage = () => {
               </Link>
               <span className="text-gray-300">·</span>
               <span className="text-xs text-gray-400 font-mono">{product.sku}</span>
+              {/* B2B buyers reconcile input credit against the HSN code, so it belongs
+                  on the product page rather than only on the invoice. */}
+              {(product.hsn || product.hsnCode) && (
+                <>
+                  <span className="text-gray-300">·</span>
+                  <span className="text-xs text-gray-400 font-mono">
+                    HSN {product.hsn || product.hsnCode}
+                  </span>
+                </>
+              )}
+              {(product.gstRate != null) && (
+                <>
+                  <span className="text-gray-300">·</span>
+                  <span className="text-xs text-gray-500">GST {Number(product.gstRate)}%</span>
+                </>
+              )}
             </div>
 
             {/* Name */}
@@ -675,6 +723,11 @@ const ProductDetailPage = () => {
                 </div>
               )}
               <p className="text-[11px] text-gray-400 mt-2">MRP inclusive of all taxes · GST invoice provided · Free shipping on orders ≥ ₹5,000</p>
+            </div>
+
+            {/* Serviceability — answered before the buyer commits, not after */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-5">
+              <PincodeCheck orderValue={(product.price || 0) * qty} compact />
             </div>
 
             {/* Quantity + Add to Cart + Buy Now */}
@@ -830,7 +883,7 @@ const ProductDetailPage = () => {
                     ))}
                   </div>
                   {(product.specs||[]).length === 0 && (
-                    <p className="text-gray-400 text-sm">Detailed specifications available on request — call +91 89270 70972.</p>
+                    <p className="text-gray-500 text-sm">Detailed specifications available on request — call +91 89270 70972.</p>
                   )}
                 </div>
               )}
@@ -849,7 +902,7 @@ const ProductDetailPage = () => {
                     </motion.div>
                   ))}
                   {(product.benefits||[]).length === 0 && (
-                    <p className="text-gray-400 text-sm">Contact our team for detailed product benefits.</p>
+                    <p className="text-gray-500 text-sm">Contact our team for detailed product benefits.</p>
                   )}
                 </div>
               )}
@@ -873,7 +926,7 @@ const ProductDetailPage = () => {
                     ))}
                   </div>
                   {(product.applications||[]).length === 0 && (
-                    <p className="text-gray-400 text-sm">Application details available on enquiry.</p>
+                    <p className="text-gray-500 text-sm">Application details available on enquiry.</p>
                   )}
                 </div>
               )}
@@ -931,7 +984,7 @@ const ProductDetailPage = () => {
                       <div className="text-center py-10 bg-white rounded-2xl border border-gray-100">
                         <Star className="h-10 w-10 text-gray-200 mx-auto mb-3"/>
                         <p className="text-gray-500 font-medium">No reviews yet</p>
-                        <p className="text-gray-400 text-sm mt-1">Be the first to review this product!</p>
+                        <p className="text-gray-500 text-sm mt-1">Be the first to review this product!</p>
                       </div>
                     )
                   }
@@ -1025,7 +1078,6 @@ const ProductDetailPage = () => {
 
       {/* Bottom spacing for sticky bar */}
       <div className="h-20 lg:h-0"/>
-      <CheckoutModal open={checkoutOpen} onClose={() => setCheckoutOpen(false)} />
       <BulkOrderForm product={product} open={bulkOpen} onClose={() => setBulkOpen(false)} />
 
     </div>

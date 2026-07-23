@@ -55,7 +55,7 @@ const TestimonialsSection = () => (
           <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
           Our Clients
         </div>
-        <h2 className="mb-4 text-white">Trusted by <span className="gradient-text">Industry Leaders</span></h2>
+        <h2 className="mb-4 text-white">Trusted by <span className="gradient-text-light">Industry Leaders</span></h2>
         <p className="text-blue-200 text-lg">
           Delivering quality-first engineering — the proven foundation behind our sustainability solutions.
         </p>

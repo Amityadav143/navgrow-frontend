@@ -15,7 +15,7 @@ import { Link, Outlet, useLocation, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard, Package, ShoppingCart, MessageSquare, FileText,
   Users, Newspaper, Image, Briefcase, Tag, ChevronRight, Bell, Settings,
-  TrendingUp, AlertCircle, CheckCircle, Clock, BarChart2, ClipboardList, Layers, FileDown,
+  TrendingUp, AlertCircle, CheckCircle, Clock, BarChart2, ClipboardList, Layers, FileDown, Percent, Truck,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useApi } from '@/hooks/useApi';
@@ -29,6 +29,8 @@ const NAV_ITEMS = [
   { path: '/admin/products',  label: 'Products',       icon: Package,                     group: 'Commerce' },
   { path: '/admin/quotes',    label: 'Quote Requests', icon: FileText,                    group: 'Commerce' },
   { path: '/admin/catalogue-leads', label: 'Catalogue Leads', icon: FileDown,             group: 'Commerce' },
+  { path: '/admin/tax-rules', label: 'Tax Rules',       icon: Percent,              group: 'Commerce' },
+  { path: '/admin/delivery-zones', label: 'Delivery Zones', icon: Truck,         group: 'Commerce' },
   { path: '/admin/rfqs',      label: 'RFQ Pipeline',   icon: ClipboardList,               group: 'Commerce' },
   { path: '/admin/coupons',   label: 'Coupons',        icon: Tag,                         group: 'Commerce' },
   // CRM

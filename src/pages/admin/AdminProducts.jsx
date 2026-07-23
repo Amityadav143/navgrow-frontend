@@ -36,7 +36,7 @@ const GST_RATES = ['0','5','12','18','28'];
 // (features, benefits, applications, specifications, imageUrls) using a
 // literal "\n" between items, or wrap the whole multi-line cell in quotes.
 const CSV_HEADERS = [
-  'name','category','price','mrp','gstRate','stockQty','minOrderQty',
+  'name','category','price','mrp','gstRate','hsnCode','stockQty','minOrderQty',
   'description','imageUrl','badge','featured',
   'tagline','summary','warranty',
   'features','benefits','applications','specifications','imageUrls',
@@ -105,6 +105,7 @@ const HEADER_ALIASES = {
   price: 'price', sellingprice: 'price', saleprice: 'price', rate: 'price', amount: 'price', unitprice: 'price',
   mrp: 'mrp', listprice: 'mrp', maximumretailprice: 'mrp',
   gstrate: 'gstRate', gst: 'gstRate', tax: 'gstRate', taxrate: 'gstRate',
+  hsn: 'hsnCode', hsncode: 'hsnCode', sac: 'hsnCode', saccode: 'hsnCode', hsnsac: 'hsnCode',
   stockqty: 'stockQty', stock: 'stockQty', quantity: 'stockQty', qty: 'stockQty', inventory: 'stockQty',
   minorderqty: 'minOrderQty', moq: 'minOrderQty', minimumorderquantity: 'minOrderQty',
   description: 'description', desc: 'description', details: 'description',
@@ -162,6 +163,7 @@ export function csvToProducts(csvText) {
     price:          num(get(cells, 'price')) ?? 0,
     mrp:            get(cells, 'mrp') ? num(get(cells, 'mrp')) : null,
     gstRate:        get(cells, 'gstRate') ? (num(get(cells, 'gstRate')) ?? 18) : 18,
+    hsnCode:        get(cells, 'hsnCode') || undefined,
     stockQty:       get(cells, 'stockQty') ? Math.trunc(num(get(cells, 'stockQty')) ?? 0) : 0,
     minOrderQty:    get(cells, 'minOrderQty') ? Math.max(1, Math.trunc(num(get(cells, 'minOrderQty')) ?? 1)) : 1,
     description:    get(cells, 'description'),
@@ -259,7 +261,7 @@ const FormInput = ({ label, fieldKey, type='text', required, placeholder, form, 
 /* ── Product form — Input defined OUTSIDE to fix cursor jump bug ─────────── */
 const ProductForm = ({ initial, onSave, onCancel, saving, categories = CATEGORIES }) => {
   const DEFAULTS = {
-    name:'', category:'Safety Equipment', price:'', mrp:'', gstRate:'18',
+    name:'', category:'Safety Equipment', price:'', mrp:'', gstRate:'18', hsnCode:'',
     stockQty:'0', minOrderQty:'1', description:'', imageUrl:'', badge:'', featured:false, sku:'', active:true,
     tagline:'', summary:'', warranty:'', imageUrls:'', features:'', benefits:'', applications:'', specifications:'',
   };
@@ -319,6 +321,14 @@ const ProductForm = ({ initial, onSave, onCancel, saving, categories = CATEGORIE
               className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500">
               {GST_RATES.map(r => <option key={r} value={r}>{r}%</option>)}
             </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">HSN / SAC Code</label>
+            <input value={form.hsnCode} onChange={e => handleChange('hsnCode', e.target.value)}
+              placeholder="Leave blank to use the category default"
+              className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500" />
+            <p className="text-[11px] text-gray-500 mt-1">Printed on the GST invoice. Blank inherits this category's tax rule.</p>
           </div>
 
           {/* Description */}

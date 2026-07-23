@@ -41,12 +41,31 @@ const MainLayout = () => {
   }, []);
 
   useEffect(() => {
-    if (!headerRef.current) return;
     const el = headerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setHeaderHeight(headerRef.current?.offsetHeight ?? 80));
+
+    // Take the measurement from the ResizeObserver entry rather than reading
+    // el.offsetHeight inside the callback. Querying a geometric property there
+    // forces a synchronous reflow, and because the resulting setState changes
+    // the spacer's height the observer fires again — the layout-thrash loop
+    // Lighthouse reports as "forced reflow". The entry already carries the
+    // measured border box, so no extra layout pass is needed.
+    const apply = (h) => {
+      const next = Math.round(h);
+      // Bail out when unchanged so we don't re-render (and re-trigger) for nothing.
+      setHeaderHeight(prev => (prev === next ? prev : next));
+    };
+
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const box = Array.isArray(entry.borderBoxSize) ? entry.borderBoxSize[0] : entry.borderBoxSize;
+      apply(box ? box.blockSize : entry.contentRect.height);
+    });
     ro.observe(el);
-    setHeaderHeight(el.offsetHeight);
+
+    // One initial measurement on mount (unavoidable, and cheap as a single read).
+    apply(el.getBoundingClientRect().height);
     return () => ro.disconnect();
   }, []);
 

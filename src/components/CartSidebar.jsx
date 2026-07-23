@@ -15,12 +15,11 @@ import useBodyScrollLock from '@/hooks/useBodyScrollLock';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingCart, Minus, Plus, Trash2, Package, ArrowRight, Tag,
          CheckCircle, AlertTriangle, Mail, Send, FileText, Loader2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/context/CartContext';
 import { couponsApi, rfqApi } from '@/lib/api';
 import { track } from '@/lib/analytics';
 import { useToast } from '@/components/ui/use-toast';
-import CheckoutModal from '@/components/CheckoutModal';
 
 /* ── Professional bulk-quote email ──────────────────────────────────────── */
 const buildBulkQuoteEmail = (items, subtotal, grandTotal, discount) => {
@@ -197,7 +196,7 @@ const QuoteChoiceModal = ({ open, onClose, items, subtotal, grandTotal, discount
 
 const CartSidebar = () => {
   const { items, totalItems, totalAmount, cartOpen, setCartOpen, removeItem, updateQty, clearCart } = useCart();
-  const [checkoutOpen,  setCheckoutOpen]  = useState(false);
+  const navigate = useNavigate();
   const [couponCode,    setCouponCode]    = useState('');
   const [coupon,        setCoupon]        = useState(null);
   const [couponError,   setCouponError]   = useState('');
@@ -276,8 +275,8 @@ const CartSidebar = () => {
                 {items.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center">
                     <Package className="h-20 w-20 text-gray-200 mb-4"/>
-                    <p className="font-bold text-gray-400 text-lg mb-2">Your cart is empty</p>
-                    <p className="text-gray-400 text-sm mb-6">Add products from our engineering shop</p>
+                    <p className="font-bold text-gray-500 text-lg mb-2">Your cart is empty</p>
+                    <p className="text-gray-500 text-sm mb-6">Add products from our engineering shop</p>
                     <Link to="/shop" onClick={() => setCartOpen(false)}
                       className="px-6 py-3 brand-gradient text-white rounded-xl font-semibold hover:opacity-90 flex items-center gap-2">
                       Browse Shop <ArrowRight className="h-4 w-4"/>
@@ -398,7 +397,7 @@ const CartSidebar = () => {
                     </div>
                   </div>
 
-                  <button onClick={() => { setCartOpen(false); setCheckoutOpen(true); }}
+                  <button onClick={() => { setCartOpen(false); navigate('/checkout'); }}
                     className="w-full py-3.5 btn-gold rounded-xl shadow-lg font-bold">
                     Proceed to Checkout
                   </button>
@@ -420,14 +419,7 @@ const CartSidebar = () => {
           </>
         )}
       </AnimatePresence>
-
-      <CheckoutModal
-        open={checkoutOpen}
-        onClose={() => setCheckoutOpen(false)}
-        orderData={{ items, totalAmount, discount, couponCode: coupon?.code, grandTotal }}
-      />
-
-      <QuoteChoiceModal
+<QuoteChoiceModal
         open={quoteOpen}
         onClose={() => setQuoteOpen(false)}
         items={items}
