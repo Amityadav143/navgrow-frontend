@@ -323,7 +323,8 @@ const ShopPage = () => {
   });
 
   // Live products from DB; fallback to static catalogue if API unavailable
-  const { data: apiData } = useApi(() => productsApi.list({ size: 100, active: true }), [], { immediate: true });
+  const { data: apiData, error: apiErr, loading: apiLoading } =
+    useApi(() => productsApi.list({ size: 100, active: true }), [], { immediate: true });
   const liveProducts = React.useMemo(() => {
     const list = apiData?.content || (Array.isArray(apiData) ? apiData : null);
     if (list && list.length > 0) return list.map(p => ({
@@ -337,6 +338,9 @@ const ShopPage = () => {
     }));
     return null;
   }, [apiData]);
+  // True only when we're falling back to the built-in catalogue because the API
+  // failed — used to be transparent that these aren't the live shop products.
+  const usingSampleData = !liveProducts && !apiLoading && Boolean(apiErr);
   // Memoize to give useMemo dep a stable reference
   const ACTIVE_PRODUCTS = React.useMemo(() => liveProducts || PRODUCTS, [liveProducts]);
   const ACTIVE_CATS     = React.useMemo(() => ['All', ...Array.from(new Set(ACTIVE_PRODUCTS.map(p => p.cat)))], [ACTIVE_PRODUCTS]);
@@ -457,6 +461,12 @@ const ShopPage = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:shrink-0">
+              {usingSampleData && (
+                <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-3 py-1 order-1"
+                  title="Live shop data couldn't be loaded; showing the built-in sample catalogue.">
+                  Sample catalogue
+                </span>
+              )}
               <span className="text-sm text-gray-500 hidden sm:block order-1">{filtered.length} products</span>
               <select value={sort} onChange={e => setSort(e.target.value)}
                 className="flex-1 min-w-[130px] sm:flex-none px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-blue-400 cursor-pointer order-2">

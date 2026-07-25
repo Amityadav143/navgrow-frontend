@@ -72,16 +72,41 @@ const mapProduct = (p) => ({
  * as the shop API is reachable. Only a failed/empty API falls back to placeholders.
  */
 const useFeaturedProducts = () => {
-  const { data: featuredData } = useApi(() => productsApi.featured(), [], { immediate: true });
-  const { data: listData }     = useApi(() => productsApi.list({ size: 4 }), [], { immediate: true });
+  const { data: featuredData, error: featuredErr, loading: fLoading } =
+    useApi(() => productsApi.featured(), [], { immediate: true });
+  // Newest active products, used to top up the row when fewer than 4 are flagged.
+  const { data: listData, error: listErr, loading: lLoading } =
+    useApi(() => productsApi.list({ size: 12, active: true, sort: 'createdAt' }), [], { immediate: true });
 
   return React.useMemo(() => {
     const featured = Array.isArray(featuredData) ? featuredData : (featuredData?.content || []);
-    if (featured.length > 0) return featured.slice(0, 4).map(mapProduct);
-    const list = listData?.content || (Array.isArray(listData) ? listData : []);
-    if (list.length > 0) return list.slice(0, 4).map(mapProduct);
-    return CATALOGUE_FALLBACK;
-  }, [featuredData, listData]);
+    const list     = listData?.content || (Array.isArray(listData) ? listData : []);
+    const loading  = fLoading || lLoading;
+
+    // Admin-flagged featured come FIRST; then fill any remaining slots (up to 4)
+    // with the newest products, skipping ones already shown. So a freshly-added
+    // admin product appears even before it's ticked "featured", and ticking it
+    // moves it to the front — exactly the behaviour asked for.
+    if (featured.length > 0 || list.length > 0) {
+      const seen = new Set();
+      const combined = [];
+      for (const p of [...featured, ...list]) {
+        if (combined.length >= 4) break;
+        const key = p.id ?? p.slug ?? p.sku;
+        if (key == null || seen.has(key)) continue;
+        seen.add(key);
+        combined.push(mapProduct(p));
+      }
+      if (combined.length > 0) return { items: combined, source: 'live', loading };
+    }
+
+    // Still loading — skeletons, not a flash of fallback content.
+    if (loading) return { items: [], source: 'loading', loading };
+
+    // Genuinely nothing from the shop (empty DB) or unreachable.
+    const unreachable = Boolean(featuredErr || listErr);
+    return { items: CATALOGUE_FALLBACK, source: unreachable ? 'offline' : 'empty', loading: false };
+  }, [featuredData, listData, featuredErr, listErr, fLoading, lLoading]);
 };
 
 const categories = [
@@ -93,7 +118,7 @@ const categories = [
 
 const ShopPreview = () => {
   const { addItem, items } = useCart();
-  const featured = useFeaturedProducts();
+  const { items: featured, source } = useFeaturedProducts();
 
   return (
     <section className="section-padding bg-white">
@@ -131,8 +156,24 @@ const ShopPreview = () => {
         </div>
 
         {/* Featured products */}
+        {source === 'offline' && (
+          <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+            Showing our standard catalogue — live shop data couldn't be loaded right now.
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {featured.map((p, i) => {
+          {source === 'loading'
+            ? Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="rounded-2xl border border-gray-100 overflow-hidden animate-pulse">
+                  <div className="aspect-square bg-gray-100" />
+                  <div className="p-4 space-y-2">
+                    <div className="h-3 bg-gray-100 rounded w-1/3" />
+                    <div className="h-4 bg-gray-100 rounded w-4/5" />
+                    <div className="h-5 bg-gray-100 rounded w-1/2" />
+                  </div>
+                </div>
+              ))
+            : featured.map((p, i) => {
             const inCart = items.some(item => item.id === p.id);
             return (
               <motion.div key={p.id} initial={{ opacity:0, y:20 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ delay:i*0.08 }}

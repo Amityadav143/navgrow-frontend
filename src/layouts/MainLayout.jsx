@@ -14,6 +14,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import BackendStatusBanner from '@/components/BackendStatusBanner';
 import WhatsAppButton from '@/components/WhatsAppButton';
 import ScrollToTop from '@/components/ScrollToTop';
 import ChatBot from '@/components/ChatBot';
@@ -88,6 +89,10 @@ const MainLayout = () => {
 
       {/* Dynamic spacer — height matches fixed header */}
       <div style={{ height: headerHeight }} aria-hidden="true" />
+
+      {/* Makes an unreachable/empty backend obvious instead of silently falling
+          back to sample data (the cause of "dummy products keep showing"). */}
+      <BackendStatusBanner />
 
       <motion.main
         id="main-content"
