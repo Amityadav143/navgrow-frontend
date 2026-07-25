@@ -18,6 +18,7 @@ import { X, ShoppingCart, Minus, Plus, Trash2, Package, ArrowRight, Tag,
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/context/CartContext';
 import { couponsApi, rfqApi } from '@/lib/api';
+import { applyDeliveryTier } from '@/lib/utils';
 import { track } from '@/lib/analytics';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -211,17 +212,25 @@ const CartSidebar = () => {
   useBodyScrollLock(cartOpen);
 
   const discount    = coupon?.discount || 0;
-  const taxableAmt  = Math.max(0, totalAmount - discount);
-  // GST per line item (each product can sit on a different slab: 5/12/18/28%).
-  // Falls back to 18% when a rate isn't known, matching the server calculation.
+  // Catalogue prices INCLUDE GST. The tax is therefore extracted from the price
+  // (inclusive x 100 / (100 + rate)) and disclosed, never added on top — adding
+  // it would charge more than the price the customer was shown. Each product can
+  // sit on its own slab (5/12/18/28%), so this is worked out per line.
+  const payableGoods = Math.max(0, totalAmount - discount);
   const grossGst = items.reduce((sum, i) => {
-    const rate = (typeof i.gstRate === 'number' && i.gstRate > 0) ? i.gstRate : 18;
-    return sum + (i.price || 0) * (i.qty || 1) * (rate / 100);
+    const rate = (typeof i.gstRate === 'number' && i.gstRate >= 0) ? i.gstRate : 18;
+    const inclusive = (i.price || 0) * (i.qty || 1);
+    return sum + (inclusive - inclusive * 100 / (100 + rate));
   }, 0);
-  // Scale the GST down proportionally if a discount applies to the order.
-  const gst         = totalAmount > 0 ? grossGst * (taxableAmt / totalAmount) : 0;
-  const shipping    = totalAmount >= 5000 ? 0 : 150;
-  const grandTotal  = taxableAmt + gst + shipping;
+  // Scale the disclosed GST down proportionally if a discount applies.
+  const gst         = totalAmount > 0 ? grossGst * (payableGoods / totalAmount) : 0;
+  const taxableAmt  = payableGoods - gst;
+  // Preview delivery: free above the threshold, otherwise the default rate
+  // discounted by the volume tier for the number of units — the same tiering the
+  // zone quote applies at checkout, so this estimate lines up with the charge.
+  const shipping    = payableGoods >= 5000 ? 0 : applyDeliveryTier(150, totalItems);
+  // Goods are already tax-inclusive, so only delivery is added.
+  const grandTotal  = payableGoods + shipping;
 
   const applyCoupon = async () => {
     if (!couponCode.trim()) return;
@@ -229,15 +238,22 @@ const CartSidebar = () => {
     try {
       const { data } = await couponsApi.validate(couponCode.trim(), totalAmount);
       setCoupon(data);
+      // Carry the code to checkout, which re-validates against the final total.
+      try { localStorage.setItem('navgrow_coupon', data.code || couponCode.trim()); } catch {}
     } catch (err) {
       setCouponError(err.response?.data?.message || 'Invalid coupon code');
       setCoupon(null);
+      try { localStorage.removeItem('navgrow_coupon'); } catch {}
     } finally { setCouponLoading(false); }
   };
-  const removeCoupon = () => { setCoupon(null); setCouponCode(''); setCouponError(''); };
+  const removeCoupon = () => {
+    setCoupon(null); setCouponCode(''); setCouponError('');
+    try { localStorage.removeItem('navgrow_coupon'); } catch {}
+  };
   const handleClearConfirmed = () => {
     clearCart(); setConfirmClear(false);
     setCoupon(null); setCouponCode(''); setCouponError('');
+    try { localStorage.removeItem('navgrow_coupon'); } catch {}
   };
 
   return (
@@ -385,7 +401,7 @@ const CartSidebar = () => {
                       </div>
                     )}
                     <div className="flex justify-between text-gray-600">
-                      <span>GST (18%)</span><span>₹{gst.toFixed(0)}</span>
+                      <span>GST (included)</span><span>₹{gst.toFixed(0)}</span>
                     </div>
                     <div className="flex justify-between text-gray-600">
                       <span>Shipping {totalAmount>=5000 && <span className="text-green-600 text-xs font-bold ml-1">FREE</span>}</span>

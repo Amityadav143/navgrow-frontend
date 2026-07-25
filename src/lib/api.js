@@ -151,9 +151,11 @@ export const quotesApi = {
 
 // ── Delivery serviceability & zones ─────────────────────────────────────────
 export const deliveryApi = {
-  // Public: is this pincode serviceable, at what charge, by when
-  check:      (pincode, orderValue) =>
-                api.get('/delivery/check', { params: { pincode, orderValue } }),
+  // Public: is this pincode serviceable, at what charge, by when.
+  // `qty` (total units in the order) drives the volume-based delivery tier so the
+  // quoted charge matches what the order endpoint will bill.
+  check:      (pincode, orderValue, qty) =>
+                api.get('/delivery/check', { params: { pincode, orderValue, qty } }),
   // Admin
   zones:      ()        => api.get('/delivery/zones'),
   createZone: (d)       => api.post('/delivery/zones', d),
@@ -244,6 +246,12 @@ export const jobsApi = {
   manage:         ()       => api.get('/jobs/manage'),
   get:            (id)     => api.get(`/jobs/${id}`),
   apply:          (id, d)  => api.post(`/jobs/${id}/apply`, d),
+  // Uploads a CV and returns { url } to attach to an application.
+  uploadResume:   (file)   => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/jobs/resume', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
   applications:   (id, p)  => api.get(`/jobs/${id}/applications`, { params: p }),
   updateAppStatus:(id, st) => api.patch(`/jobs/applications/${id}/status`, null, { params: { status: st } }),
   create:         (d)      => api.post('/jobs', d),

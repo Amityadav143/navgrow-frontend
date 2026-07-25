@@ -170,11 +170,23 @@ const AdminDeliveryZones = () => {
 
       <div className="flex items-start gap-2 bg-blue-950/40 border border-blue-900 text-blue-200 text-sm rounded-xl px-4 py-3 mb-4">
         <Info className="h-4 w-4 mt-0.5 shrink-0" />
-        <p>
-          Prefixes are comma-separated, e.g. <span className="font-mono">70,71,72</span>. The
-          <strong> longest matching prefix wins</strong>, so <span className="font-mono">734</span> overrides
-          <span className="font-mono"> 73</span>. Use the tester below to confirm a pincode resolves the way you expect.
-        </p>
+        <div className="space-y-1.5">
+          <p>
+            Prefixes are comma-separated, e.g. <span className="font-mono">70,71,72</span>. The
+            <strong> longest matching prefix wins</strong>, so <span className="font-mono">734</span> overrides
+            <span className="font-mono"> 73</span>.
+          </p>
+          <p>
+            <strong>To control a single pincode</strong>, add a zone whose prefix is the full six digits
+            (e.g. <span className="font-mono">700091</span>). Being the longest match, it overrides every
+            broader rule — use it to grant free delivery to a key account, or switch COD off for one area.
+          </p>
+          <p className="text-blue-300/90">
+            <strong>Free above:</strong> <span className="font-mono">0</span> = always free ·
+            a value = free at or above that order total · <em>blank</em> = never free.
+            Use the tester below to confirm a pincode resolves the way you expect.
+          </p>
+        </div>
       </div>
 
       {/* Pincode tester */}
@@ -256,7 +268,7 @@ const AdminDeliveryZones = () => {
                     className="w-full px-2.5 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white font-mono" />
                 </div>
                 <Num label="Charge ₹"    value={z.baseCharge}   onChange={v => edit(z.id, 'baseCharge', v)} />
-                <Num label="Free above ₹" value={z.freeAbove}   onChange={v => edit(z.id, 'freeAbove', v)} placeholder="never" />
+                <Num label="Free above ₹" value={z.freeAbove}   onChange={v => edit(z.id, 'freeAbove', v)} placeholder="blank=never, 0=always" />
                 <Num label="ETA min"     value={z.etaMinDays}   onChange={v => edit(z.id, 'etaMinDays', v)} />
                 <Num label="ETA max"     value={z.etaMaxDays}   onChange={v => edit(z.id, 'etaMaxDays', v)} />
                 <Num label="COD ₹"       value={z.codCharge}    onChange={v => edit(z.id, 'codCharge', v)} />

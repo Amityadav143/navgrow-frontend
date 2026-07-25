@@ -239,7 +239,7 @@ const Navbar = ({ scrolled, onSearchOpen }) => {
 
               <UserMenu dark={onDark} />
 
-              <Link to="/contact" className="px-5 py-2.5 rounded-xl text-sm font-bold text-white btn-gold shadow-md">
+              <Link to="/contact" className="px-5 py-2.5 rounded-xl text-sm btn-gold shadow-md">
                 Get a Quote
               </Link>
             </div>

@@ -19,8 +19,12 @@ import { rfqApi } from '@/lib/api';
 import { track } from '@/lib/analytics';
 import useSeo from '@/hooks/useSeo';
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/context/AuthContext';
+import RequireAuth from '@/components/RequireAuth';
 
-const SAVED_KEY = 'ng_saved_quotes';
+const SAVED_KEY_BASE = 'ng_saved_quotes';
+/** Quotes are per-account: a shared device must not leak one user's to another. */
+const keyFor = (user) => (user?.id ? `${SAVED_KEY_BASE}:${user.id}` : SAVED_KEY_BASE);
 
 const STATUS_META = {
   SUBMITTED: { label: 'Submitted', icon: Clock,        cls: 'bg-blue-50 text-blue-700 border-blue-200' },
@@ -45,6 +49,7 @@ const StatusBadge = ({ status }) => {
 };
 
 const SavedQuotesPage = () => {
+  const { user } = useAuth();
   useSeo({
     title: 'Saved Quotes — Compare Your RFQs | Navgrow Engineering',
     description: 'Track and compare your Navgrow Engineering quotation requests side by side. View line items, totals, and status, and accept the quote that works best for you.',
@@ -63,14 +68,14 @@ const SavedQuotesPage = () => {
   // Load saved references on mount
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem(SAVED_KEY) || '[]');
+      const saved = JSON.parse(localStorage.getItem(keyFor(user)) || '[]');
       if (Array.isArray(saved)) setRefs(saved);
     } catch { /* ignore */ }
   }, []);
 
   const persist = useCallback((list) => {
     setRefs(list);
-    try { localStorage.setItem(SAVED_KEY, JSON.stringify(list)); } catch { /* ignore */ }
+    try { localStorage.setItem(keyFor(user), JSON.stringify(list)); } catch { /* ignore */ }
   }, []);
 
   const fetchQuote = useCallback(async (num) => {
@@ -377,4 +382,13 @@ const Row = ({ label, value, icon: Icon }) => (
   </div>
 );
 
-export default SavedQuotesPage;
+// Saved quotes are account data, so the page is gated rather than merely hidden.
+const GuardedSavedQuotesPage = () => (
+  <RequireAuth
+    title="Sign in to see your saved quotes"
+    message="Your saved quotations are tied to your account so you can pick them up on any device.">
+    <SavedQuotesPage />
+  </RequireAuth>
+);
+
+export default GuardedSavedQuotesPage;

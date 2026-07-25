@@ -89,7 +89,7 @@ const ProjectModal = ({ project, onClose }) => {
               href="https://wa.me/918927070972?text=I%20want%20to%20know%20more%20about%20a%20similar%20project"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-6 py-3 brand-gradient text-white rounded-xl font-semibold shadow-md hover:opacity-90 transition-opacity"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-[#25D366] hover:bg-[#1fba59] text-white rounded-xl font-semibold shadow-md hover:opacity-90 transition-opacity"
             >
               Enquire About This Project
             </a>

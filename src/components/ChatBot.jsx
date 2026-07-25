@@ -251,12 +251,22 @@ const FeedbackRow = memo(({ msgId, onRate }) => {
 
 // ─── Lead capture ─────────────────────────────────────────────────────────────
 const LeadCapture = memo(({ onSubmit, onDismiss }) => {
-  const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [sent, setSent] = useState(false);
+  const [name, setName] = useState(""); const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState(""); const [sent, setSent] = useState(false);
   if (sent) return (
     <motion.div initial={{ opacity: 0, scale: .95 }} animate={{ opacity: 1, scale: 1 }}
-      className="mx-2 my-3 p-3.5 bg-green-950/60 border border-green-800/50 rounded-2xl text-center">
-      <p className="text-green-400 font-semibold text-sm">✓ We'll reach out shortly!</p>
-      <p className="text-green-600 text-xs mt-0.5">Usually within 2 business hours</p>
+      className="mx-2 my-3 p-4 bg-green-950/60 border border-green-800/50 rounded-2xl text-center">
+      <div className="w-10 h-10 rounded-full bg-green-900/70 flex items-center justify-center mx-auto mb-2">
+        <Check className="h-5 w-5 text-green-400" />
+      </div>
+      <p className="text-green-300 font-bold text-sm">Thank you, {name.split(' ')[0] || 'there'}!</p>
+      <p className="text-green-500/90 text-xs mt-1 leading-relaxed">
+        Your details are with our engineering team. Someone will call you on
+        <span className="font-semibold text-green-400"> {phone}</span> within 2 business hours.
+      </p>
+      <p className="text-gray-500 text-[11px] mt-2">
+        In a hurry? Call <span className="font-semibold text-gray-400">+91 89270 70972</span> and we'll pick up.
+      </p>
     </motion.div>
   );
   return (
@@ -274,10 +284,12 @@ const LeadCapture = memo(({ onSubmit, onDismiss }) => {
           className="w-full bg-gray-800 text-gray-100 placeholder-gray-500 rounded-xl px-3 py-2 text-xs border border-gray-700 focus:outline-none focus:border-blue-500"/>
         <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+91 XXXXX XXXXX" type="tel"
           className="w-full bg-gray-800 text-gray-100 placeholder-gray-500 rounded-xl px-3 py-2 text-xs border border-gray-700 focus:outline-none focus:border-blue-500"/>
-        <button onClick={() => { if (name.trim() && phone.trim()) { onSubmit({ name: name.trim(), phone: phone.trim() }); setSent(true); }}}
+        <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email (optional — so we can send details)" type="email"
+          className="w-full bg-gray-800 text-gray-100 placeholder-gray-500 rounded-xl px-3 py-2 text-xs border border-gray-700 focus:outline-none focus:border-blue-500"/>
+        <button onClick={() => { if (name.trim() && phone.trim()) { onSubmit({ name: name.trim(), phone: phone.trim(), email: email.trim() }); setSent(true); }}}
           disabled={!name.trim() || !phone.trim()}
-          className="w-full py-2 brand-gradient text-white rounded-xl text-xs font-bold disabled:opacity-40 hover:opacity-90 transition-opacity">
-          Request Callback
+          className="w-full py-2 btn-gold rounded-xl text-xs disabled:opacity-40 transition-opacity">
+          Request a callback
         </button>
       </div>
     </motion.div>
@@ -334,7 +346,7 @@ const EscalationPanel = memo(({ onDismiss }) => (
     </div>
     <div className="space-y-2">
       <a href="tel:+918927070972"
-        className="flex items-center gap-2.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm text-gray-300 transition-colors group">
+        className="flex items-center gap-2.5 px-3 py-2 bg-[#25D366] hover:bg-[#1fba59] rounded-xl text-sm text-white font-semibold transition-colors group">
         <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
           <Phone className="h-3.5 w-3.5 text-white"/>
         </div>
@@ -610,9 +622,38 @@ const ChatBot = () => {
     });
   }, []);
 
-  const handleLeadSubmit = useCallback(({ name, phone }) => {
-    doSend(`My name is ${name} and I can be reached at ${phone}. Please have someone call me.`);
-    setTimeout(() => setShowLead(false), 500);
+  const handleLeadSubmit = useCallback(async ({ name, phone, email }) => {
+    // Route the request to the team. Previously it only became a chat message,
+    // so a visitor who left a number expecting a callback was never actually
+    // logged anywhere the office would see.
+    if (email) {
+      try {
+        await api.post('/contact', {
+          name,
+          email,
+          phone,
+          subject: 'Callback request from website chat',
+          message: `${name} asked for a callback on ${phone} via the website assistant.`,
+        });
+      } catch {
+        // Non-fatal: the transcript below still carries the request.
+      }
+    }
+
+    doSend(`My name is ${name} and I can be reached at ${phone}${email ? ` (${email})` : ''}. Please have someone call me.`);
+
+    // Acknowledge like a person would, immediately, rather than waiting on a
+    // model reply — and leave the confirmation on screen instead of yanking it
+    // away after half a second.
+    setMessages(prev => [...prev, {
+      id: `lead-ack-${Date.now()}`,
+      role: 'assistant',
+      done: true,
+      content: `Thanks ${name.split(' ')[0]} — I've passed your details to our engineering team. `
+             + `Someone will call you on ${phone} within 2 business hours (Mon–Sat, 9am–7pm). `
+             + `If it's urgent, you can reach us directly on +91 89270 70972.`,
+    }]);
+    setTimeout(() => setShowLead(false), 6000);
   }, [doSend]);
 
   const lastMsg      = messages[messages.length - 1];

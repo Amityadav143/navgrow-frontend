@@ -15,13 +15,50 @@ import { Link } from 'react-router-dom';
 import { ShoppingCart, ArrowRight, ShieldCheck, Package, Wrench, HardHat } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { toCartItem } from '@/lib/cartItem';
+import { productsApi } from '@/lib/api';
+import { useApi } from '@/hooks/useApi';
 
-const FEATURED = [
+// Shown only if the shop API is unreachable, so the homepage is never blank.
+// Live, admin-managed featured products take priority (see useFeaturedProducts).
+const FALLBACK_FEATURED = [
   { id: 1,  slug: 'industrial-safety-helmet-isi', name: 'Industrial Safety Helmet (ISI Marked)',  price: 480,  cat: 'Safety', image: 'https://images.unsplash.com/photo-1582139329536-e7284fece509?w=400&q=80' },
   { id: 6, slug: 'digital-torque-wrench', name: 'Digital Torque Wrench (10–200 Nm)',      price: 4800, cat: 'Tools',  image: 'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?w=400&q=80' },
   { id: 11, name: 'Anti-Corrosion Penetrant Spray (500 ml)',price: 380,  cat: 'Supply', image: 'https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=400&q=80' },
   { id: 14, name: 'Digital Vernier Calliper (0–300 mm)',    price: 1650, cat: 'Testing',image: 'https://images.unsplash.com/photo-1611791484670-ce19b801d192?w=400&q=80' },
 ];
+
+// Normalise an API product to the shape this card renders.
+const mapProduct = (p) => ({
+  id: p.id,
+  slug: p.slug || String(p.id),
+  name: p.name,
+  price: Number(p.price ?? 0),
+  mrp: p.mrp != null ? Number(p.mrp) : undefined,
+  cat: p.category || 'Shop',
+  image: p.imageUrl || '',
+  stockQty: p.stockQty,
+  gstRate: p.gstRate,
+  hsn: p.hsnCode,
+});
+
+/**
+ * Live featured products for the homepage. Prefers products an admin has flagged
+ * as featured; if none are flagged, falls back to the newest active products so
+ * the section still shows the real catalogue (never the placeholder list) as long
+ * as the shop API is reachable. Only a failed/empty API falls back to placeholders.
+ */
+const useFeaturedProducts = () => {
+  const { data: featuredData } = useApi(() => productsApi.featured(), [], { immediate: true });
+  const { data: listData }     = useApi(() => productsApi.list({ size: 4 }), [], { immediate: true });
+
+  return React.useMemo(() => {
+    const featured = Array.isArray(featuredData) ? featuredData : (featuredData?.content || []);
+    if (featured.length > 0) return featured.slice(0, 4).map(mapProduct);
+    const list = listData?.content || (Array.isArray(listData) ? listData : []);
+    if (list.length > 0) return list.slice(0, 4).map(mapProduct);
+    return FALLBACK_FEATURED;
+  }, [featuredData, listData]);
+};
 
 const categories = [
   { icon: HardHat,    label: 'Safety Equipment',    count: 5, color: 'from-blue-500 to-blue-700' },
@@ -32,6 +69,7 @@ const categories = [
 
 const ShopPreview = () => {
   const { addItem, items } = useCart();
+  const featured = useFeaturedProducts();
 
   return (
     <section className="section-padding bg-white">
@@ -70,7 +108,7 @@ const ShopPreview = () => {
 
         {/* Featured products */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {FEATURED.map((p, i) => {
+          {featured.map((p, i) => {
             const inCart = items.some(item => item.id === p.id);
             return (
               <motion.div key={p.id} initial={{ opacity:0, y:20 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ delay:i*0.08 }}

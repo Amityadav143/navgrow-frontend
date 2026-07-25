@@ -370,6 +370,21 @@ const ProductDetailPage = () => {
   const [bulkOpen, setBulkOpen] = useState(false);
   const stickyRef = useRef(null);
 
+  // Available stock caps how much can be added here. When stock is unknown
+  // (e.g. a static-catalogue product with no count) we allow a sane ceiling and
+  // let the cart/checkout do the final clamp. `atMax` means the buyer has
+  // selected everything on hand — the point at which we steer them to a bulk RFQ.
+  const stockNum   = Number(product?.stockQty);
+  const knownStock = Number.isFinite(stockNum) && stockNum > 0;
+  const maxQty     = knownStock ? stockNum : 99;
+  const atMax      = knownStock && qty >= maxQty;
+
+  // Never let the selected quantity sit above what's actually available — e.g.
+  // if the product data loads after mount, or stock was reduced.
+  useEffect(() => {
+    setQty(q => Math.min(Math.max(1, q), maxQty));
+  }, [maxQty]);
+
   /* ── SEO ── */
   const productSchema = product ? (() => {
     const priceNum = Number(product.price);
@@ -722,7 +737,7 @@ const ProductDetailPage = () => {
                   <span className="text-green-600 text-sm font-bold">You save {fmt(saved)}</span>
                 </div>
               )}
-              <p className="text-[11px] text-gray-400 mt-2">MRP inclusive of all taxes · GST invoice provided · Free shipping on orders ≥ ₹5,000</p>
+              <p className="text-[11px] text-gray-400 mt-2">Price inclusive of all taxes · GST invoice with HSN · Delivery charged separately by pincode</p>
             </div>
 
             {/* Serviceability — answered before the buyer commits, not after */}
@@ -733,17 +748,47 @@ const ProductDetailPage = () => {
             {/* Quantity + Add to Cart + Buy Now */}
             <div className="space-y-3 mb-6">
               {/* Qty selector */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <label className="text-sm font-semibold text-gray-600">Qty:</label>
                 <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden">
-                  <button onClick={() => setQty(q => Math.max(1,q-1))}
-                    className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 text-gray-600 font-bold text-xl transition-colors">−</button>
+                  <button onClick={() => setQty(q => Math.max(1,q-1))} disabled={qty <= 1}
+                    aria-label="Decrease quantity"
+                    className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 text-gray-600 font-bold text-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed">−</button>
                   <span className="w-12 text-center font-bold text-gray-900">{qty}</span>
-                  <button onClick={() => setQty(q => Math.min(99,q+1))}
-                    className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 text-gray-600 font-bold text-xl transition-colors">+</button>
+                  <button onClick={() => setQty(q => Math.min(maxQty,q+1))} disabled={atMax}
+                    aria-label="Increase quantity"
+                    className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 text-gray-600 font-bold text-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed">+</button>
                 </div>
-                <span className="text-sm text-gray-400">Total: <strong className="text-gray-900">{fmt(product.price * qty)}</strong></span>
+                {knownStock && (
+                  <span className="text-sm text-gray-500">
+                    <strong className="text-gray-900">{maxQty}</strong> available
+                  </span>
+                )}
+                <span className="text-sm text-gray-400 ml-auto">Total: <strong className="text-gray-900">{fmt(product.price * qty)}</strong></span>
               </div>
+
+              {/* Reached the available stock — steer larger requirements to a bulk quote */}
+              {atMax && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
+                  <p className="font-semibold text-amber-800">
+                    That's all we have in stock ({maxQty} unit{maxQty === 1 ? '' : 's'}).
+                  </p>
+                  <p className="text-amber-700 mt-0.5">
+                    Need more? Raise a bulk order enquiry or request a quote and our team will confirm
+                    availability, lead time and volume pricing.
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-2.5">
+                    <button onClick={() => setBulkOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-blue-900 text-white hover:bg-blue-800 transition-colors">
+                      <Package className="h-3.5 w-3.5" /> Bulk order enquiry
+                    </button>
+                    <button onClick={() => addToRfq(product, maxQty)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold border-2 border-blue-200 text-blue-700 hover:bg-blue-50 transition-colors">
+                      <FileText className="h-3.5 w-3.5" /> Request a quote
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Add to cart */}
               <motion.button
@@ -1040,7 +1085,7 @@ const ProductDetailPage = () => {
                 +91 89270 70972
               </a>
               <a href="https://wa.me/918927070972" target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 px-6 py-3.5 font-extrabold rounded-2xl shadow-lg btn-gold">
+                className="flex items-center justify-center gap-2 px-6 py-3.5 font-extrabold rounded-2xl shadow-lg bg-[#25D366] hover:bg-[#1fba59] text-white">
                 <MessageCircle className="h-5 w-5"/>
                 WhatsApp Us
               </a>

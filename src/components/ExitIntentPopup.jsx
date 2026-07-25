@@ -87,8 +87,8 @@ const ExitIntentPopup = () => {
               {/* Body */}
               <div className="p-6">
                 <p className="text-gray-600 text-sm mb-5 leading-relaxed">
-                  Use code <strong className="text-blue-700">NAVGROW10</strong> at checkout to get <strong>10% off</strong> on
-                  any order from our B2B engineering shop. ISI-certified products, pan-India delivery.
+                  Use code <strong className="text-blue-700">NAVGROW10</strong> at checkout for <strong>10% off (up to ₹250)</strong> on
+                  orders above ₹3,000 from our B2B engineering shop. ISI-certified products, pan-India delivery. One use per customer.
                 </p>
 
                 {/* Code box */}

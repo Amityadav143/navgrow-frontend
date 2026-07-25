@@ -107,11 +107,11 @@ const ServiceDetailPage = () => {
                 Request a Consultation <ArrowRight className="h-4 w-4" />
               </Link>
               <a href="https://wa.me/918927070972" target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm ring-1 ring-white/25 transition-colors">
+                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-[#25D366] hover:bg-[#1fba59] text-white font-bold text-sm ring-1 ring-white/25 transition-colors">
                 <MessageCircle className="h-4 w-4" /> WhatsApp Us
               </a>
               <a href="tel:+918927070972"
-                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm ring-1 ring-white/25 transition-colors">
+                className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-[#25D366] hover:bg-[#1fba59] text-white font-bold text-sm ring-1 ring-white/25 transition-colors">
                 <Phone className="h-4 w-4" /> +91 89270 70972
               </a>
             </div>

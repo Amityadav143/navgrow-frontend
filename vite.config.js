@@ -243,11 +243,11 @@ export default defineConfig({
 						// one chunk. react-dom shares a single internal module instance with
 						// react; splitting them breaks that shared reference and throws
 						// "Cannot read properties of undefined (reading '__SECRET_INTERNALS…')".
-						if (id.includes('react-dom') || id.includes('react-router') ||
-							id.includes('scheduler') || /[\\/]node_modules[\\/]react[\\/]/.test(id) ||
-							/[\\/]node_modules[\\/]react[\\/]jsx-runtime/.test(id)) {
-							return 'vendor-react';
-						}
+						//if (id.includes('react-dom') || id.includes('react-router') ||
+							//id.includes('scheduler') || /[\\/]node_modules[\\/]react[\\/]/.test(id) ||
+							///[\\/]node_modules[\\/]react[\\/]jsx-runtime/.test(id)) {
+							//return 'vendor-react';
+						//}
 						if (id.includes('framer-motion')) return 'vendor-motion';
 						if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts';
 						if (id.includes('lucide-react')) return 'vendor-icons';

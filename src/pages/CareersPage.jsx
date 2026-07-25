@@ -11,13 +11,14 @@
  */
 import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Users, MapPin, Clock, Briefcase, ChevronDown, ChevronUp, Send, CheckCircle, Star } from 'lucide-react';
+import { Users, MapPin, Clock, Briefcase, ChevronDown, ChevronUp, Send, CheckCircle, Star, ChevronRight} from 'lucide-react';
 import PageHero from '@/components/PageHero';
 import CtaSection from '@/components/CtaSection';
 import useSeo from '@/hooks/useSeo';
 import { useToast } from '@/components/ui/use-toast';
 import { useApi } from '@/hooks/useApi';
 import { jobsApi } from '@/lib/api';
+import JobDetailModal, { CAREERS_EMAIL } from '@/components/JobDetailModal';
 
 const PERKS = [
   { icon: '🏆', title: 'Growth Opportunities', desc: 'Fast career progression in a growing company with direct access to Indian Railways and industrial projects.' },
@@ -62,47 +63,44 @@ const JOBS = [
 ];
 
 const JobCard = ({ job }) => {
+  // The card is now a summary that opens a proper brief, rather than an
+  // accordion that dropped a paragraph and a mailto link into the list.
   const [open, setOpen] = useState(false);
   return (
-    <motion.div initial={{ opacity: 0, y: 15 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
-      className={`bg-white rounded-2xl border overflow-hidden transition-all ${open ? 'border-blue-300 shadow-lg' : 'border-gray-100 shadow-sm hover:border-blue-200'}`}>
-      <button className="w-full p-5 text-left flex flex-col sm:flex-row sm:items-center gap-3 justify-between" onClick={() => setOpen(!open)}>
-        <div className="flex-1">
-          <div className="flex flex-wrap items-center gap-2 mb-1.5">
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">{job.dept}</span>
-            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${job.type === 'Contract' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>{job.type}</span>
-          </div>
-          <h3 className="font-bold text-gray-900 text-lg">{job.title}</h3>
-          <div className="flex flex-wrap gap-3 mt-1.5 text-xs text-gray-500">
-            <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location}</span>
-            <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{job.exp} experience</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="hidden sm:block text-xs text-blue-600 font-semibold">View Details</span>
-          {open ? <ChevronUp className="h-5 w-5 text-blue-500" /> : <ChevronDown className="h-5 w-5 text-gray-400" />}
-        </div>
-      </button>
-      {open && (
-        <div className="px-5 pb-5 border-t border-gray-100 pt-4">
-          <p className="text-gray-600 text-sm mb-4 leading-relaxed">{job.desc}</p>
-          {(job.skills?.length > 0) && (
-            <div className="mb-4">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Key Skills</p>
-              <div className="flex flex-wrap gap-2">
-                {job.skills.map(s => <span key={s} className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold">{s}</span>)}
-              </div>
+    <>
+      <motion.div initial={{ opacity: 0, y: 15 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+        className="bg-white rounded-2xl border border-gray-100 hover:border-blue-300 hover:shadow-lg transition-all overflow-hidden">
+        <button onClick={() => setOpen(true)}
+          className="w-full p-5 text-left flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-1.5">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">{job.dept}</span>
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                job.type === 'Contract' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}`}>
+                {job.type}
+              </span>
             </div>
-          )}
-          <a href={`mailto:info@navgrow.org?subject=Application: ${job.title}&body=Dear Navgrow Team,%0A%0AI am applying for the ${job.title} position.%0A%0AName:%0APhone:%0AExperience:%0A%0APlease find my CV attached.`}
-            className="inline-flex items-center gap-2 px-5 py-2.5 btn-gold rounded-xl font-bold text-sm hover:opacity-90 transition-opacity">
-            <Send className="h-4 w-4" /> Apply via Email
-          </a>
-        </div>
-      )}
-    </motion.div>
+            <h3 className="font-bold text-gray-900 text-lg">{job.title}</h3>
+            <div className="flex flex-wrap gap-3 mt-1.5 text-xs text-gray-500">
+              <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location}</span>
+              <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{job.exp} experience</span>
+            </div>
+            {job.desc && (
+              <p className="text-sm text-gray-500 mt-2 line-clamp-2 leading-relaxed">{job.desc}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-blue-600 font-semibold">View details &amp; apply</span>
+            <ChevronRight className="h-4 w-4 text-blue-500" />
+          </div>
+        </button>
+      </motion.div>
+
+      <JobDetailModal job={job} open={open} onClose={() => setOpen(false)} />
+    </>
   );
 };
+
 
 const ApplicationForm = () => {
   const { toast } = useToast();
@@ -113,7 +111,8 @@ const ApplicationForm = () => {
     e.preventDefault();
     const subject = encodeURIComponent(`Job Application – ${form.role || 'General'} – ${form.name}`);
     const body = encodeURIComponent(`Name: ${form.name}\nEmail: ${form.email}\nPhone: ${form.phone}\nApplying for: ${form.role}\nExperience: ${form.exp}\n\n${form.message}`);
-    window.location.href = `mailto:info@navgrow.org?subject=${subject}&body=${body}`;
+    // Speculative applications go to the recruitment inbox, not the general one.
+    window.location.href = `mailto:${CAREERS_EMAIL}?subject=${subject}&body=${body}`;
     setSent(true);
   };
 

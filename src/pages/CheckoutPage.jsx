@@ -22,11 +22,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ShoppingCart, MapPin, CreditCard, CheckCircle, Check, Plus, Minus, Trash2,
   ShieldCheck, Truck, RotateCcw, Lock, Package, ChevronRight, Loader2, AlertCircle,
-  FileText, ArrowLeft, Zap, Banknote,
+  FileText, ArrowLeft, Zap, Banknote, Tag,
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
-import { ordersApi, deliveryApi } from '@/lib/api';
+import { ordersApi, deliveryApi, couponsApi } from '@/lib/api';
+import { applyDeliveryTier } from '@/lib/utils';
 import PincodeCheck from '@/components/PincodeCheck';
+import RequireAuth from '@/components/RequireAuth';
+import { useAuth } from '@/context/AuthContext';
 import useSeo from '@/hooks/useSeo';
 
 const STATES = ['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal','Delhi'];
@@ -89,6 +92,7 @@ const Field = ({ id, label, type = 'text', required, placeholder, value, onChang
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const { items, updateQty, removeItem, clearCart } = useCart();
+  const { user } = useAuth();
 
   const [step, setStep]       = useState(1);
   const [maxStep, setMaxStep] = useState(1);
@@ -99,10 +103,26 @@ const CheckoutPage = () => {
   const [delivery, setDelivery]         = useState(null);      // zone quote
   const [deliverySpeed, setDeliverySpeed] = useState('standard');
   const [payMethod, setPayMethod] = useState('ONLINE');
+  const [couponCode,    setCouponCode]    = useState('');
+  const [coupon,        setCoupon]        = useState(null);   // { code, discount, description }
+  const [couponError,   setCouponError]   = useState('');
+  const [couponLoading, setCouponLoading] = useState(false);
   const [form, setForm] = useState({
     name: '', email: '', phone: '', gstin: '',
     address: '', city: '', state: '', pincode: '',
   });
+
+  // Prefill from the signed-in account — re-typing details you have already
+  // given us is friction, not security.
+  useEffect(() => {
+    if (!user) return;
+    setForm(prev => ({
+      ...prev,
+      name:  prev.name  || user.name  || user.fullName || '',
+      email: prev.email || user.email || '',
+      phone: prev.phone || user.phone || '',
+    }));
+  }, [user]);
 
   useSeo({
     title: 'Checkout | Navgrow Engineering',
@@ -132,25 +152,36 @@ const CheckoutPage = () => {
     // Tax is worked out per line on that product's own slab, then grouped by
     // rate, so the buyer can see exactly which items sit at 12% and which at 18%
     // instead of a single opaque "GST" figure.
+    // Catalogue prices INCLUDE GST, so tax is backed out of the price rather than
+    // added to it: taxable = inclusive x 100 / (100 + rate). Only delivery is
+    // charged on top. This mirrors the server calculation exactly.
     const lines = items.map(i => {
       const qty = i.qty || 1;
       const rate = (typeof i.gstRate === 'number' && i.gstRate >= 0) ? i.gstRate : 18;
-      const taxable = (i.price || 0) * qty;
-      return { ...i, qty, rate, taxable, tax: taxable * (rate / 100) };
+      const inclusive = (i.price || 0) * qty;
+      const taxable = inclusive * 100 / (100 + rate);
+      return { ...i, qty, rate, inclusive, taxable, tax: inclusive - taxable };
     });
 
+    // What the customer pays for goods is the inclusive figure they were shown.
+    const goods    = lines.reduce((s, l) => s + l.inclusive, 0);
     const subtotal = lines.reduce((s, l) => s + l.taxable, 0);
     const gst      = lines.reduce((s, l) => s + l.tax, 0);
     const mrpTotal = items.reduce((s, i) => s + ((i.mrp || i.price || 0) * (i.qty || 1)), 0);
-    // Delivery is priced by the buyer's zone once their pincode resolves. Until
-    // then we show the default national rule so the panel is never blank.
+    const count = items.reduce((s, i) => s + (i.qty || 1), 0);
+    // Delivery is priced by the buyer's zone once their pincode resolves — the
+    // zone quote already applies the volume-based tier for the order quantity, so
+    // we use it as-is. Until a pincode is entered we show a tiered estimate of the
+    // default national rule so the preview matches the eventual charge.
     let shipping;
     if (delivery && delivery.serviceable) {
       shipping = deliverySpeed === 'express' && delivery.expressAvailable
         ? Number(delivery.expressCharge || 0)
         : Number(delivery.standardCharge || 0);
     } else {
-      shipping = subtotal >= FREE_SHIPPING_THRESHOLD || subtotal === 0 ? 0 : SHIPPING_FEE;
+      shipping = goods >= FREE_SHIPPING_THRESHOLD || goods === 0
+        ? 0
+        : applyDeliveryTier(SHIPPING_FEE, count);
     }
 
     // Group taxable value and tax by slab for the breakdown.
@@ -167,15 +198,60 @@ const CheckoutPage = () => {
       slabs: Object.values(bySlab).sort((a, b) => a.rate - b.rate),
       savings: Math.max(0, mrpTotal - subtotal),
       codCharge: 0,   // filled in below once the zone and method are known
-      grandTotal: subtotal + gst + shipping,
-      count: items.reduce((s, i) => s + (i.qty || 1), 0),
+      goods,
+      grandTotal: goods + shipping,
+      count,
     };
   }, [items, delivery, deliverySpeed]);
 
   // Cash-handling fee, only when COD is both chosen and offered here.
   const codFee = (payMethod === 'COD' && delivery?.codAvailable)
     ? Number(delivery.codCharge || 0) : 0;
-  const payable = totals.grandTotal + codFee;
+  // Coupon discount is a single deduction off the (tax-inclusive) goods total —
+  // exactly what the server applies and what the invoice shows. Clamp so it can
+  // never exceed the goods value.
+  const discount = coupon ? Math.min(Number(coupon.discount || 0), totals.goods) : 0;
+  const payable  = Math.max(0, totals.grandTotal - discount + codFee);
+
+  // Validate a code against the CURRENT goods total (server is the source of
+  // truth for eligibility, cap and per-customer limits). Persisted so a code
+  // applied in the cart survives the jump to this page.
+  const applyCoupon = useCallback(async (rawCode) => {
+    const code = (typeof rawCode === 'string' ? rawCode : couponCode).trim();
+    if (!code) return;
+    setCouponLoading(true); setCouponError('');
+    try {
+      const { data } = await couponsApi.validate(code, totals.goods);
+      setCoupon(data);
+      setCouponCode(data.code || code);
+      try { localStorage.setItem('navgrow_coupon', data.code || code); } catch {}
+    } catch (err) {
+      setCoupon(null);
+      setCouponError(err.response?.data?.message || 'This coupon could not be applied.');
+    } finally {
+      setCouponLoading(false);
+    }
+  }, [couponCode, totals.goods]);
+
+  const removeCoupon = () => {
+    setCoupon(null); setCouponCode(''); setCouponError('');
+    try { localStorage.removeItem('navgrow_coupon'); } catch {}
+  };
+
+  // Prefill a code carried over from the cart, and validate it once on mount.
+  useEffect(() => {
+    let stored = '';
+    try { stored = localStorage.getItem('navgrow_coupon') || ''; } catch {}
+    if (stored) { setCouponCode(stored); applyCoupon(stored); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the discount honest when the cart quantity/value changes: re-validate so
+  // it drops automatically if the order falls below the coupon's minimum.
+  useEffect(() => {
+    if (coupon) applyCoupon(coupon.code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totals.goods]);
 
   // Only known once a state is chosen; before that we show the combined figure.
   const intraState = form.state ? form.state === SELLER_STATE : null;
@@ -185,7 +261,9 @@ const CheckoutPage = () => {
     const pin = form.pincode.trim();
     if (!/^[1-9][0-9]{5}$/.test(pin)) { setDelivery(null); return; }
     let cancelled = false;
-    deliveryApi.check(pin, totals.subtotal)
+    // Total quantity drives the volume-based delivery tier, so the quote must be
+    // refreshed when it changes (not only when the pincode or order value does).
+    deliveryApi.check(pin, totals.goods, totals.count)
       .then(({ data }) => {
         if (cancelled) return;
         setDelivery(data);
@@ -195,7 +273,7 @@ const CheckoutPage = () => {
       .catch(() => { if (!cancelled) setDelivery(null); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.pincode, totals.subtotal]);
+  }, [form.pincode, totals.goods, totals.count]);
 
   const validateDelivery = () => {
     const e = {};
@@ -243,6 +321,7 @@ const CheckoutPage = () => {
         pincode: form.pincode.trim(),
         deliverySpeed,
         paymentMethod: payMethod,
+        couponCode: coupon?.code || undefined,
         items: items.map(i => ({ productId: i.id, quantity: i.qty || 1 })),
       });
 
@@ -256,6 +335,7 @@ const CheckoutPage = () => {
           zone: delivery?.zone,
           cod: true,
         });
+        try { localStorage.removeItem('navgrow_coupon'); } catch {}
         clearCart();
         setPaying(false);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -280,10 +360,11 @@ const CheckoutPage = () => {
             });
             setPlaced({
               orderNumber: order.orderNumber,
-              grandTotal: order.grandTotal ?? totals.grandTotal,
+              grandTotal: order.grandTotal ?? payable,
               eta: deliverySpeed === 'express' ? delivery?.expressBy : delivery?.estimatedBy,
               zone: delivery?.zone,
             });
+            try { localStorage.removeItem('navgrow_coupon'); } catch {}
             clearCart();
             window.scrollTo({ top: 0, behavior: 'smooth' });
           } catch {
@@ -423,7 +504,7 @@ const CheckoutPage = () => {
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-gray-900 text-sm leading-snug line-clamp-2">{i.name}</p>
                               <p className="text-[11px] text-gray-400 mt-0.5">
-                                {i.hsn ? `HSN ${i.hsn} · ` : ''}GST {rate}% · tax {inr(i.tax)}
+                                {i.hsn ? `HSN ${i.hsn} · ` : ''}incl. {rate}% GST ({inr(i.tax)})
                               </p>
                               <div className="flex items-center justify-between mt-2 gap-2 flex-wrap">
                                 <div className="flex items-center gap-1 border border-gray-200 rounded-lg">
@@ -450,11 +531,11 @@ const CheckoutPage = () => {
                     </div>
                     <div className="mt-4 rounded-xl bg-gray-50 border border-gray-100 p-3 space-y-1.5 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Taxable value</span>
-                        <span className="font-medium text-gray-800">{inr(totals.subtotal)}</span>
+                        <span className="text-gray-500">Items (inclusive of GST)</span>
+                        <span className="font-medium text-gray-800">{inr(totals.goods)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Tax on the above</span>
+                        <span className="text-gray-500">of which GST</span>
                         <span className="font-medium text-gray-800">{inr(totals.gst)}</span>
                       </div>
                       <div className="flex justify-between">
@@ -463,7 +544,59 @@ const CheckoutPage = () => {
                           {totals.shipping === 0 ? 'Free' : inr(totals.shipping)}
                         </span>
                       </div>
+                      {discount > 0 && (
+                        <div className="flex justify-between text-emerald-700">
+                          <span>Coupon discount{coupon?.code ? ` (${coupon.code})` : ''}</span>
+                          <span className="font-semibold">−{inr(discount)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between pt-1.5 mt-0.5 border-t border-gray-200">
+                        <span className="font-semibold text-gray-900">Total</span>
+                        <span className="font-bold text-gray-900">{inr(Math.max(0, totals.grandTotal - discount))}</span>
+                      </div>
                     </div>
+
+                    {/* Coupon */}
+                    <div className="mt-3">
+                      {coupon ? (
+                        <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Tag className="h-4 w-4 text-emerald-600 shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-emerald-800 truncate">
+                                {coupon.code} applied
+                              </p>
+                              <p className="text-xs text-emerald-700">You save {inr(discount)}</p>
+                            </div>
+                          </div>
+                          <button onClick={removeCoupon}
+                            className="text-xs font-semibold text-gray-500 hover:text-gray-800 shrink-0 ml-2">
+                            Remove
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex gap-2">
+                            <div className="relative flex-1">
+                              <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                              <input
+                                value={couponCode}
+                                onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); if (couponError) setCouponError(''); }}
+                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyCoupon(); } }}
+                                placeholder="Coupon code"
+                                className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm uppercase tracking-wide focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                              />
+                            </div>
+                            <button onClick={() => applyCoupon()} disabled={couponLoading || !couponCode.trim()}
+                              className="px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-blue-200 text-blue-700 hover:bg-blue-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                              {couponLoading ? '…' : 'Apply'}
+                            </button>
+                          </div>
+                          {couponError && <p className="mt-1.5 text-xs text-red-600">{couponError}</p>}
+                        </>
+                      )}
+                    </div>
+
                     <button onClick={() => goToStep(2)}
                       className="w-full mt-4 py-3 btn-gold rounded-xl text-sm">
                       Continue to delivery →
@@ -628,8 +761,11 @@ const CheckoutPage = () => {
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Price details</h3>
               <div className="space-y-2.5 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Price ({totals.count} item{totals.count === 1 ? '' : 's'})</span>
-                  <span className="font-semibold text-gray-900">{inr(totals.subtotal)}</span>
+                  <span className="text-gray-600">
+                    Price ({totals.count} item{totals.count === 1 ? '' : 's'})
+                    <span className="block text-[11px] text-gray-400">inclusive of GST</span>
+                  </span>
+                  <span className="font-semibold text-gray-900">{inr(totals.goods)}</span>
                 </div>
                 {totals.savings > 0 && (
                   <div className="flex justify-between">
@@ -637,9 +773,9 @@ const CheckoutPage = () => {
                     <span className="font-semibold text-green-600">− {inr(totals.savings)}</span>
                   </div>
                 )}
-                {/* Tax, itemised. Slabs are listed separately so a mixed basket
-                    shows which portion sits at 12% and which at 18%, and the
-                    CGST/SGST vs IGST split matches the invoice once a state is set. */}
+                {/* Tax disclosure. These figures are already contained in the price
+                    above — they are shown so the buyer can see the split that will
+                    appear on their invoice, not because anything is being added. */}
                 {totals.slabs.map(sl => (
                   <div key={sl.rate} className="flex justify-between text-[13px]">
                     <span className="text-gray-500">
@@ -654,8 +790,8 @@ const CheckoutPage = () => {
                   </div>
                 ))}
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Total tax</span>
-                  <span className="font-semibold text-gray-900">{inr(totals.gst)}</span>
+                  <span className="text-gray-600">Tax included above</span>
+                  <span className="font-medium text-gray-500">{inr(totals.gst)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">
@@ -705,7 +841,7 @@ const CheckoutPage = () => {
                   : intraState
                     ? 'Billed from West Bengal to West Bengal, so CGST and SGST apply.'
                     : `Billed from West Bengal to ${form.state}, so IGST applies.`}
-                {' '}These are the exact figures that appear on your GST invoice.
+                {' '}Prices include GST; only delivery is charged on top. These are the figures that appear on your invoice.
               </p>
             </div>
 
@@ -732,4 +868,14 @@ const CheckoutPage = () => {
   );
 };
 
-export default CheckoutPage;
+// Placing an order requires an account: the order endpoint is authenticated, and
+// a buyer who reaches payment only to be rejected has wasted the whole journey.
+const GuardedCheckoutPage = () => (
+  <RequireAuth
+    title="Sign in to complete your order"
+    message="Orders are tied to your account so you can track them, download GST invoices and reorder. It only takes a moment.">
+    <CheckoutPage />
+  </RequireAuth>
+);
+
+export default GuardedCheckoutPage;
