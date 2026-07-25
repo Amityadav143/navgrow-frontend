@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { ordersApi, deliveryApi, couponsApi } from '@/lib/api';
-import { applyDeliveryTier } from '@/lib/utils';
+import { applyDeliveryTier, deliveryTierFactor } from '@/lib/utils';
 import PincodeCheck from '@/components/PincodeCheck';
 import RequireAuth from '@/components/RequireAuth';
 import { useAuth } from '@/context/AuthContext';
@@ -107,6 +107,18 @@ const CheckoutPage = () => {
   const [coupon,        setCoupon]        = useState(null);   // { code, discount, description }
   const [couponError,   setCouponError]   = useState('');
   const [couponLoading, setCouponLoading] = useState(false);
+  const [offers, setOffers] = useState([]);
+
+  // Real offer terms, straight from the server that enforces them. Used to tell
+  // the customer up front what a code needs (and how far off they are) instead
+  // of letting them discover it through a rejection at the last step.
+  useEffect(() => {
+    let cancelled = false;
+    couponsApi.offers()
+      .then(({ data }) => { if (!cancelled) setOffers(Array.isArray(data) ? data : []); })
+      .catch(() => { if (!cancelled) setOffers([]); });
+    return () => { cancelled = true; };
+  }, []);
   const [form, setForm] = useState({
     name: '', email: '', phone: '', gstin: '',
     address: '', city: '', state: '', pincode: '',
@@ -544,6 +556,12 @@ const CheckoutPage = () => {
                           {totals.shipping === 0 ? 'Free' : inr(totals.shipping)}
                         </span>
                       </div>
+                      {totals.shipping > 0 && totals.count > 1 && (
+                        <p className="text-[11px] text-emerald-700 -mt-1">
+                          Volume discount applied — {Math.round((1 - deliveryTierFactor(totals.count)) * 100)}% off
+                          delivery for {totals.count} units
+                        </p>
+                      )}
                       {discount > 0 && (
                         <div className="flex justify-between text-emerald-700">
                           <span>Coupon discount{coupon?.code ? ` (${coupon.code})` : ''}</span>
@@ -593,6 +611,39 @@ const CheckoutPage = () => {
                             </button>
                           </div>
                           {couponError && <p className="mt-1.5 text-xs text-red-600">{couponError}</p>}
+                          {/* Offer terms, stated plainly and sourced from the
+                              server — including exactly how much more is needed
+                              when the order doesn't yet qualify. */}
+                          {offers.length > 0 && (
+                            <div className="mt-2 space-y-1.5">
+                              {offers.map(o => {
+                                const min = Number(o.minOrderAmount || 0);
+                                const short = min - totals.goods;
+                                const qualifies = short <= 0;
+                                const cap = Number(o.maxDiscount || 0);
+                                const terms = [
+                                  o.type === 'PERCENTAGE' ? `${Number(o.value)}% off` : `${inr(Number(o.value))} off`,
+                                  cap > 0 ? `up to ${inr(cap)}` : null,
+                                  min > 0 ? `on orders above ${inr(min)}` : null,
+                                ].filter(Boolean).join(' · ');
+                                return (
+                                  <button key={o.code} type="button"
+                                    onClick={() => { setCouponCode(o.code); applyCoupon(o.code); }}
+                                    className={`w-full text-left rounded-lg border px-3 py-2 transition-colors ${
+                                      qualifies ? 'border-emerald-200 bg-emerald-50/60 hover:bg-emerald-50'
+                                                : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`}>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-xs font-bold tracking-wide text-gray-900">{o.code}</span>
+                                      <span className={`text-[11px] font-semibold ${qualifies ? 'text-emerald-700' : 'text-gray-400'}`}>
+                                        {qualifies ? 'Tap to apply' : `Add ${inr(short)} more`}
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-gray-500 mt-0.5">{terms} · one use per customer</p>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </>
                       )}
                     </div>

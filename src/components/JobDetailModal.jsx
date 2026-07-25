@@ -29,6 +29,59 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^[0-9+\-()\s]{7,20}$/;
 const MAX_CV_MB = 5;
 
+/**
+ * Turns a free-text job description into organised sections.
+ *
+ * WHY: the backend stores a single `description` blob — it has no
+ * responsibilities/requirements/benefits columns. Without this, every
+ * API-created role rendered as one long unbroken paragraph, which is what made
+ * the details screen feel disorganised. Admins naturally write headings
+ * ("Responsibilities:", "What we're looking for", "Perks"), so we detect those
+ * and the bullet lines beneath them, and fall back to showing the raw text
+ * unchanged when a description has no recognisable structure.
+ */
+const HEADING_MAP = [
+  { key: 'responsibilities', re: /^(key\s+)?(responsibilities|duties|what\s+you'?ll\s+do|role\s+overview|the\s+role|job\s+role)\b/i },
+  { key: 'requirements',     re: /^(requirements|qualifications|eligibility|skills\s+required|what\s+we'?re\s+looking\s+for|who\s+you\s+are|desired\s+candidate(\s+profile)?)\b/i },
+  { key: 'benefits',         re: /^(benefits|perks|what\s+we\s+offer|compensation\s+&?\s*benefits|why\s+join)\b/i },
+];
+const BULLET_RE = /^\s*(?:[-•*–—]|\d+[.)])\s+/;
+
+export function parseJobDescription(desc) {
+  const empty = { about: '', responsibilities: [], requirements: [], benefits: [] };
+  if (!desc || typeof desc !== 'string') return empty;
+  const lines = desc.split('\n');
+  const out = { ...empty, responsibilities: [], requirements: [], benefits: [] };
+  const aboutLines = [];
+  let current = null;              // null = still in the intro/about block
+  let sawHeading = false;
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    // A heading may be written as "Responsibilities:" or on its own short line.
+    const stripped = line.replace(/[:：]\s*$/, '');
+    const match = HEADING_MAP.find(h => h.re.test(stripped));
+    const looksLikeHeading = match && (line.endsWith(':') || line.endsWith('：') || stripped.split(/\s+/).length <= 6);
+    if (looksLikeHeading) { current = match.key; sawHeading = true; continue; }
+
+    const item = line.replace(BULLET_RE, '').trim();
+    const isBullet = BULLET_RE.test(line);
+    if (current) {
+      if (item) out[current].push(item);
+    } else if (isBullet) {
+      // Bullets before any heading are almost always the duties list.
+      out.responsibilities.push(item);
+    } else {
+      aboutLines.push(line);
+    }
+  }
+  out.about = aboutLines.join('\n').trim();
+  // Nothing recognisable? Show the original text rather than mangling it.
+  if (!sawHeading && out.responsibilities.length === 0) return { ...empty, about: desc.trim() };
+  return out;
+}
+
 const Section = ({ title, children }) => (
   <div>
     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{title}</h3>
@@ -152,10 +205,32 @@ export default function JobDetailModal({ job, open, onClose }) {
     `I have attached my CV for your consideration.\n\nRegards,\n`);
   const mailHref = `mailto:${CAREERS_EMAIL}?subject=${encodeURIComponent(`Application: ${job.title}`)}&body=${mailBody}`;
 
-  const responsibilities = job.responsibilities || job.duties || [];
-  const requirements     = job.requirements || [];
+  // Structured fields win when present (static catalogue roles); otherwise the
+  // free-text description from the API is parsed into the same shape so every
+  // role renders as an organised brief instead of one long paragraph.
+  const parsed = parseJobDescription(job.desc || job.description || '');
+  const responsibilities = (job.responsibilities || job.duties || []).length
+    ? (job.responsibilities || job.duties) : parsed.responsibilities;
+  const requirements     = (job.requirements || []).length ? job.requirements : parsed.requirements;
   const skills           = job.skills || [];
-  const benefits         = job.benefits || [];
+  const benefits         = (job.benefits || []).length ? job.benefits : parsed.benefits;
+  const about            = parsed.about || job.desc || '';
+
+  // Pay and deadline are the two things candidates most want up front; showing
+  // them (when the employer has filled them in) is basic respect for their time.
+  const money = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? '₹' + n.toLocaleString('en-IN') : null;
+  };
+  const salaryFrom = money(job.salaryFrom), salaryTo = money(job.salaryTo);
+  const salaryText = salaryFrom && salaryTo ? `${salaryFrom} – ${salaryTo} per month`
+    : salaryFrom ? `From ${salaryFrom} per month`
+    : salaryTo   ? `Up to ${salaryTo} per month` : null;
+  let deadlineText = null;
+  if (job.applicationDeadline) {
+    const d = new Date(job.applicationDeadline);
+    if (!isNaN(d)) deadlineText = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
 
   return (
     <AnimatePresence>
@@ -198,9 +273,38 @@ export default function JobDetailModal({ job, open, onClose }) {
             <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5">
               {mode === 'details' && (
                 <div className="space-y-5">
-                  {job.desc && (
+                  {/* At a glance — the facts candidates screen on first */}
+                  {(salaryText || deadlineText || job.exp || job.openings) && (
+                    <div className="grid grid-cols-2 gap-3 rounded-xl border border-gray-100 bg-gray-50 p-4">
+                      {salaryText && (
+                        <div>
+                          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Compensation</p>
+                          <p className="text-sm font-semibold text-gray-900 mt-0.5">{salaryText}</p>
+                        </div>
+                      )}
+                      {job.exp && (
+                        <div>
+                          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Experience</p>
+                          <p className="text-sm font-semibold text-gray-900 mt-0.5">{job.exp}</p>
+                        </div>
+                      )}
+                      {job.openings > 0 && (
+                        <div>
+                          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Openings</p>
+                          <p className="text-sm font-semibold text-gray-900 mt-0.5">{job.openings}</p>
+                        </div>
+                      )}
+                      {deadlineText && (
+                        <div>
+                          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Apply by</p>
+                          <p className="text-sm font-semibold text-gray-900 mt-0.5">{deadlineText}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {about && (
                     <Section title="About the role">
-                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{job.desc}</p>
+                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{about}</p>
                     </Section>
                   )}
                   {responsibilities.length > 0 && (

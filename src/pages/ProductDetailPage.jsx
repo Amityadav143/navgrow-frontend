@@ -283,9 +283,13 @@ const ProductDetailPage = () => {
   const [apiProduct, setApiProduct] = React.useState(null);
   const [apiLoading, setApiLoading] = React.useState(false);
 
-  // If slug not in static catalogue, try fetching from API
+  // Always ask the API for this slug — not only when the slug is missing from the
+  // static catalogue. The static file is rich editorial content (features, specs,
+  // photos) but it carries NO stock figure and its price can go stale, so live
+  // data has to win for anything commercial. Without this the quantity cap had
+  // nothing to enforce and every product looked infinitely available.
   React.useEffect(() => {
-    if (!staticProduct && slug) {
+    if (slug) {
       setApiLoading(true);
       productsApi.get(slug)
         .then(({ data }) => {
@@ -331,7 +335,26 @@ const ProductDetailPage = () => {
     }
   }, [slug, staticProduct]);
 
-  const product = staticProduct || apiProduct;
+  // Merge: static supplies the editorial depth, the API supplies the truth about
+  // price and availability. Live values overwrite the static ones; static fields
+  // survive only where the API has nothing to say (e.g. long-form spec tables an
+  // admin hasn't filled in). If the API is unreachable we still render the static
+  // page rather than a blank one — but then stock is unknown and the UI says so.
+  const product = React.useMemo(() => {
+    if (!staticProduct) return apiProduct;
+    if (!apiProduct)    return staticProduct;
+    const merged = { ...staticProduct };
+    Object.entries(apiProduct).forEach(([k, v]) => {
+      const empty = v === null || v === undefined || v === ''
+        || (Array.isArray(v) && v.length === 0);
+      if (!empty) merged[k] = v;
+    });
+    // Availability is never inherited from static data — it is live or unknown.
+    merged.stockQty = apiProduct.stockQty;
+    merged.inStock  = apiProduct.inStock;
+    return merged;
+  }, [staticProduct, apiProduct]);
+  const stockKnown = apiProduct != null;
   // Live related products from the API (same category); static data is only a
   // fallback so admin-created products get a related section too.
   const [liveRelated, setLiveRelated] = React.useState(null);
@@ -370,14 +393,18 @@ const ProductDetailPage = () => {
   const [bulkOpen, setBulkOpen] = useState(false);
   const stickyRef = useRef(null);
 
-  // Available stock caps how much can be added here. When stock is unknown
-  // (e.g. a static-catalogue product with no count) we allow a sane ceiling and
-  // let the cart/checkout do the final clamp. `atMax` means the buyer has
-  // selected everything on hand — the point at which we steer them to a bulk RFQ.
+  // Available stock caps how much can be added here. Stock is authoritative only
+  // when the API answered (see the merge above); if the shop API is unreachable
+  // we fall back to a sane ceiling and let the cart/server do the final clamp
+  // rather than silently promising unlimited units.
   const stockNum   = Number(product?.stockQty);
-  const knownStock = Number.isFinite(stockNum) && stockNum > 0;
+  const liveStock  = stockKnown && Number.isFinite(stockNum);
+  const soldOut    = liveStock && stockNum <= 0;
+  const knownStock = liveStock && stockNum > 0;
   const maxQty     = knownStock ? stockNum : 99;
   const atMax      = knownStock && qty >= maxQty;
+  // Low-stock nudge: honest scarcity, shown only when it's actually true.
+  const lowStock   = knownStock && stockNum <= 5;
 
   // Never let the selected quantity sit above what's actually available — e.g.
   // if the product data loads after mount, or stock was reduced.
@@ -760,9 +787,17 @@ const ProductDetailPage = () => {
                     className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 text-gray-600 font-bold text-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed">+</button>
                 </div>
                 {knownStock && (
-                  <span className="text-sm text-gray-500">
-                    <strong className="text-gray-900">{maxQty}</strong> available
+                  <span className={`text-sm ${lowStock ? 'text-amber-700 font-semibold' : 'text-gray-500'}`}>
+                    {lowStock
+                      ? <>Only <strong>{maxQty}</strong> left in stock</>
+                      : <><strong className="text-gray-900">{maxQty}</strong> in stock</>}
                   </span>
+                )}
+                {soldOut && (
+                  <span className="text-sm font-semibold text-red-600">Out of stock</span>
+                )}
+                {!liveStock && (
+                  <span className="text-sm text-gray-400">Live stock unavailable — we'll confirm on order</span>
                 )}
                 <span className="text-sm text-gray-400 ml-auto">Total: <strong className="text-gray-900">{fmt(product.price * qty)}</strong></span>
               </div>

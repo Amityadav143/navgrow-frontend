@@ -271,6 +271,10 @@ export const galleryApi = {
 // ── Coupons API ───────────────────────────────────────────────────────────────
 export const couponsApi = {
   validate: (code, amount) => api.post('/coupons/validate', null, { params: { code, amount } }),
+  // Public: currently-valid offers with their real terms (minimum spend, cap).
+  // Sourced from the same rows that enforce the discount, so advertised terms
+  // and applied discounts can never drift apart.
+  offers:   ()             => api.get('/coupons/offers'),
   list:     ()             => api.get('/coupons'),
   create:   (d)            => api.post('/coupons', d),
   update:   (id, d)        => api.put(`/coupons/${id}`, d),
