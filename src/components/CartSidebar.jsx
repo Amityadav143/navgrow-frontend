@@ -18,7 +18,8 @@ import { X, ShoppingCart, Minus, Plus, Trash2, Package, ArrowRight, Tag,
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/context/CartContext';
 import { couponsApi, rfqApi } from '@/lib/api';
-import { applyDeliveryTier } from '@/lib/utils';
+import { applyDeliveryTier, deliveryTierFactor } from '@/lib/utils';
+import { evaluateLocalCoupon, isOffline } from '@/lib/offers';
 import { track } from '@/lib/analytics';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -228,7 +229,9 @@ const CartSidebar = () => {
   // Preview delivery: free above the threshold, otherwise the default rate
   // discounted by the volume tier for the number of units — the same tiering the
   // zone quote applies at checkout, so this estimate lines up with the charge.
-  const shipping    = payableGoods >= 5000 ? 0 : applyDeliveryTier(150, totalItems);
+  // Delivery is chargeable outside Siliguri — no spend-based waiver. The exact
+  // charge comes from the zone quote at checkout; this is the indicative figure.
+  const shipping    = payableGoods === 0 ? 0 : applyDeliveryTier(150, totalItems);
   // Goods are already tax-inclusive, so only delivery is added.
   const grandTotal  = payableGoods + shipping;
 
@@ -241,9 +244,23 @@ const CartSidebar = () => {
       // Carry the code to checkout, which re-validates against the final total.
       try { localStorage.setItem('navgrow_coupon', data.code || couponCode.trim()); } catch {}
     } catch (err) {
-      setCouponError(err.response?.data?.message || 'Invalid coupon code');
-      setCoupon(null);
-      try { localStorage.removeItem('navgrow_coupon'); } catch {}
+      // Server unreachable → evaluate with the mirrored rules so the shopper gets
+      // a real answer (and a real reason). The server re-validates at checkout.
+      if (isOffline(err)) {
+        const local = evaluateLocalCoupon(couponCode, totalAmount);
+        if (local.ok) {
+          setCoupon(local.coupon);
+          try { localStorage.setItem('navgrow_coupon', local.coupon.code); } catch {}
+        } else {
+          setCoupon(null);
+          setCouponError(local.message);
+          try { localStorage.removeItem('navgrow_coupon'); } catch {}
+        }
+      } else {
+        setCouponError(err.response?.data?.message || 'Invalid coupon code');
+        setCoupon(null);
+        try { localStorage.removeItem('navgrow_coupon'); } catch {}
+      }
     } finally { setCouponLoading(false); }
   };
   const removeCoupon = () => {
@@ -404,7 +421,7 @@ const CartSidebar = () => {
                       <span>GST (included)</span><span>₹{gst.toFixed(0)}</span>
                     </div>
                     <div className="flex justify-between text-gray-600">
-                      <span>Shipping {totalAmount>=5000 && <span className="text-green-600 text-xs font-bold ml-1">FREE</span>}</span>
+                      <span>Delivery {totalItems > 1 && <span className="text-emerald-600 text-xs font-bold ml-1">{Math.round((1-deliveryTierFactor(totalItems))*100)}% OFF</span>}</span>
                       <span>{shipping===0?'₹0':`₹${shipping}`}</span>
                     </div>
                     <div className="flex justify-between font-extrabold text-gray-900 text-base pt-2 border-t border-gray-100">

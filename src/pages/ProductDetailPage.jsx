@@ -349,12 +349,15 @@ const ProductDetailPage = () => {
         || (Array.isArray(v) && v.length === 0);
       if (!empty) merged[k] = v;
     });
-    // Availability is never inherited from static data — it is live or unknown.
-    merged.stockQty = apiProduct.stockQty;
-    merged.inStock  = apiProduct.inStock;
+    // Availability is never inherited blindly: the live figure wins whenever the
+    // API answered, otherwise we fall back to the catalogue's own stock.
+    if (apiProduct.stockQty !== undefined && apiProduct.stockQty !== null) {
+      merged.stockQty = apiProduct.stockQty;
+      merged.inStock  = apiProduct.inStock;
+    }
     return merged;
   }, [staticProduct, apiProduct]);
-  const stockKnown = apiProduct != null;
+  const stockKnown = apiProduct != null || Number.isFinite(Number(staticProduct?.stockQty));
   // Live related products from the API (same category); static data is only a
   // fallback so admin-created products get a related section too.
   const [liveRelated, setLiveRelated] = React.useState(null);

@@ -17,15 +17,39 @@ import { useCart } from '@/context/CartContext';
 import { toCartItem } from '@/lib/cartItem';
 import { productsApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
+import { ALL_PRODUCTS } from '@/lib/productData';
 
-// Shown only if the shop API is unreachable, so the homepage is never blank.
-// Live, admin-managed featured products take priority (see useFeaturedProducts).
-const FALLBACK_FEATURED = [
-  { id: 1,  slug: 'industrial-safety-helmet-isi', name: 'Industrial Safety Helmet (ISI Marked)',  price: 480,  cat: 'Safety', image: 'https://images.unsplash.com/photo-1582139329536-e7284fece509?w=400&q=80' },
-  { id: 6, slug: 'digital-torque-wrench', name: 'Digital Torque Wrench (10–200 Nm)',      price: 4800, cat: 'Tools',  image: 'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?w=400&q=80' },
-  { id: 11, name: 'Anti-Corrosion Penetrant Spray (500 ml)',price: 380,  cat: 'Supply', image: 'https://images.unsplash.com/photo-1563013544-824ae1b704d3?w=400&q=80' },
-  { id: 14, name: 'Digital Vernier Calliper (0–300 mm)',    price: 1650, cat: 'Testing',image: 'https://images.unsplash.com/photo-1611791484670-ce19b801d192?w=400&q=80' },
+// The four roles we lead with on the homepage — one per major category. Kept as
+// slugs (not copies of the product data) so the card always renders the real
+// catalogue entry: real name, price, image and stock.
+const FEATURED_SLUGS = [
+  'industrial-safety-helmet-isi',
+  'digital-torque-wrench',
+  'anti-corrosion-penetrant-spray',
+  'digital-vernier-caliper',
 ];
+
+// Offline/last-resort source. This is the SAME catalogue the shop and product
+// pages use — never invented placeholder products. Earlier this was a small
+// hardcoded array, which is what surfaced as "dummy products" whenever the shop
+// API was unreachable or the catalogue table was empty.
+const CATALOGUE_FALLBACK = (() => {
+  const bySlug = new Map(ALL_PRODUCTS.map(p => [p.slug, p]));
+  const picked = FEATURED_SLUGS.map(s => bySlug.get(s)).filter(Boolean);
+  return (picked.length ? picked : ALL_PRODUCTS.slice(0, 4)).map(p => ({
+    id: p.id,
+    slug: p.slug,
+    name: p.name,
+    price: Number(p.price ?? 0),
+    mrp: p.mrp != null ? Number(p.mrp) : undefined,
+    cat: p.cat,
+    image: p.image,
+    stockQty: p.stockQty,
+    gstRate: p.gstRate,
+    hsn: p.hsn,
+    sku: p.sku,
+  }));
+})();
 
 // Normalise an API product to the shape this card renders.
 const mapProduct = (p) => ({
@@ -56,7 +80,7 @@ const useFeaturedProducts = () => {
     if (featured.length > 0) return featured.slice(0, 4).map(mapProduct);
     const list = listData?.content || (Array.isArray(listData) ? listData : []);
     if (list.length > 0) return list.slice(0, 4).map(mapProduct);
-    return FALLBACK_FEATURED;
+    return CATALOGUE_FALLBACK;
   }, [featuredData, listData]);
 };
 

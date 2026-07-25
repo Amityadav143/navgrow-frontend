@@ -27,6 +27,7 @@ import {
 import { useCart } from '@/context/CartContext';
 import { ordersApi, deliveryApi, couponsApi } from '@/lib/api';
 import { applyDeliveryTier, deliveryTierFactor } from '@/lib/utils';
+import { LOCAL_OFFERS, evaluateLocalCoupon, isOffline } from '@/lib/offers';
 import PincodeCheck from '@/components/PincodeCheck';
 import RequireAuth from '@/components/RequireAuth';
 import { useAuth } from '@/context/AuthContext';
@@ -39,7 +40,10 @@ const STATES = ['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisga
 // buyer sees before paying are the ones printed on their tax invoice.
 const SELLER_STATE = 'West Bengal';
 
-const FREE_SHIPPING_THRESHOLD = 5000;
+// Delivery is chargeable outside Siliguri — only the same-city Siliguri zone is
+// free, and that comes back from the zone quote itself (standardCharge = 0).
+// There is deliberately no spend-based waiver here: the old ₹5,000 threshold
+// promised free delivery the server would still charge for.
 const SHIPPING_FEE = 150;
 
 const inr = (n) => `₹${Math.round(n).toLocaleString('en-IN')}`;
@@ -115,8 +119,13 @@ const CheckoutPage = () => {
   useEffect(() => {
     let cancelled = false;
     couponsApi.offers()
-      .then(({ data }) => { if (!cancelled) setOffers(Array.isArray(data) ? data : []); })
-      .catch(() => { if (!cancelled) setOffers([]); });
+      .then(({ data }) => {
+        if (cancelled) return;
+        setOffers(Array.isArray(data) && data.length ? data : LOCAL_OFFERS);
+      })
+      // Server unreachable: still show the offer and its terms from the mirrored
+      // rules, so the coupon feature is visibly present rather than silently gone.
+      .catch(() => { if (!cancelled) setOffers(LOCAL_OFFERS); });
     return () => { cancelled = true; };
   }, []);
   const [form, setForm] = useState({
@@ -191,9 +200,7 @@ const CheckoutPage = () => {
         ? Number(delivery.expressCharge || 0)
         : Number(delivery.standardCharge || 0);
     } else {
-      shipping = goods >= FREE_SHIPPING_THRESHOLD || goods === 0
-        ? 0
-        : applyDeliveryTier(SHIPPING_FEE, count);
+      shipping = goods === 0 ? 0 : applyDeliveryTier(SHIPPING_FEE, count);
     }
 
     // Group taxable value and tax by slab for the breakdown.
@@ -238,8 +245,24 @@ const CheckoutPage = () => {
       setCouponCode(data.code || code);
       try { localStorage.setItem('navgrow_coupon', data.code || code); } catch {}
     } catch (err) {
-      setCoupon(null);
-      setCouponError(err.response?.data?.message || 'This coupon could not be applied.');
+      // A reply from the server is a real decision (expired / already used /
+      // below minimum) and is shown verbatim. No reply means we couldn't reach
+      // it, so fall back to the mirrored rules — the server re-checks the code
+      // at order time regardless, so this can never over-discount an order.
+      if (isOffline(err)) {
+        const local = evaluateLocalCoupon(code, totals.goods);
+        if (local.ok) {
+          setCoupon(local.coupon);
+          setCouponCode(local.coupon.code);
+          try { localStorage.setItem('navgrow_coupon', local.coupon.code); } catch {}
+        } else {
+          setCoupon(null);
+          setCouponError(local.message);
+        }
+      } else {
+        setCoupon(null);
+        setCouponError(err.response?.data?.message || 'This coupon could not be applied.');
+      }
     } finally {
       setCouponLoading(false);
     }
@@ -870,14 +893,24 @@ const CheckoutPage = () => {
                 </div>
               </div>
 
+              {/* Delivery is chargeable outside Siliguri, so instead of dangling a
+                  free-delivery threshold we can't honour, we show the volume
+                  discount the customer is actually getting — and what the next
+                  tier would give them. */}
               {totals.shipping > 0 && (
-                <div className="mt-4">
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full gold-gradient rounded-full transition-all"
-                      style={{ width: `${Math.min(100, (totals.subtotal / FREE_SHIPPING_THRESHOLD) * 100)}%` }} />
-                  </div>
-                  <p className="text-[11px] text-gray-500 mt-1.5">
-                    Add {inr(FREE_SHIPPING_THRESHOLD - totals.subtotal)} more for free delivery
+                <div className="mt-4 rounded-lg bg-gray-50 border border-gray-100 px-3 py-2">
+                  <p className="text-[11px] text-gray-600 leading-relaxed">
+                    {totals.count > 1 ? (
+                      <>Delivery is one charge for the whole order — you're getting{' '}
+                        <strong className="text-emerald-700">
+                          {Math.round((1 - deliveryTierFactor(totals.count)) * 100)}% off
+                        </strong>{' '}
+                        it for ordering {totals.count} units.</>
+                    ) : (
+                      <>Delivery is charged once for the whole order. Ordering 2 or more units
+                        reduces it by 20%, 6+ by 30%, and 11+ by 50%.</>
+                    )}
+                    {' '}Siliguri (734xxx) is always free.
                   </p>
                 </div>
               )}
