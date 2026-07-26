@@ -226,6 +226,22 @@ const CartSidebar = () => {
   // Scale the disclosed GST down proportionally if a discount applies.
   const gst         = totalAmount > 0 ? grossGst * (payableGoods / totalAmount) : 0;
   const taxableAmt  = payableGoods - gst;
+  // Per-slab GST split (5/12/18/28%) so the breakdown shows each rate, like the
+  // invoice will. Discount is applied proportionally across slabs.
+  const gstBySlab = React.useMemo(() => {
+    const bySlab = new Map();
+    for (const i of items) {
+      const rate = (typeof i.gstRate === 'number' && i.gstRate >= 0) ? i.gstRate : 18;
+      const inclusive = (i.price || 0) * (i.qty || 1);
+      const tax = inclusive - inclusive * 100 / (100 + rate);
+      bySlab.set(rate, (bySlab.get(rate) || 0) + tax);
+    }
+    const scale = totalAmount > 0 ? (payableGoods / totalAmount) : 1;
+    return [...bySlab.entries()]
+      .map(([rate, tax]) => ({ rate, tax: tax * scale }))
+      .filter(s => s.tax > 0.5)
+      .sort((a, b) => a.rate - b.rate);
+  }, [items, totalAmount, payableGoods]);
   // Preview delivery: free above the threshold, otherwise the default rate
   // discounted by the volume tier for the number of units — the same tiering the
   // zone quote applies at checkout, so this estimate lines up with the charge.
@@ -405,10 +421,14 @@ const CartSidebar = () => {
                   )}
                   {couponError && <p className="text-xs text-red-500">{couponError}</p>}
 
-                  {/* Summary */}
+                  {/* Summary — prices INCLUDE GST, so we disclose the split
+                      (taxable value + GST) rather than a single lump, so the
+                      buyer sees exactly what appears on the invoice. */}
                   <div className="space-y-1.5 text-sm">
                     <div className="flex justify-between text-gray-600">
-                      <span>Subtotal ({totalItems} items)</span>
+                      <span>Item total ({totalItems} item{totalItems === 1 ? '' : 's'})
+                        <span className="block text-[11px] text-gray-400">incl. GST</span>
+                      </span>
                       <span>₹{totalAmount.toLocaleString('en-IN')}</span>
                     </div>
                     {discount > 0 && (
@@ -417,11 +437,25 @@ const CartSidebar = () => {
                         <span>–₹{Number(discount).toLocaleString('en-IN')}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-gray-600">
-                      <span>GST (included)</span><span>₹{gst.toFixed(0)}</span>
+                    <div className="pl-0 pt-1 mt-1 border-t border-dashed border-gray-100 space-y-1">
+                      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Price breakdown</p>
+                      <div className="flex justify-between text-gray-500 text-[13px]">
+                        <span>Taxable value</span><span>₹{taxableAmt.toFixed(0)}</span>
+                      </div>
+                      {gstBySlab.map(s => (
+                        <div key={s.rate} className="flex justify-between text-gray-500 text-[13px]">
+                          <span>GST @ {s.rate}%</span><span>₹{s.tax.toFixed(0)}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between text-gray-500 text-[13px]">
+                        <span className="font-medium">Total GST included</span>
+                        <span className="font-medium">₹{gst.toFixed(0)}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-gray-600">
-                      <span>Delivery {totalItems > 1 && <span className="text-emerald-600 text-xs font-bold ml-1">{Math.round((1-deliveryTierFactor(totalItems))*100)}% OFF</span>}</span>
+                    <div className="flex justify-between text-gray-600 pt-1">
+                      <span>Delivery {totalItems > 1 && <span className="text-emerald-600 text-xs font-bold ml-1">{Math.round((1-deliveryTierFactor(totalItems))*100)}% OFF</span>}
+                        <span className="block text-[11px] text-gray-400">charged by pincode; Siliguri free</span>
+                      </span>
                       <span>{shipping===0?'₹0':`₹${shipping}`}</span>
                     </div>
                     <div className="flex justify-between font-extrabold text-gray-900 text-base pt-2 border-t border-gray-100">

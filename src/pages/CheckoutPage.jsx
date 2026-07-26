@@ -876,6 +876,12 @@ const CheckoutPage = () => {
                         {delivery.zone ? ` · ${delivery.zone}` : ''}
                       </span>
                     )}
+                    {totals.shipping > 0 && totals.count > 1 && (
+                      <span className="block text-[11px] text-emerald-700">
+                        Whole order · {Math.round(deliveryTierFactor(totals.count) * 100)}% of base
+                        ({Math.round((1 - deliveryTierFactor(totals.count)) * 100)}% volume discount)
+                      </span>
+                    )}
                   </span>
                   <span className="font-semibold">
                     {totals.shipping === 0 ? <span className="text-green-600">FREE</span> : inr(totals.shipping)}
@@ -887,10 +893,73 @@ const CheckoutPage = () => {
                     <span className="font-semibold text-gray-900">{inr(codFee)}</span>
                   </div>
                 )}
+                {discount > 0 && (
+                  <div className="flex justify-between text-emerald-700">
+                    <span>Coupon discount{coupon?.code ? ` (${coupon.code})` : ''}</span>
+                    <span className="font-semibold">− {inr(discount)}</span>
+                  </div>
+                )}
                 <div className="border-t border-dashed border-gray-200 pt-3 flex justify-between items-center">
                   <span className="font-bold text-gray-900">Total payable</span>
                   <span className="text-xl font-extrabold text-gray-900">{inr(payable)}</span>
                 </div>
+              </div>
+
+              {/* Coupon — available on EVERY step (including final payment), not
+                  just the cart review step. This is the "coupon on final checkout"
+                  the report asked for. */}
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                {coupon ? (
+                  <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Tag className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-emerald-800 truncate">{coupon.code} applied</p>
+                        <p className="text-xs text-emerald-700">You save {inr(discount)}</p>
+                      </div>
+                    </div>
+                    <button onClick={removeCoupon} className="text-xs font-semibold text-gray-500 hover:text-gray-800 shrink-0 ml-2">Remove</button>
+                  </div>
+                ) : (
+                  <>
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Have a coupon?</label>
+                    <div className="flex gap-2 mt-1.5">
+                      <div className="relative flex-1">
+                        <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <input
+                          value={couponCode}
+                          onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); if (couponError) setCouponError(''); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyCoupon(); } }}
+                          placeholder="Coupon code"
+                          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm uppercase tracking-wide focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300"
+                        />
+                      </div>
+                      <button onClick={() => applyCoupon()} disabled={couponLoading || !couponCode.trim()}
+                        className="px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-blue-200 text-blue-700 hover:bg-blue-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                        {couponLoading ? '…' : 'Apply'}
+                      </button>
+                    </div>
+                    {couponError && <p className="mt-1.5 text-xs text-red-600">{couponError}</p>}
+                    {offers.length > 0 && !couponError && (
+                      <div className="mt-2 space-y-1">
+                        {offers.map(o => {
+                          const min = Number(o.minOrderAmount || 0);
+                          const short = min - totals.goods;
+                          const ok = short <= 0;
+                          return (
+                            <button key={o.code} type="button" onClick={() => { setCouponCode(o.code); applyCoupon(o.code); }}
+                              className="w-full text-left text-[11px] rounded-lg border border-gray-200 bg-gray-50 hover:bg-gray-100 px-2.5 py-1.5 flex items-center justify-between gap-2">
+                              <span className="font-bold text-gray-800">{o.code}</span>
+                              <span className={ok ? 'text-emerald-700 font-semibold' : 'text-gray-400'}>
+                                {ok ? 'Tap to apply' : `Add ${inr(short)} more`}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
               {/* Delivery is chargeable outside Siliguri, so instead of dangling a

@@ -767,7 +767,27 @@ const ProductDetailPage = () => {
                   <span className="text-green-600 text-sm font-bold">You save {fmt(saved)}</span>
                 </div>
               )}
-              <p className="text-[11px] text-gray-400 mt-2">Price inclusive of all taxes · GST invoice with HSN · Delivery charged separately by pincode</p>
+              {/* Price is GST-inclusive; show the split so the buyer sees the base
+                  price and the tax that make up the amount, as on the invoice. */}
+              {product.gstRate != null && (() => {
+                const rate = Number(product.gstRate) || 0;
+                const gstAmt = product.price - product.price * 100 / (100 + rate);
+                const base = product.price - gstAmt;
+                return (
+                  <div className="mt-3 pt-3 border-t border-dashed border-gray-100 text-[13px] space-y-1">
+                    <div className="flex justify-between text-gray-500">
+                      <span>Base price (taxable)</span><span>{fmt(base)}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-500">
+                      <span>GST @ {rate}%</span><span>{fmt(gstAmt)}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-700 font-semibold">
+                      <span>Total (incl. GST)</span><span>{fmt(product.price)}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+              <p className="text-[11px] text-gray-400 mt-2">Inclusive of GST · GST invoice with HSN · Delivery charged separately by pincode</p>
             </div>
 
             {/* Serviceability — answered before the buyer commits, not after */}

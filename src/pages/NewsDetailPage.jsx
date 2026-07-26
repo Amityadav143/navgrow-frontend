@@ -13,7 +13,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Calendar, User, Tag, Eye, Share2, Clock, ChevronRight, Newspaper, Check } from 'lucide-react';
-import { sanitizeHtml } from '@/lib/sanitize';
+import { renderArticleHtml } from '@/lib/richText';
 import { useApi } from '@/hooks/useApi';
 import { newsApi } from '@/lib/api';
 import useSeo from '@/hooks/useSeo';
@@ -233,8 +233,12 @@ const NewsDetailPage = () => {
             prose-blockquote:border-l-4 prose-blockquote:border-blue-400
             prose-blockquote:bg-blue-50 prose-blockquote:rounded-r-xl
             prose-blockquote:px-5 prose-blockquote:py-3 prose-blockquote:italic
-            prose-blockquote:text-blue-800 prose-blockquote:not-italic"
-          dangerouslySetInnerHTML={{ __html: sanitizeHtml(article.content || article.excerpt || '') }}
+            prose-blockquote:text-blue-800 prose-blockquote:not-italic
+            prose-img:rounded-xl prose-img:w-full prose-img:my-6
+            prose-a:text-blue-600 prose-a:font-medium
+            prose-h3:text-xl prose-h3:mt-6 prose-h3:mb-3
+            prose-ul:list-disc prose-ul:pl-5 prose-ol:list-decimal prose-ol:pl-5"
+          dangerouslySetInnerHTML={{ __html: renderArticleHtml(article.content || article.excerpt || '') }}
         />
 
         {/* Image gallery */}

@@ -9,7 +9,7 @@
  *
  * Licensed for: navgrow.org (Production Deployment Only)
  */
-import { sanitizeHtml } from '@/lib/sanitize';
+import { renderArticleHtml } from '@/lib/richText';
 import { useConfirm } from '@/components/ConfirmDialog';
 import React, { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -105,7 +105,7 @@ const ArticleForm = ({ initial, onSave, onCancel, saving }) => {
           <h2 className="text-2xl font-extrabold text-gray-900 mt-2 mb-3">{form.title || 'Article Title'}</h2>
           <p className="text-gray-500 mb-4 italic">{form.excerpt}</p>
           <div className="prose prose-sm max-w-none text-gray-700"
-            dangerouslySetInnerHTML={{ __html: sanitizeHtml(form.content || '<p>Article content here…</p>') }}/>
+            dangerouslySetInnerHTML={{ __html: renderArticleHtml(form.content || 'Article content here…') }}/>
         </div>
       ) : (
         <form onSubmit={e => { e.preventDefault(); onSave(form); }} className="space-y-4">

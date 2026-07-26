@@ -74,38 +74,41 @@ const mapProduct = (p) => ({
 const useFeaturedProducts = () => {
   const { data: featuredData, error: featuredErr, loading: fLoading } =
     useApi(() => productsApi.featured(), [], { immediate: true });
-  // Newest active products, used to top up the row when fewer than 4 are flagged.
+  // Only used as a fallback when the admin hasn't flagged ANY product as featured,
+  // so the section is never empty on a fresh install.
   const { data: listData, error: listErr, loading: lLoading } =
-    useApi(() => productsApi.list({ size: 12, active: true, sort: 'createdAt' }), [], { immediate: true });
+    useApi(() => productsApi.list({ size: 8, active: true, sort: 'createdAt' }), [], { immediate: true });
 
   return React.useMemo(() => {
     const featured = Array.isArray(featuredData) ? featuredData : (featuredData?.content || []);
     const list     = listData?.content || (Array.isArray(listData) ? listData : []);
     const loading  = fLoading || lLoading;
 
-    // Admin-flagged featured come FIRST; then fill any remaining slots (up to 4)
-    // with the newest products, skipping ones already shown. So a freshly-added
-    // admin product appears even before it's ticked "featured", and ticking it
-    // moves it to the front — exactly the behaviour asked for.
-    if (featured.length > 0 || list.length > 0) {
-      const seen = new Set();
-      const combined = [];
-      for (const p of [...featured, ...list]) {
-        if (combined.length >= 4) break;
-        const key = p.id ?? p.slug ?? p.sku;
-        if (key == null || seen.has(key)) continue;
-        seen.add(key);
-        combined.push(mapProduct(p));
-      }
-      if (combined.length > 0) return { items: combined, source: 'live', loading };
+    // STRICT: the Engineering Supply Store shows the products an admin has ticked
+    // "Featured" — and ONLY those. Show up to 8 of them. We deliberately do NOT
+    // top up with other products: mixing in newest/random items is exactly the
+    // "it shows random products" bug. If an admin wants more here, they flag more.
+    if (featured.length > 0) {
+      const items = featured.slice(0, 8).map(mapProduct);
+      return { items, source: 'live', loading, featuredCount: featured.length };
     }
 
-    // Still loading — skeletons, not a flash of fallback content.
-    if (loading) return { items: [], source: 'loading', loading };
+    // While still loading, show skeletons rather than a flash of fallback content.
+    if (loading) return { items: [], source: 'loading', loading, featuredCount: 0 };
 
-    // Genuinely nothing from the shop (empty DB) or unreachable.
+    // No product is flagged featured at all. Rather than an empty section, show
+    // the newest few as a clearly-labelled fallback so the page isn't broken —
+    // but this only happens when NOTHING is featured, never alongside featured.
+    if (list.length > 0) {
+      return { items: list.slice(0, 4).map(mapProduct), source: 'fallback-newest', loading, featuredCount: 0 };
+    }
+
+    // Empty DB or unreachable API → local catalogue.
     const unreachable = Boolean(featuredErr || listErr);
-    return { items: CATALOGUE_FALLBACK, source: unreachable ? 'offline' : 'empty', loading: false };
+    return {
+      items: CATALOGUE_FALLBACK, source: unreachable ? 'offline' : 'empty',
+      loading: false, featuredCount: 0,
+    };
   }, [featuredData, listData, featuredErr, listErr, fLoading, lLoading]);
 };
 
@@ -119,6 +122,7 @@ const categories = [
 const ShopPreview = () => {
   const { addItem, items } = useCart();
   const { items: featured, source } = useFeaturedProducts();
+  const isFeatured = source === 'live';
 
   return (
     <section className="section-padding bg-white">
@@ -128,8 +132,12 @@ const ShopPreview = () => {
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
           <motion.div initial={{ opacity:0, y:20 }} whileInView={{ opacity:1, y:0 }} viewport={{ once:true }} transition={{ duration:0.5 }}>
             <div className="section-chip mb-4 w-fit">Online Shop</div>
-            <h2 className="mb-3">Engineering <span className="gradient-text">Supply Store</span></h2>
-            <p className="text-gray-600 text-lg max-w-lg">Safety equipment, railway tools, maintenance supplies and PPE — available for B2B quote requests.</p>
+            <h2 className="mb-3">{isFeatured ? <>Featured <span className="gradient-text">Products</span></> : <>Engineering <span className="gradient-text">Supply Store</span></>}</h2>
+            <p className="text-gray-600 text-lg max-w-lg">
+              {isFeatured
+                ? 'Hand-picked products from our catalogue — available for B2B quote requests.'
+                : 'Safety equipment, railway tools, maintenance supplies and PPE — available for B2B quote requests.'}
+            </p>
           </motion.div>
           <motion.div initial={{ opacity:0, x:20 }} whileInView={{ opacity:1, x:0 }} viewport={{ once:true }} transition={{ duration:0.5 }}>
             <Link to="/shop" className="inline-flex items-center gap-2 px-6 py-3 rounded-full border-2 border-blue-200 text-blue-700 font-bold hover:border-blue-400 hover:bg-blue-50 transition-all group">
@@ -159,6 +167,11 @@ const ShopPreview = () => {
         {source === 'offline' && (
           <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
             Showing our standard catalogue — live shop data couldn't be loaded right now.
+          </div>
+        )}
+        {source === 'fallback-newest' && (
+          <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-800">
+            No products are marked <strong>Featured</strong> yet — showing our latest additions. Tick “Featured” on a product in the admin panel to feature it here.
           </div>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

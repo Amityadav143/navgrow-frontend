@@ -18,6 +18,7 @@ import CtaSection from '@/components/CtaSection';
 import useSeo from '@/hooks/useSeo';
 import { useApi } from '@/hooks/useApi';
 import { newsApi, newsletterApi } from '@/lib/api';
+import { toPlainText } from '@/lib/richText';
 
 /* ── Static fallback articles (shown when API unavailable) ───────────────── */
 const STATIC_NEWS = [
@@ -212,7 +213,13 @@ const NewsPage = () => {
   const { data: apiData } = useApi(() => newsApi.list({ status: 'PUBLISHED', size: 50 }), [], { immediate: true });
   const articles = useMemo(() => {
     const list = apiData?.content || (Array.isArray(apiData) ? apiData : null);
-    return list && list.length > 0 ? list : STATIC_NEWS;
+    if (!list || list.length === 0) return STATIC_NEWS;
+    // Ensure every card has a clean plain-text excerpt even if the admin only
+    // filled in the body (which may be Markdown/HTML).
+    return list.map(a => ({
+      ...a,
+      excerpt: (a.excerpt && a.excerpt.trim()) ? a.excerpt : toPlainText(a.content, 180),
+    }));
   }, [apiData]);
 
   const cats   = ['All', ...Array.from(new Set(articles.map(n => n.category || n.cat)))];
