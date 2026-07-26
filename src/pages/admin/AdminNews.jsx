@@ -29,26 +29,59 @@ const CATEGORIES = ['Project Update', 'Company News', 'Industry', 'Milestone', '
 const slugify = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
 /* ── Simple rich text toolbar ────────────────────────────────────────────── */
-const RichToolbar = ({ textareaRef }) => {
-  const insert = (before, after = before) => {
+const RichToolbar = ({ textareaRef, onChange }) => {
+  // Apply a change and notify React (controlled component) in one place.
+  const apply = (newVal, selStart, selEnd) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    onChange(newVal);
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(selStart, selEnd ?? selStart);
+    });
+  };
+
+  // Wrap the selection with inline markers (bold/italic/code).
+  const wrap = (marker) => {
     const ta = textareaRef.current;
     if (!ta) return;
     const { selectionStart: s, selectionEnd: e, value } = ta;
-    const selected = value.slice(s, e);
-    const newVal = value.slice(0, s) + before + selected + after + value.slice(e);
-    const event = { target: { value: newVal } };
-    ta.value = newVal;
-    ta.dispatchEvent(new Event('input', { bubbles: true }));
-    ta.focus();
-    ta.setSelectionRange(s + before.length, s + before.length + selected.length);
+    const sel = value.slice(s, e) || 'text';
+    const newVal = value.slice(0, s) + marker + sel + marker + value.slice(e);
+    apply(newVal, s + marker.length, s + marker.length + sel.length);
   };
+
+  // Prefix each selected line (headings, list items, quotes) — markdown blocks
+  // must start a line, so this guarantees valid, unambiguous structure.
+  const prefixLines = (prefix, { ordered = false } = {}) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    let { selectionStart: s, selectionEnd: e, value } = ta;
+    // Expand selection to whole lines.
+    const lineStart = value.lastIndexOf('\n', s - 1) + 1;
+    let lineEnd = value.indexOf('\n', e);
+    if (lineEnd === -1) lineEnd = value.length;
+    const block = value.slice(lineStart, lineEnd) || 'text';
+    const lines = block.split('\n');
+    const out = lines.map((ln, i) => {
+      const clean = ln.replace(/^(\s*)(#{1,6}\s+|[-*]\s+|>\s+|\d+[.)]\s+)/, '$1');
+      return (ordered ? `${i + 1}. ` : prefix) + (clean || 'text');
+    }).join('\n');
+    // Ensure a blank line before a heading so it always parses as a block.
+    const needsGapBefore = prefix.startsWith('#') && lineStart > 0 && value[lineStart - 1] !== '\n';
+    const insert = (needsGapBefore ? '\n' : '') + out;
+    const newVal = value.slice(0, lineStart) + insert + value.slice(lineEnd);
+    apply(newVal, lineStart + insert.length, lineStart + insert.length);
+  };
+
   const tools = [
-    { icon: Heading,   label: 'H2',  action: () => insert('<h2>', '</h2>') },
-    { icon: Bold,      label: 'B',   action: () => insert('<strong>', '</strong>') },
-    { icon: Italic,    label: 'I',   action: () => insert('<em>', '</em>') },
-    { icon: List,      label: 'UL',  action: () => insert('<ul>\n  <li>', '</li>\n</ul>') },
-    { icon: AlignLeft, label: 'P',   action: () => insert('<p>', '</p>') },
-    { icon: FileText,  label: 'Quote', action: () => insert('<blockquote>', '</blockquote>') },
+    { icon: Heading,   label: 'H2',    action: () => prefixLines('## ') },
+    { icon: Heading,   label: 'H3',    action: () => prefixLines('### ') },
+    { icon: Bold,      label: 'Bold',  action: () => wrap('**') },
+    { icon: Italic,    label: 'Italic',action: () => wrap('_') },
+    { icon: List,      label: 'Bullets', action: () => prefixLines('- ') },
+    { icon: List,      label: 'Numbered', action: () => prefixLines('', { ordered: true }) },
+    { icon: FileText,  label: 'Quote', action: () => prefixLines('> ') },
   ];
   return (
     <div className="flex gap-1 p-2 bg-gray-800 border-b border-gray-700 rounded-t-xl flex-wrap">
@@ -58,7 +91,7 @@ const RichToolbar = ({ textareaRef }) => {
           <Icon className="h-3 w-3" />{label}
         </button>
       ))}
-      <span className="ml-auto text-xs text-gray-500 self-center">HTML editor</span>
+      <span className="ml-auto text-xs text-gray-500 self-center">Formatted editor — no HTML needed</span>
     </div>
   );
 };
@@ -183,14 +216,14 @@ const ArticleForm = ({ initial, onSave, onCancel, saving }) => {
             </div>
             {/* Content */}
             <div className="md:col-span-2">
-              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Full Content (HTML)</label>
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Full Content</label>
               <div className="rounded-xl overflow-hidden border border-gray-700">
-                <RichToolbar textareaRef={contentRef}/>
+                <RichToolbar textareaRef={contentRef} onChange={(v) => setForm(p => ({ ...p, content: v }))}/>
                 <textarea ref={contentRef} value={form.content} onChange={ch('content')} rows={14}
-                  placeholder="<h2>Section Heading</h2>&#10;<p>Article content...</p>"
-                  className="w-full px-3 py-2.5 bg-gray-900 border-0 text-sm text-white font-mono focus:outline-none resize-y"
-                  onInput={e => setForm(p => ({ ...p, content: e.target.value }))}/>
+                  placeholder={"Write naturally. Use the buttons above to format.\n\n## Section heading\n\nA paragraph of text.\n\n- First point\n- Second point"}
+                  className="w-full px-3 py-2.5 bg-gray-900 border-0 text-sm text-white font-mono focus:outline-none resize-y"/>
               </div>
+              <p className="text-[11px] text-gray-500 mt-1">Tip: put a blank line between paragraphs. Use the toolbar for headings, bold, and lists — no HTML needed. The Preview tab shows exactly how it will look.</p>
             </div>
           </div>
 

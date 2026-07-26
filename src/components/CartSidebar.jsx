@@ -18,7 +18,7 @@ import { X, ShoppingCart, Minus, Plus, Trash2, Package, ArrowRight, Tag,
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/context/CartContext';
 import { couponsApi, rfqApi } from '@/lib/api';
-import { applyDeliveryTier, deliveryTierFactor } from '@/lib/utils';
+import { perProductDelivery } from '@/lib/utils';
 import { evaluateLocalCoupon, isOffline } from '@/lib/offers';
 import { track } from '@/lib/analytics';
 import { useToast } from '@/components/ui/use-toast';
@@ -242,12 +242,10 @@ const CartSidebar = () => {
       .filter(s => s.tax > 0.5)
       .sort((a, b) => a.rate - b.rate);
   }, [items, totalAmount, payableGoods]);
-  // Preview delivery: free above the threshold, otherwise the default rate
-  // discounted by the volume tier for the number of units — the same tiering the
-  // zone quote applies at checkout, so this estimate lines up with the charge.
-  // Delivery is chargeable outside Siliguri — no spend-based waiver. The exact
-  // charge comes from the zone quote at checkout; this is the indicative figure.
-  const shipping    = payableGoods === 0 ? 0 : applyDeliveryTier(150, totalItems);
+  // Preview delivery is charged PER PRODUCT LINE: base × each line's qty ×
+  // slab(lineQty), summed. Chargeable outside Siliguri (no free-above waiver);
+  // the exact per-zone base is applied at checkout, this uses the ₹150 default.
+  const shipping    = payableGoods === 0 ? 0 : perProductDelivery(items, 150);
   // Goods are already tax-inclusive, so only delivery is added.
   const grandTotal  = payableGoods + shipping;
 
@@ -453,8 +451,8 @@ const CartSidebar = () => {
                       </div>
                     </div>
                     <div className="flex justify-between text-gray-600 pt-1">
-                      <span>Delivery {totalItems > 1 && <span className="text-emerald-600 text-xs font-bold ml-1">{Math.round((1-deliveryTierFactor(totalItems))*100)}% OFF</span>}
-                        <span className="block text-[11px] text-gray-400">charged by pincode; Siliguri free</span>
+                      <span>Delivery
+                        <span className="block text-[11px] text-gray-400">per product × qty; Siliguri free</span>
                       </span>
                       <span>{shipping===0?'₹0':`₹${shipping}`}</span>
                     </div>
@@ -479,7 +477,7 @@ const CartSidebar = () => {
                       Clear Cart
                     </button>
                   </div>
-                  <p className="text-center text-xs text-gray-400">Free shipping on orders above ₹5,000</p>
+                  <p className="text-center text-xs text-gray-400">Free delivery in Siliguri · charged by pincode elsewhere</p>
                 </div>
               )}
             </motion.div>

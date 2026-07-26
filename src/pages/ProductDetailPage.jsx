@@ -21,6 +21,7 @@ import { useCart } from '@/context/CartContext';
 import { useRfq } from '@/context/RfqContext';
 import { useAuth } from '@/context/AuthContext';
 import { productsApi } from '@/lib/api';
+import { renderArticleHtml } from '@/lib/richText';
 import { track } from '@/lib/analytics';
 import { getProductBySlug, getRelated } from '@/lib/productData';
 import useSeo from '@/hooks/useSeo';
@@ -320,6 +321,7 @@ const ProductDetailPage = () => {
             images: [primaryImg, ...galleryImgs].filter((v, i, a) => v && a.indexOf(v) === i),
             summary: data.summary || data.description || '',
             desc: data.description || '',
+            description: data.description || data.summary || '',
             inStock: (data.stockQty || 0) > 0,
             stockQty: data.stockQty || 0,
             features: lines(data.features),
@@ -472,7 +474,7 @@ const ProductDetailPage = () => {
 
   useSeo({
     title: product ? `${product.name} — Buy Online | Navgrow Engineering Shop` : 'Product — Navgrow',
-    description: product ? `Buy ${product.name} online at ₹${product.price?.toLocaleString('en-IN')}. ${product.summary || product.desc || ''}. ISI-certified. Free shipping ₹5K+. GST invoice. Pan-India delivery.` : '',
+    description: product ? `Buy ${product.name} online at ₹${product.price?.toLocaleString('en-IN')}. ${product.summary || product.desc || ''}. ISI-certified. GST invoice with HSN. Pan-India delivery.` : '',
     path: product ? `/shop/${product.slug || product.id}` : '/shop',
     keywords: product ? `buy ${product.name}, ${product.cat}, engineering products India, ${product.name} price` : '',
     type: 'product',
@@ -948,19 +950,28 @@ const ProductDetailPage = () => {
             >
 
               {/* ── DESCRIPTION ── */}
-              {tab === 'description' && (
+              {tab === 'description' && (() => {
+                // Robust across sources: admin products carry `description`,
+                // static ones may only have `desc`/`summary`. Never render the
+                // literal string "undefined" (the reported bug).
+                const full = (product.description || product.desc || product.summary || '').trim();
+                if (!full) return <p className="text-gray-500">No description available for this product yet.</p>;
+                const isLong = full.length > 400;
+                const shown = showFull || !isLong ? full : full.slice(0, 400).replace(/\s+\S*$/, '') + '…';
+                return (
                 <div className="max-w-3xl">
-                  <div className="prose prose-blue max-w-none">
-                    <p className="text-gray-700 text-base leading-loose">
-                      {showFull ? product.description : product.description?.slice(0, 400) + (product.description?.length > 400 ? '…' : '')}
-                    </p>
-                    {product.description?.length > 400 && (
-                      <button onClick={() => setShowFull(v=>!v)}
-                        className="mt-2 text-blue-600 font-semibold text-sm flex items-center gap-1 hover:text-amber-600 transition-colors">
-                        {showFull ? <><ChevronUp className="h-4 w-4"/>Show less</> : <><ChevronDown className="h-4 w-4"/>Read full description</>}
-                      </button>
-                    )}
-                  </div>
+                  <div
+                    className="prose prose-blue max-w-none text-gray-700 leading-loose
+                      prose-headings:text-gray-900 prose-h2:text-xl prose-h3:text-lg
+                      prose-li:text-gray-700 prose-ul:list-disc prose-ul:pl-5 prose-ol:pl-5"
+                    dangerouslySetInnerHTML={{ __html: renderArticleHtml(shown) }}
+                  />
+                  {isLong && (
+                    <button onClick={() => setShowFull(v=>!v)}
+                      className="mt-2 text-blue-600 font-semibold text-sm flex items-center gap-1 hover:text-amber-600 transition-colors">
+                      {showFull ? <><ChevronUp className="h-4 w-4"/>Show less</> : <><ChevronDown className="h-4 w-4"/>Read full description</>}
+                    </button>
+                  )}
 
                   {/* Warranty block */}
                   {product.warranty && (
@@ -972,7 +983,8 @@ const ProductDetailPage = () => {
                     </div>
                   )}
                 </div>
-              )}
+                );
+              })()}
 
               {/* ── SPECIFICATIONS ── */}
               {tab === 'specifications' && (

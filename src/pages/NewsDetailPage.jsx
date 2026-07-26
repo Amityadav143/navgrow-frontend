@@ -169,9 +169,13 @@ const NewsDetailPage = () => {
         {/* Hero image */}
         {article.imageUrl && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-            className="rounded-3xl overflow-hidden mb-8 shadow-xl aspect-[16/7]">
+            className="rounded-3xl overflow-hidden mb-8 shadow-xl bg-gray-50 flex justify-center">
+            {/* Contain, not cover: article images are often tall infographics or
+                posters. Cropping them to a fixed 16:7 banner (the old behaviour)
+                cut off content. We cap the height and letterbox instead so the
+                whole image is always visible. */}
             <img loading="lazy" decoding="async" src={article.imageUrl} alt={article.title}
-              className="w-full h-full object-cover"
+              className="w-full max-h-[70vh] object-contain"
               onError={e => { e.target.src = '/placeholder.jpg'; }} />
           </motion.div>
         )}

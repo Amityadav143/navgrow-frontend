@@ -40,3 +40,29 @@ export function applyDeliveryTier(baseCharge, totalQty) {
 	const base = Number(baseCharge) || 0;
 	return Math.round(base * deliveryTierFactor(totalQty));
 }
+
+/**
+ * Delivery is charged PER PRODUCT LINE and scales with quantity:
+ *
+ *     line delivery = baseCharge × lineQty × slabFactor(lineQty)
+ *     order delivery = Σ line delivery
+ *
+ * The slab (%) is decided by each line's OWN quantity, not the cart total. So a
+ * cart with A×3 and B×7 at a ₹150 base is (150×3×0.8) + (150×7×0.7) = ₹1095.
+ * This is the single source of truth for the storefront preview; the backend
+ * computes the same figure against the real zone charge at checkout.
+ *
+ * @param {Array<{qty:number}>} lines - cart items (each with a qty)
+ * @param {number} baseCharge - the per-unit base delivery charge for the zone
+ * @returns {number} total delivery in whole rupees
+ */
+export function perProductDelivery(lines, baseCharge) {
+	const base = Number(baseCharge) || 0;
+	if (!Array.isArray(lines) || base <= 0) return 0;
+	const total = lines.reduce((sum, l) => {
+		const q = Number(l?.qty ?? l?.quantity ?? 0) || 0;
+		if (q <= 0) return sum;
+		return sum + base * q * deliveryTierFactor(q);
+	}, 0);
+	return Math.round(total);
+}

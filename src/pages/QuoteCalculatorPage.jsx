@@ -66,15 +66,21 @@ const Steps = ({ current }) => (
     {['Service', 'Scope', 'Add-ons', 'Summary'].map((label, i) => (
       <React.Fragment key={label}>
         <div className="flex flex-col items-center gap-1">
+          {/* Flow reads gold → green: completed steps are green, the active step
+              is the gold gradient, upcoming steps are muted. (No blue/navy.) */}
           <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
-            i < current ? 'bg-green-500 text-white' :
-            i === current ? 'brand-gradient text-white shadow-md' : 'bg-gray-100 text-gray-400'
+            i < current ? 'bg-emerald-500 text-white shadow' :
+            i === current ? 'gold-gradient text-white shadow-md ring-2 ring-amber-300' : 'bg-gray-100 text-gray-400'
           }`}>
             {i < current ? <CheckCircle className="h-4 w-4" /> : i + 1}
           </div>
-          <span className={`text-[11px] font-semibold hidden sm:block ${i === current ? 'text-blue-600' : 'text-gray-400'}`}>{label}</span>
+          <span className={`text-[11px] font-semibold hidden sm:block ${
+            i < current ? 'text-emerald-600' : i === current ? 'text-amber-600' : 'text-gray-400'
+          }`}>{label}</span>
         </div>
-        {i < 3 && <div className={`flex-1 h-0.5 mx-1 transition-colors ${i < current ? 'bg-green-400' : 'bg-gray-200'}`} />}
+        {i < 3 && <div className={`flex-1 h-0.5 mx-1 transition-colors ${
+          i < current ? 'bg-emerald-400' : i === current ? 'bg-amber-300' : 'bg-gray-200'
+        }`} />}
       </React.Fragment>
     ))}
   </div>
@@ -242,14 +248,14 @@ const QuoteCalculatorPage = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {SERVICES.map(({ id, icon: Icon, label, unit }) => (
                     <button key={id} onClick={() => setService(id)}
-                      className={`flex items-center gap-4 p-4 rounded-2xl border-2 text-left transition-all hover:border-blue-300 hover:shadow-md ${
-                        service === id ? 'border-blue-500 bg-blue-50 shadow-md' : 'border-gray-200 bg-white'
+                      className={`flex items-center gap-4 p-4 rounded-2xl border-2 text-left transition-all hover:border-amber-300 hover:shadow-md ${
+                        service === id ? 'border-amber-500 bg-amber-50 shadow-md' : 'border-gray-200 bg-white'
                       }`}>
-                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors ${service === id ? 'brand-gradient' : 'bg-gray-100'}`}>
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors ${service === id ? 'gold-gradient' : 'bg-gray-100'}`}>
                         <Icon className={`h-5 w-5 ${service === id ? 'text-white' : 'text-gray-500'}`} />
                       </div>
                       <div>
-                        <p className={`font-bold text-sm ${service === id ? 'text-blue-700' : 'text-gray-900'}`}>{label}</p>
+                        <p className={`font-bold text-sm ${service === id ? 'text-amber-700' : 'text-gray-900'}`}>{label}</p>
                         <p className="text-xs text-gray-400">{unit}</p>
                       </div>
                     </button>
@@ -257,7 +263,7 @@ const QuoteCalculatorPage = () => {
                 </div>
                 <div className="mt-6 flex justify-end">
                   <button disabled={!service} onClick={() => setStep(1)}
-                    className="flex items-center gap-2 px-7 py-3 brand-gradient text-white font-bold rounded-xl shadow-md disabled:opacity-40 hover:opacity-90 transition-opacity">
+                    className="flex items-center gap-2 px-7 py-3 btn-gold text-white font-bold rounded-xl shadow-md disabled:opacity-40 hover:opacity-90 transition-opacity">
                     Next <ArrowRight className="h-4 w-4" />
                   </button>
                 </div>
@@ -268,15 +274,15 @@ const QuoteCalculatorPage = () => {
             {step === 1 && (
               <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
                 <h2 className="text-xl font-bold text-gray-900 mb-1">Project scope & duration</h2>
-                <p className="text-gray-500 text-sm mb-6">Service: <span className="font-semibold text-blue-600">{svc?.label}</span></p>
+                <p className="text-gray-500 text-sm mb-6">Service: <span className="font-semibold text-amber-600">{svc?.label}</span></p>
 
                 <div className="mb-6">
                   <p className="text-sm font-bold text-gray-700 mb-3">Project Scope</p>
                   <div className="grid grid-cols-3 gap-2 sm:gap-3">
                     {SCOPES.map(({ id, label, desc }) => (
                       <button key={id} onClick={() => setScope(id)}
-                        className={`p-3 sm:p-4 rounded-2xl border-2 text-center transition-all ${scope === id ? 'border-blue-500 bg-blue-50 shadow-md' : 'border-gray-200 hover:border-blue-200'}`}>
-                        <p className={`font-bold text-sm sm:text-base ${scope === id ? 'text-blue-700' : 'text-gray-900'}`}>{label}</p>
+                        className={`p-3 sm:p-4 rounded-2xl border-2 text-center transition-all ${scope === id ? 'border-amber-500 bg-amber-50 shadow-md' : 'border-gray-200 hover:border-amber-200'}`}>
+                        <p className={`font-bold text-sm sm:text-base ${scope === id ? 'text-amber-700' : 'text-gray-900'}`}>{label}</p>
                         <p className="text-[11px] sm:text-xs text-gray-400 mt-1 leading-tight">{desc}</p>
                       </button>
                     ))}
@@ -288,7 +294,7 @@ const QuoteCalculatorPage = () => {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {DURATIONS.map(({ id, label }) => (
                       <button key={id} onClick={() => setDuration(id)}
-                        className={`py-3 px-4 rounded-xl border-2 text-sm font-bold transition-all ${duration === id ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 hover:border-blue-200 text-gray-700'}`}>
+                        className={`py-3 px-4 rounded-xl border-2 text-sm font-bold transition-all ${duration === id ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-gray-200 hover:border-amber-200 text-gray-700'}`}>
                         {label}
                       </button>
                     ))}
@@ -298,7 +304,7 @@ const QuoteCalculatorPage = () => {
                 <div className="flex justify-between">
                   <button onClick={() => setStep(0)} className="px-5 py-2.5 border border-gray-200 text-gray-600 font-semibold rounded-xl hover:border-gray-300 text-sm">← Back</button>
                   <button disabled={!scope} onClick={() => setStep(2)}
-                    className="flex items-center gap-2 px-7 py-3 brand-gradient text-white font-bold rounded-xl shadow-md disabled:opacity-40 hover:opacity-90 text-sm">
+                    className="flex items-center gap-2 px-7 py-3 btn-gold text-white font-bold rounded-xl shadow-md disabled:opacity-40 hover:opacity-90 text-sm">
                     Next <ArrowRight className="h-4 w-4" />
                   </button>
                 </div>
@@ -315,12 +321,12 @@ const QuoteCalculatorPage = () => {
                     const sel = addons.includes(id);
                     return (
                       <button key={id} onClick={() => toggleAddon(id)}
-                        className={`flex items-center gap-4 p-4 rounded-2xl border-2 text-left transition-all ${sel ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-200'}`}>
-                        <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors ${sel ? 'border-blue-500 bg-blue-600' : 'border-gray-300'}`}>
+                        className={`flex items-center gap-4 p-4 rounded-2xl border-2 text-left transition-all ${sel ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:border-amber-200'}`}>
+                        <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center shrink-0 transition-colors ${sel ? 'border-amber-500 bg-amber-600' : 'border-gray-300'}`}>
                           {sel && <CheckCircle className="h-4 w-4 text-white" />}
                         </div>
-                        <p className={`font-semibold text-sm flex-1 ${sel ? 'text-blue-700' : 'text-gray-900'}`}>{label}</p>
-                        <span className="text-sm font-bold text-blue-600">+{fmt(cost)}</span>
+                        <p className={`font-semibold text-sm flex-1 ${sel ? 'text-amber-700' : 'text-gray-900'}`}>{label}</p>
+                        <span className="text-sm font-bold text-amber-600">+{fmt(cost)}</span>
                       </button>
                     );
                   })}
@@ -328,7 +334,7 @@ const QuoteCalculatorPage = () => {
                 <div className="flex justify-between">
                   <button onClick={() => setStep(1)} className="px-5 py-2.5 border border-gray-200 text-gray-600 font-semibold rounded-xl hover:border-gray-300 text-sm">← Back</button>
                   <button onClick={() => setStep(3)}
-                    className="flex items-center gap-2 px-7 py-3 brand-gradient text-white font-bold rounded-xl shadow-md hover:opacity-90 text-sm">
+                    className="flex items-center gap-2 px-7 py-3 btn-gold text-white font-bold rounded-xl shadow-md hover:opacity-90 text-sm">
                     See Estimate <ArrowRight className="h-4 w-4" />
                   </button>
                 </div>
@@ -341,10 +347,10 @@ const QuoteCalculatorPage = () => {
                 <h2 className="text-xl font-bold text-gray-900 mb-6">Your Estimate</h2>
 
                 {/* Big estimate */}
-                <div className="brand-gradient rounded-3xl p-6 text-center mb-6 text-white">
-                  <p className="text-blue-100 text-sm mb-1 font-medium uppercase tracking-wide">Estimated Project Cost</p>
+                <div className="gold-gradient rounded-3xl p-6 text-center mb-6 text-white">
+                  <p className="text-amber-50 text-sm mb-1 font-medium uppercase tracking-wide">Estimated Project Cost</p>
                   <p className="text-4xl md:text-5xl font-extrabold mb-1">{fmt(low)} – {fmt(high)}</p>
-                  <p className="text-blue-200 text-xs">Exclusive of GST · Subject to site assessment</p>
+                  <p className="text-amber-100 text-xs">Exclusive of GST · Subject to site assessment</p>
                 </div>
 
                 {/* Breakdown */}
@@ -370,11 +376,11 @@ const QuoteCalculatorPage = () => {
                     {[['name','Your Name','text'],['email','Email','email'],['phone','Phone','tel']].map(([id,ph,type]) => (
                       <input key={id} type={type} placeholder={ph} value={form[id]}
                         onChange={e => setForm(p => ({...p,[id]:e.target.value}))}
-                        className="px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 transition-colors" />
+                        className="px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-amber-500 transition-colors" />
                     ))}
                     <input placeholder="Notes (optional)" value={form.notes}
                       onChange={e => setForm(p => ({...p,notes:e.target.value}))}
-                      className="px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 sm:col-span-1" />
+                      className="px-4 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-amber-500 sm:col-span-1" />
                   </div>
                 </div>
 
@@ -386,7 +392,7 @@ const QuoteCalculatorPage = () => {
                 )}
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button onClick={sendQuote} disabled={sending}
-                    className="flex-1 flex items-center justify-center gap-2 py-3.5 brand-gradient text-white font-bold rounded-xl shadow-md hover:opacity-90 disabled:opacity-60">
+                    className="flex-1 flex items-center justify-center gap-2 py-3.5 btn-gold text-white font-bold rounded-xl shadow-md hover:opacity-90 disabled:opacity-60">
                     {sending
                       ? <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       : <Send className="h-4 w-4" />}
@@ -435,7 +441,7 @@ const QuoteCalculatorPage = () => {
                     Your mail app opened with the full estimate — hit send there to reach us at info@navgrow.org.
                   </p>
                 )}
-                <button onClick={reset} className="inline-flex items-center gap-2 px-7 py-3 brand-gradient text-white font-bold rounded-xl">
+                <button onClick={reset} className="inline-flex items-center gap-2 px-7 py-3 btn-gold text-white font-bold rounded-xl">
                   <RotateCcw className="h-4 w-4" /> Calculate Another
                 </button>
               </motion.div>

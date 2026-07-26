@@ -171,7 +171,7 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
   }, 0);
   // Scale GST down proportionally if a discount applies.
   const gst          = cartSubtotal > 0 ? grossGst * (taxableAmount / cartSubtotal) : 0;
-  const shipping     = cartSubtotal >= 5000 ? 0 : 150;
+  const shipping     = 150; // Delivery is chargeable; free only in Siliguri (zone-based at real checkout).
   const grandTotal   = orderData?.grandTotal || (taxableAmount + gst + shipping);
   const itemCount    = items.reduce((s, i) => s + (i.qty || 1), 0);
 
@@ -248,7 +248,7 @@ const CheckoutModal = ({ open, onClose, orderData }) => {
                       <p className="text-xl font-extrabold text-blue-900">₹{Math.round(grandTotal).toLocaleString('en-IN')}</p>
                     </div>
                   </div>
-                  {shipping > 0 && <p className="text-[11px] text-gray-500 mt-2">Add ₹{(5000 - cartSubtotal).toLocaleString('en-IN')} more for FREE shipping</p>}
+                  {shipping > 0 && <p className="text-[11px] text-gray-500 mt-2">Delivery charged by pincode · free in Siliguri</p>}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

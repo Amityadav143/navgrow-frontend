@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { ordersApi, deliveryApi, couponsApi } from '@/lib/api';
-import { applyDeliveryTier, deliveryTierFactor } from '@/lib/utils';
+import { perProductDelivery } from '@/lib/utils';
 import { LOCAL_OFFERS, evaluateLocalCoupon, isOffline } from '@/lib/offers';
 import PincodeCheck from '@/components/PincodeCheck';
 import RequireAuth from '@/components/RequireAuth';
@@ -190,17 +190,25 @@ const CheckoutPage = () => {
     const gst      = lines.reduce((s, l) => s + l.tax, 0);
     const mrpTotal = items.reduce((s, i) => s + ((i.mrp || i.price || 0) * (i.qty || 1)), 0);
     const count = items.reduce((s, i) => s + (i.qty || 1), 0);
-    // Delivery is priced by the buyer's zone once their pincode resolves — the
-    // zone quote already applies the volume-based tier for the order quantity, so
-    // we use it as-is. Until a pincode is entered we show a tiered estimate of the
-    // default national rule so the preview matches the eventual charge.
+    // Delivery is charged PER PRODUCT LINE and scales with each line's quantity
+    // (base × lineQty × slab(lineQty), summed). The zone quote returns the per-unit
+    // base charge for the pincode; we apply the per-product formula to it here so
+    // cart and checkout always agree. Until a pincode resolves we use the national
+    // default base as the estimate.
+    const cartLines = items.map(i => ({ qty: i.qty || 1 }));
     let shipping;
     if (delivery && delivery.serviceable) {
-      shipping = deliverySpeed === 'express' && delivery.expressAvailable
-        ? Number(delivery.expressCharge || 0)
-        : Number(delivery.standardCharge || 0);
+      // Free zones (Siliguri) return a 0 base → stays free. Otherwise the returned
+      // charge IS the per-unit base for this zone; apply the per-product formula.
+      const baseStd = Number(delivery.standardCharge || 0);
+      const baseExp = Number(delivery.expressCharge || 0);
+      if (deliverySpeed === 'express' && delivery.expressAvailable) {
+        shipping = baseExp === 0 ? 0 : perProductDelivery(cartLines, baseExp);
+      } else {
+        shipping = baseStd === 0 ? 0 : perProductDelivery(cartLines, baseStd);
+      }
     } else {
-      shipping = goods === 0 ? 0 : applyDeliveryTier(SHIPPING_FEE, count);
+      shipping = goods === 0 ? 0 : perProductDelivery(cartLines, SHIPPING_FEE);
     }
 
     // Group taxable value and tax by slab for the breakdown.
@@ -579,10 +587,10 @@ const CheckoutPage = () => {
                           {totals.shipping === 0 ? 'Free' : inr(totals.shipping)}
                         </span>
                       </div>
-                      {totals.shipping > 0 && totals.count > 1 && (
+                      {totals.shipping > 0 && (
                         <p className="text-[11px] text-emerald-700 -mt-1">
-                          Volume discount applied — {Math.round((1 - deliveryTierFactor(totals.count)) * 100)}% off
-                          delivery for {totals.count} units
+                          Delivery is charged per product and scales with each item's quantity
+                          (higher quantity = lower per-unit rate). Siliguri is free.
                         </p>
                       )}
                       {discount > 0 && (
@@ -876,10 +884,9 @@ const CheckoutPage = () => {
                         {delivery.zone ? ` · ${delivery.zone}` : ''}
                       </span>
                     )}
-                    {totals.shipping > 0 && totals.count > 1 && (
+                    {totals.shipping > 0 && (
                       <span className="block text-[11px] text-emerald-700">
-                        Whole order · {Math.round(deliveryTierFactor(totals.count) * 100)}% of base
-                        ({Math.round((1 - deliveryTierFactor(totals.count)) * 100)}% volume discount)
+                        Per product × quantity
                       </span>
                     )}
                   </span>
@@ -962,23 +969,15 @@ const CheckoutPage = () => {
                 )}
               </div>
 
-              {/* Delivery is chargeable outside Siliguri, so instead of dangling a
-                  free-delivery threshold we can't honour, we show the volume
-                  discount the customer is actually getting — and what the next
-                  tier would give them. */}
+              {/* Delivery is charged per product line and scales with each item's
+                  quantity. We state the per-unit slab so the figure is transparent
+                  rather than a mysterious number. */}
               {totals.shipping > 0 && (
                 <div className="mt-4 rounded-lg bg-gray-50 border border-gray-100 px-3 py-2">
                   <p className="text-[11px] text-gray-600 leading-relaxed">
-                    {totals.count > 1 ? (
-                      <>Delivery is one charge for the whole order — you're getting{' '}
-                        <strong className="text-emerald-700">
-                          {Math.round((1 - deliveryTierFactor(totals.count)) * 100)}% off
-                        </strong>{' '}
-                        it for ordering {totals.count} units.</>
-                    ) : (
-                      <>Delivery is charged once for the whole order. Ordering 2 or more units
-                        reduces it by 20%, 6+ by 30%, and 11+ by 50%.</>
-                    )}
+                    Delivery is charged <strong>per product</strong>, multiplied by that item's
+                    quantity, with a lower per-unit rate as quantity rises:
+                    1 unit = 100%, 2–5 = 80%, 6–10 = 70%, 11+ = 50% of the base rate.
                     {' '}Siliguri (734xxx) is always free.
                   </p>
                 </div>
