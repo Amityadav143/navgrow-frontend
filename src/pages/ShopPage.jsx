@@ -110,8 +110,21 @@ const ProductCard = ({ product, onBuyNow }) => {
               You save ₹{(product.mrp - product.price).toLocaleString('en-IN')}
             </span>
           )}
-          <span className="block text-[10px] text-gray-400 mt-0.5">+ GST · GST invoice available</span>
+          <span className="block text-[10px] text-gray-400 mt-0.5">Incl. GST · GST invoice with HSN</span>
         </div>
+
+        {/* Stock status — honest availability at a glance */}
+        {product.stockQty != null && (
+          <div className="mb-2 text-[11px] font-semibold">
+            {product.stockQty <= 0 ? (
+              <span className="text-red-500">● Out of stock — RFQ available</span>
+            ) : product.stockQty <= 10 ? (
+              <span className="text-amber-600">● Only {product.stockQty} left in stock</span>
+            ) : (
+              <span className="text-emerald-600">● In stock</span>
+            )}
+          </div>
+        )}
 
         {/* Compare */}
         <button
@@ -125,26 +138,32 @@ const ProductCard = ({ product, onBuyNow }) => {
         </button>
 
         {/* Actions */}
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => addItem(toCartItem(product))}
-            className={`flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
-              inCart
-                ? 'border-green-400 bg-green-50 text-green-700'
-                : 'border-blue-200 text-blue-600 hover:border-blue-400 hover:bg-blue-50'
-            }`}
-          >
-            {inCart ? <CheckCircle className="h-3.5 w-3.5" /> : <ShoppingCart className="h-3.5 w-3.5" />}
-            {inCart ? 'In Cart' : 'Add'}
-          </button>
-          <button
-            onClick={() => onBuyNow(product)}
-            className="flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-bold brand-gradient text-white shadow hover:opacity-90 transition-opacity"
-          >
-            <Zap className="h-3.5 w-3.5" />
-            Buy Now
-          </button>
-        </div>
+        {product.stockQty != null && product.stockQty <= 0 ? (
+          <div className="rounded-xl bg-gray-50 border border-gray-200 text-center py-2 text-xs font-semibold text-gray-500">
+            Out of stock — use Request Quote below for bulk/backorder
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => addItem(toCartItem(product))}
+              className={`flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
+                inCart
+                  ? 'border-green-400 bg-green-50 text-green-700'
+                  : 'border-blue-200 text-blue-600 hover:border-blue-400 hover:bg-blue-50'
+              }`}
+            >
+              {inCart ? <CheckCircle className="h-3.5 w-3.5" /> : <ShoppingCart className="h-3.5 w-3.5" />}
+              {inCart ? 'In Cart' : 'Add'}
+            </button>
+            <button
+              onClick={() => onBuyNow(product)}
+              className="flex items-center justify-center gap-1 py-2 rounded-xl text-xs font-bold brand-gradient text-white shadow hover:opacity-90 transition-opacity"
+            >
+              <Zap className="h-3.5 w-3.5" />
+              Buy Now
+            </button>
+          </div>
+        )}
 
         {/* B2B — Request for Quote */}
         <button
@@ -496,10 +515,20 @@ const ShopPage = () => {
 
           {/* Product grid */}
           {filtered.length === 0 ? (
-            <div className="text-center py-24">
+            <div className="text-center py-20 max-w-md mx-auto">
               <Package className="h-16 w-16 text-gray-200 mx-auto mb-4" />
-              <p className="text-gray-500 font-medium text-lg">No products match your search.</p>
-              <button onClick={() => { setSearch(''); setDebouncedSearch(''); setCat('All'); setPriceMin(''); setPriceMax(''); }} className="mt-4 text-blue-600 text-sm underline">Clear filters</button>
+              <p className="text-gray-700 font-bold text-lg">No products match your search</p>
+              <p className="text-gray-400 text-sm mt-1">Try a different keyword or category — or ask us directly for what you need.</p>
+              <div className="flex flex-wrap gap-2 justify-center mt-5">
+                <button onClick={() => { setSearch(''); setDebouncedSearch(''); setCat('All'); setPriceMin(''); setPriceMax(''); }}
+                  className="px-4 py-2 rounded-xl border-2 border-gray-200 text-gray-600 text-sm font-bold hover:border-blue-300 hover:text-blue-600 transition-colors">
+                  Clear filters
+                </button>
+                <Link to="/quote"
+                  className="px-4 py-2 rounded-xl brand-gradient text-white text-sm font-bold hover:opacity-90 transition-opacity">
+                  Request a quote
+                </Link>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

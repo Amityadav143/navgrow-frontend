@@ -42,6 +42,7 @@ const NotFoundPage       = React.lazy(() => import('@/pages/NotFoundPage'));
 // Admin pages
 const AdminHome          = React.lazy(() => import('@/pages/admin/AdminDashboard'));
 const AdminSettings      = React.lazy(() => import('@/pages/admin/AdminSettings'));
+const AdminNotifications = React.lazy(() => import('@/pages/admin/AdminNotifications'));
 const AdminOrders        = React.lazy(() => import('@/pages/admin/AdminOrders'));
 const AdminProducts      = React.lazy(() => import('@/pages/admin/AdminProducts'));
 const AdminContacts      = React.lazy(() => import('@/pages/admin/AdminContacts'));
@@ -202,6 +203,7 @@ function App() {
           <Route path="news"    element={<W><AdminNews /></W>} />
           <Route path="coupons" element={<W><AdminCoupons /></W>} />
           <Route path="settings"  element={<W><AdminSettings /></W>} />
+          <Route path="notifications" element={<W><AdminNotifications /></W>} />
           <Route path="users"     element={<W><AdminUsers /></W>} />
           <Route path="jobs"      element={<W><AdminJobs /></W>} />
           <Route path="audit"     element={<W><AdminAuditLog /></W>} />

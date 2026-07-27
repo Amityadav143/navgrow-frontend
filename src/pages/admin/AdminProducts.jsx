@@ -36,7 +36,7 @@ const GST_RATES = ['0','5','12','18','28'];
 // (features, benefits, applications, specifications, imageUrls) using a
 // literal "\n" between items, or wrap the whole multi-line cell in quotes.
 const CSV_HEADERS = [
-  'name','category','price','mrp','gstRate','hsnCode','stockQty','minOrderQty',
+  'name','category','price','mrp','gstRate','hsnCode','stockQty','minOrderQty','deliveryCharge',
   'description','imageUrl','badge','featured',
   'tagline','summary','warranty',
   'features','benefits','applications','specifications','imageUrls',
@@ -262,7 +262,7 @@ const FormInput = ({ label, fieldKey, type='text', required, placeholder, form, 
 const ProductForm = ({ initial, onSave, onCancel, saving, categories = CATEGORIES }) => {
   const DEFAULTS = {
     name:'', category:'Safety Equipment', price:'', mrp:'', gstRate:'18', hsnCode:'',
-    stockQty:'0', minOrderQty:'1', description:'', imageUrl:'', badge:'', featured:false, sku:'', active:true,
+    stockQty:'0', minOrderQty:'1', deliveryCharge:'', description:'', imageUrl:'', badge:'', featured:false, sku:'', active:true,
     tagline:'', summary:'', warranty:'', imageUrls:'', features:'', benefits:'', applications:'', specifications:'',
   };
   const [form, setForm] = useState({ ...DEFAULTS, ...(initial || {}) });
@@ -297,6 +297,7 @@ const ProductForm = ({ initial, onSave, onCancel, saving, categories = CATEGORIE
           <FormInput label="MRP (₹)"      fieldKey="mrp"      type="number" placeholder="650" form={form} onChange={handleChange} />
           <FormInput label="Stock Qty"    fieldKey="stockQty" type="number" placeholder="100" form={form} onChange={handleChange} />
           <FormInput label="Min Order Qty" fieldKey="minOrderQty" type="number" placeholder="1" form={form} onChange={handleChange} />
+          <FormInput label="Delivery Charge / unit (₹)" fieldKey="deliveryCharge" type="number" placeholder="Blank = zone default" form={form} onChange={handleChange} />
           <FormInput label="Badge"        fieldKey="badge"    placeholder="Bestseller / New / 26% OFF" form={form} onChange={handleChange} />
           <div className="col-span-2">
             <ImageUploadInput label="Main Product Image" value={form.imageUrl}
@@ -630,6 +631,7 @@ const AdminProducts = () => {
       gstRate:     Number(form.gstRate)||18,
       stockQty:    Number(form.stockQty)||0,
       minOrderQty: Number(form.minOrderQty)||1,
+      deliveryCharge: form.deliveryCharge !== '' && form.deliveryCharge != null ? Number(form.deliveryCharge) : null,
       description: form.description||'',
       imageUrl:    form.imageUrl||'',
       badge:       form.badge||'',

@@ -45,6 +45,7 @@ const NAV_ITEMS = [
   { path: '/admin/catalog',   label: 'Categories & Services', icon: Layers,               group: 'Content' },
   // System
   { path: '/admin/settings',  label: 'Site Settings',  icon: Settings,                    group: 'System' },
+  { path: '/admin/notifications', label: 'Notifications', icon: Bell,                       group: 'System' },
   { path: '/admin/audit',     label: 'Audit Log',      icon: BarChart2,                   group: 'System' },
 ];
 

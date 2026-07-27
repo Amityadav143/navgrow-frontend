@@ -20,7 +20,7 @@ const exportsOf = (file) => {
   const src = fs.readFileSync(file,'utf8');
   const names = new Set();
   if (/export\s+default/.test(src)) names.add('default');
-  for (const m of src.matchAll(/export\s+(?:const|let|var|function|class)\s+([A-Za-z0-9_$]+)/g)) names.add(m[1]);
+  for (const m of src.matchAll(/export\s+(?:async\s+)?(?:const|let|var|function|class)\s+([A-Za-z0-9_$]+)/g)) names.add(m[1]);
   for (const m of src.matchAll(/export\s*\{([^}]*)\}/g))
     m[1].split(',').forEach(x => { const n = x.trim().split(/\s+as\s+/).pop().trim(); if (n) names.add(n); });
   return names;

@@ -35,6 +35,8 @@ export function toCartItem(product, extra = {}) {
     image:    product.image || product.imageUrl,
     slug:     product.slug,
     stockQty: product.stockQty ?? product.stock_qty,
+    // Per-product delivery base (admin-set); null → zone default at checkout.
+    deliveryCharge: product.deliveryCharge ?? product.delivery_charge ?? null,
     // Tax — the two fields that must never be dropped.
     gstRate:  Number.isFinite(rate) && rate >= 0 ? rate : undefined,
     hsn:      product.hsn || product.hsnCode || product.hsn_code || undefined,

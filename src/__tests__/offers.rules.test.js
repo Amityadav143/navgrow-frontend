@@ -44,14 +44,14 @@ describe('delivery volume tiers', () => {
     expect(applyDeliveryTier(150, 1)).toBe(150);
   });
 
-  it('charges 80% for 2–5 units', () => {
-    [2, 3, 5].forEach(q => expect(deliveryTierFactor(q)).toBe(0.8));
-    expect(applyDeliveryTier(150, 4)).toBe(120);
+  it('charges 70% for 2–5 units (reduced by a further 10%)', () => {
+    [2, 3, 5].forEach(q => expect(deliveryTierFactor(q)).toBe(0.7));
+    expect(applyDeliveryTier(150, 4)).toBe(105);
   });
 
-  it('charges 70% for 6–10 units', () => {
-    [6, 10].forEach(q => expect(deliveryTierFactor(q)).toBe(0.7));
-    expect(applyDeliveryTier(150, 8)).toBe(105);
+  it('charges 60% for 6–10 units', () => {
+    [6, 10].forEach(q => expect(deliveryTierFactor(q)).toBe(0.6));
+    expect(applyDeliveryTier(150, 8)).toBe(90);   // 150×0.6
   });
 
   it('charges 50% above 10 units', () => {
@@ -59,9 +59,9 @@ describe('delivery volume tiers', () => {
     expect(applyDeliveryTier(150, 20)).toBe(75);
   });
 
-  it('is one order-level charge, never multiplied per unit', () => {
-    // 10 units must cost less than 10 × the single-unit charge, not more.
+  it('applyDeliveryTier scales one base by the tier, never multiplies by qty', () => {
+    // The helper applies a single factor; 10 units → 60% tier.
     expect(applyDeliveryTier(150, 10)).toBeLessThan(150 * 10);
-    expect(applyDeliveryTier(150, 10)).toBe(105);
+    expect(applyDeliveryTier(150, 10)).toBe(90);   // 150×0.6
   });
 });

@@ -17,22 +17,23 @@ export function cn(...inputs) {
 }
 
 /**
- * Volume-based delivery multiplier, keyed on the TOTAL quantity in the cart
- * (not per product line). Delivery is a single order-level charge that shrinks
- * as the order grows. This MUST match DeliveryService.quantityTierFactor on the
- * backend so the preview and the charged amount agree:
+ * Volume-based delivery multiplier, keyed on a single line's quantity. Delivery
+ * is charged per product (see perProductDelivery) and each line's per-unit rate
+ * shrinks as that line's quantity grows. This MUST match
+ * DeliveryService.quantityTierFactor on the backend so the preview and the
+ * charged amount agree:
  *
  *      1 unit      → 100% of the defined delivery charge
- *      2–5 units   →  80%
- *      6–10 units  →  70%
+ *      2–5 units   →  70%
+ *      6–10 units  →  60%
  *      11+ units   →  50%
  */
 export function deliveryTierFactor(totalQty) {
 	const q = Number(totalQty) || 0;
 	if (q <= 1) return 1;
-	if (q <= 5) return 0.8;
-	if (q <= 10) return 0.7;
-	return 0.5;
+	if (q <= 5) return 0.7;   // 2–5 units: 70%
+	if (q <= 10) return 0.6;  // 6–10 units: 60%
+	return 0.5;               // 11+ units: 50%
 }
 
 /** Applies the volume tier to a base delivery charge and rounds to whole rupees. */
@@ -57,12 +58,16 @@ export function applyDeliveryTier(baseCharge, totalQty) {
  * @returns {number} total delivery in whole rupees
  */
 export function perProductDelivery(lines, baseCharge) {
-	const base = Number(baseCharge) || 0;
-	if (!Array.isArray(lines) || base <= 0) return 0;
+	const zoneBase = Number(baseCharge) || 0;
+	if (!Array.isArray(lines)) return 0;
 	const total = lines.reduce((sum, l) => {
 		const q = Number(l?.qty ?? l?.quantity ?? 0) || 0;
 		if (q <= 0) return sum;
-		return sum + base * q * deliveryTierFactor(q);
+		// Each product can carry its own per-unit delivery base (heavier items cost
+		// more to ship); fall back to the zone base when it hasn't been set.
+		const lineBase = Number(l?.deliveryCharge) > 0 ? Number(l.deliveryCharge) : zoneBase;
+		if (lineBase <= 0) return sum; // free line
+		return sum + lineBase * q * deliveryTierFactor(q);
 	}, 0);
 	return Math.round(total);
 }

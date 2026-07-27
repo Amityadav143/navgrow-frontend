@@ -343,8 +343,15 @@ const ProductDetailPage = () => {
   // admin hasn't filled in). If the API is unreachable we still render the static
   // page rather than a blank one — but then stock is unknown and the UI says so.
   const product = React.useMemo(() => {
-    if (!staticProduct) return apiProduct;
-    if (!apiProduct)    return staticProduct;
+    // Normalise availability from a concrete stock number wherever we have one,
+    // so the Add/Buy buttons and the quantity stepper always agree.
+    const withStock = (p) => {
+      if (!p) return p;
+      if (Number.isFinite(Number(p.stockQty))) return { ...p, inStock: Number(p.stockQty) > 0 };
+      return p;
+    };
+    if (!staticProduct) return withStock(apiProduct);
+    if (!apiProduct)    return withStock(staticProduct);
     const merged = { ...staticProduct };
     Object.entries(apiProduct).forEach(([k, v]) => {
       const empty = v === null || v === undefined || v === ''
@@ -357,7 +364,7 @@ const ProductDetailPage = () => {
       merged.stockQty = apiProduct.stockQty;
       merged.inStock  = apiProduct.inStock;
     }
-    return merged;
+    return withStock(merged);
   }, [staticProduct, apiProduct]);
   const stockKnown = apiProduct != null || Number.isFinite(Number(staticProduct?.stockQty));
   // Live related products from the API (same category); static data is only a

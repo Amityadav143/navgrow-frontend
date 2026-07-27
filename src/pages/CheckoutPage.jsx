@@ -29,6 +29,7 @@ import { ordersApi, deliveryApi, couponsApi } from '@/lib/api';
 import { perProductDelivery } from '@/lib/utils';
 import { LOCAL_OFFERS, evaluateLocalCoupon, isOffline } from '@/lib/offers';
 import PincodeCheck from '@/components/PincodeCheck';
+import { lookupPincode, detectLocation } from '@/lib/location';
 import RequireAuth from '@/components/RequireAuth';
 import { useAuth } from '@/context/AuthContext';
 import useSeo from '@/hooks/useSeo';
@@ -156,6 +157,52 @@ const CheckoutPage = () => {
     setErrors(p => ({ ...p, [k]: undefined }));
   };
 
+  // ── Pincode → area, and live-location → pincode (issue: help users fill this) ──
+  const [pinAreas, setPinAreas] = useState([]);      // localities under the pincode
+  const [pinInfo, setPinInfo] = useState(null);      // { area, district, state }
+  const [locating, setLocating] = useState(false);
+
+  // When a full pincode is typed, auto-fill city/state and offer the area list.
+  useEffect(() => {
+    const pin = (form.pincode || '').trim();
+    if (!/^[1-9][0-9]{5}$/.test(pin)) { setPinAreas([]); setPinInfo(null); return; }
+    let cancelled = false;
+    lookupPincode(pin).then(info => {
+      if (cancelled || !info) return;
+      setPinInfo(info);
+      setPinAreas(info.areas || []);
+      // Fill city/state if the user hasn't already typed them.
+      setForm(p => ({
+        ...p,
+        city:  p.city  && p.city.trim()  ? p.city  : (info.district || ''),
+        state: p.state && p.state.trim() ? p.state : (info.state || ''),
+      }));
+    });
+    return () => { cancelled = true; };
+  }, [form.pincode]);
+
+  const useMyLocation = async () => {
+    setLocating(true);
+    try {
+      const loc = await detectLocation();
+      setForm(p => ({
+        ...p,
+        pincode: loc.pincode || p.pincode,
+        city:    loc.city    || p.city,
+        state:   loc.state   || p.state,
+        address: p.address || [loc.area, loc.city].filter(Boolean).join(', '),
+      }));
+      setErrors(p => ({ ...p, pincode: undefined }));
+      if (!loc.pincode) {
+        toast({ title: 'Location found', description: 'Enter your PIN code to see delivery charges.' });
+      }
+    } catch (e) {
+      toast({ title: 'Location unavailable', description: e.message, variant: 'destructive' });
+    } finally {
+      setLocating(false);
+    }
+  };
+
   /* Razorpay script — loaded once, on demand */
   useEffect(() => {
     if (document.getElementById('razorpay-sdk')) return;
@@ -195,9 +242,13 @@ const CheckoutPage = () => {
     // base charge for the pincode; we apply the per-product formula to it here so
     // cart and checkout always agree. Until a pincode resolves we use the national
     // default base as the estimate.
-    const cartLines = items.map(i => ({ qty: i.qty || 1 }));
-    let shipping;
-    if (delivery && delivery.serviceable) {
+    const cartLines = items.map(i => ({ qty: i.qty || 1, deliveryCharge: i.deliveryCharge }));
+    // Delivery is only known once the buyer's pincode resolves to a zone. Until
+    // then we do NOT show an estimated figure — the user is asked to enter a PIN
+    // code first. `deliveryKnown` drives that in the UI.
+    const deliveryKnown = Boolean(delivery && delivery.serviceable);
+    let shipping = 0;
+    if (deliveryKnown) {
       // Free zones (Siliguri) return a 0 base → stays free. Otherwise the returned
       // charge IS the per-unit base for this zone; apply the per-product formula.
       const baseStd = Number(delivery.standardCharge || 0);
@@ -207,8 +258,6 @@ const CheckoutPage = () => {
       } else {
         shipping = baseStd === 0 ? 0 : perProductDelivery(cartLines, baseStd);
       }
-    } else {
-      shipping = goods === 0 ? 0 : perProductDelivery(cartLines, SHIPPING_FEE);
     }
 
     // Group taxable value and tax by slab for the breakdown.
@@ -221,7 +270,7 @@ const CheckoutPage = () => {
     });
 
     return {
-      lines, subtotal, gst, shipping,
+      lines, subtotal, gst, shipping, deliveryKnown,
       slabs: Object.values(bySlab).sort((a, b) => a.rate - b.rate),
       savings: Math.max(0, mrpTotal - subtotal),
       codCharge: 0,   // filled in below once the zone and method are known
@@ -348,6 +397,20 @@ const CheckoutPage = () => {
   const handlePay = async () => {
     setError('');
     if (!items.length) { setError('Your cart is empty.'); return; }
+    // Don't let a buyer pay before we know the delivery details — otherwise the
+    // server rejects the order with a raw error. Validate the address/pincode and
+    // send them back to step 1 to fix it, with the field errors shown.
+    if (!validateDelivery()) {
+      setStep(1); setMaxStep(m => Math.max(m, 1));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setError('Please complete your delivery details before paying.');
+      return;
+    }
+    if (!totals.deliveryKnown) {
+      setStep(1);
+      setError('Enter your PIN code so we can calculate delivery before payment.');
+      return;
+    }
     if (payMethod !== 'COD' && !window.Razorpay) {
       setError('Payment library is still loading — please try again in a moment.'); return;
     }
@@ -584,10 +647,16 @@ const CheckoutPage = () => {
                       <div className="flex justify-between">
                         <span className="text-gray-500">Delivery</span>
                         <span className="font-medium text-gray-800">
-                          {totals.shipping === 0 ? 'Free' : inr(totals.shipping)}
+                          {!totals.deliveryKnown
+                            ? <span className="text-amber-600 font-semibold text-[13px]">Enter PIN code</span>
+                            : totals.shipping === 0 ? 'Free' : inr(totals.shipping)}
                         </span>
                       </div>
-                      {totals.shipping > 0 && (
+                      {!totals.deliveryKnown ? (
+                        <p className="text-[11px] text-amber-600 -mt-1">
+                          Enter your delivery PIN code below to see the delivery charge.
+                        </p>
+                      ) : totals.shipping > 0 && (
                         <p className="text-[11px] text-emerald-700 -mt-1">
                           Delivery is charged per product and scales with each item's quantity
                           (higher quantity = lower per-unit rate). Siliguri is free.
@@ -600,9 +669,14 @@ const CheckoutPage = () => {
                         </div>
                       )}
                       <div className="flex justify-between pt-1.5 mt-0.5 border-t border-gray-200">
-                        <span className="font-semibold text-gray-900">Total</span>
+                        <span className="font-semibold text-gray-900">
+                          {totals.deliveryKnown ? 'Total' : 'Subtotal'}
+                        </span>
                         <span className="font-bold text-gray-900">{inr(Math.max(0, totals.grandTotal - discount))}</span>
                       </div>
+                      {!totals.deliveryKnown && (
+                        <p className="text-[11px] text-gray-400">+ delivery, shown once your PIN code is entered</p>
+                      )}
                     </div>
 
                     {/* Coupon */}
@@ -696,6 +770,13 @@ const CheckoutPage = () => {
                 {step === 2 && (
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                     className="overflow-hidden">
+                    {/* Help the buyer fill their address: one tap to use their live
+                        location, and area/city/state auto-filled from the pincode. */}
+                    <button type="button" onClick={useMyLocation} disabled={locating}
+                      className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-blue-200 text-blue-700 text-sm font-bold hover:bg-blue-50 transition-colors disabled:opacity-50">
+                      {locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+                      {locating ? 'Detecting…' : 'Use my current location'}
+                    </button>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                       <Field id="name" label="Full name" required value={form.name} onChange={ch('name')} autoComplete="name" error={errors.name} />
                       <Field id="phone" label="Phone" required type="tel" inputMode="tel" value={form.phone} onChange={ch('phone')} autoComplete="tel" error={errors.phone} placeholder="+91 98765 43210" />
@@ -703,7 +784,23 @@ const CheckoutPage = () => {
                       <Field id="address" label="Address" required value={form.address} onChange={ch('address')} autoComplete="street-address" error={errors.address} className="sm:col-span-2" placeholder="Building, street, area" />
                       <Field id="city" label="City" required value={form.city} onChange={ch('city')} autoComplete="address-level2" error={errors.city} />
                       <Field id="state" label="State" required options={STATES} value={form.state} onChange={ch('state')} error={errors.state} />
-                      <Field id="pincode" label="PIN code" required inputMode="numeric" value={form.pincode} onChange={ch('pincode')} autoComplete="postal-code" error={errors.pincode} placeholder="734001" />
+                      <div>
+                        <Field id="pincode" label="PIN code" required inputMode="numeric" value={form.pincode} onChange={ch('pincode')} autoComplete="postal-code" error={errors.pincode} placeholder="734001" />
+                        {pinInfo && (
+                          <p className="text-[11px] text-emerald-700 mt-1">
+                            {pinInfo.district}{pinInfo.state ? `, ${pinInfo.state}` : ''}
+                          </p>
+                        )}
+                        {pinAreas.length > 1 && (
+                          <select
+                            value={form.area || ''}
+                            onChange={(e) => setForm(p => ({ ...p, area: e.target.value }))}
+                            className="w-full mt-1.5 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100">
+                            <option value="">Select your area (optional)</option>
+                            {pinAreas.map(a => <option key={a} value={a}>{a}</option>)}
+                          </select>
+                        )}
+                      </div>
                       <Field id="gstin" label="GSTIN (optional)" value={form.gstin} onChange={ch('gstin')} error={errors.gstin} placeholder="For a business GST invoice" />
                     </div>
                     {delivery && (
@@ -884,14 +981,19 @@ const CheckoutPage = () => {
                         {delivery.zone ? ` · ${delivery.zone}` : ''}
                       </span>
                     )}
-                    {totals.shipping > 0 && (
+                    {totals.deliveryKnown && totals.shipping > 0 && (
                       <span className="block text-[11px] text-emerald-700">
                         Per product × quantity
                       </span>
                     )}
+                    {!totals.deliveryKnown && (
+                      <span className="block text-[11px] text-amber-600">Enter PIN code to see charge</span>
+                    )}
                   </span>
                   <span className="font-semibold">
-                    {totals.shipping === 0 ? <span className="text-green-600">FREE</span> : inr(totals.shipping)}
+                    {!totals.deliveryKnown
+                      ? <span className="text-amber-600 text-[13px]">—</span>
+                      : totals.shipping === 0 ? <span className="text-green-600">FREE</span> : inr(totals.shipping)}
                   </span>
                 </div>
                 {codFee > 0 && (
@@ -910,6 +1012,9 @@ const CheckoutPage = () => {
                   <span className="font-bold text-gray-900">Total payable</span>
                   <span className="text-xl font-extrabold text-gray-900">{inr(payable)}</span>
                 </div>
+                {!totals.deliveryKnown && (
+                  <p className="text-[11px] text-amber-600 text-right">excludes delivery — enter PIN code</p>
+                )}
               </div>
 
               {/* Coupon — available on EVERY step (including final payment), not
@@ -977,7 +1082,7 @@ const CheckoutPage = () => {
                   <p className="text-[11px] text-gray-600 leading-relaxed">
                     Delivery is charged <strong>per product</strong>, multiplied by that item's
                     quantity, with a lower per-unit rate as quantity rises:
-                    1 unit = 100%, 2–5 = 80%, 6–10 = 70%, 11+ = 50% of the base rate.
+                    1 unit = 100%, 2–5 = 70%, 6–10 = 60%, 11+ = 50% of the base rate.
                     {' '}Siliguri (734xxx) is always free.
                   </p>
                 </div>

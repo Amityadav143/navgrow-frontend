@@ -372,3 +372,11 @@ export const catalogApi = {
   update: (id, d)  => api.put(`/catalog/${id}`, d),
   delete: (id)     => api.delete(`/catalog/${id}`),
 };
+
+// ── Admin: notification settings (per-event emails + SMS/email provider config) ──
+export const notificationSettingsApi = {
+  get:       ()   => api.get('/admin/notification-settings'),
+  save:      (d)  => api.put('/admin/notification-settings', d),
+  testEmail: (to) => api.post('/admin/notification-settings/test-email', null, { params: { to } }),
+  testSms:   (to) => api.post('/admin/notification-settings/test-sms', null, { params: { to } }),
+};
