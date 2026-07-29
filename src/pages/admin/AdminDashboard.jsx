@@ -15,7 +15,7 @@ import { Link, Outlet, useLocation, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard, Package, ShoppingCart, MessageSquare, FileText,
   Users, Newspaper, Image, Briefcase, Tag, ChevronRight, Bell, Settings,
-  TrendingUp, AlertCircle, CheckCircle, Clock, BarChart2, ClipboardList, Layers, FileDown, Percent, Truck,
+  TrendingUp, AlertCircle, CheckCircle, Clock, BarChart2, ClipboardList, Layers, FileDown, Percent, Truck, Menu, X,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useApi } from '@/hooks/useApi';
@@ -54,65 +54,101 @@ const NAV_GROUPS = ['Overview', 'Commerce', 'CRM', 'Content', 'System'];
 export const AdminLayout = () => {
   const { isAdmin, isManager, isEditor, user } = useAuth();
   const location = useLocation();
+  const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
+
+  // Close the mobile drawer whenever the route changes (a nav item was tapped).
+  React.useEffect(() => { setMobileNavOpen(false); }, [location.pathname]);
 
   if (!isAdmin && !isManager && !isEditor) return <Navigate to="/" replace />;
 
-  return (
-    <div className="flex min-h-screen bg-gray-950">
-      {/* Sidebar */}
-      <aside className="w-64 bg-gray-900 text-gray-300 flex flex-col shrink-0">
-        {/* Logo */}
-        <div className="p-5 border-b border-gray-800">
-          <Link to="/">
-            <img loading="lazy" decoding="async" src="/ng_white_logo.png" alt="Navgrow" className="h-10 w-auto object-contain" />
-          </Link>
-          <p className="text-xs text-gray-500 mt-2">Admin Console</p>
-        </div>
+  const SidebarContent = (
+    <>
+      {/* Logo */}
+      <div className="p-5 border-b border-gray-800">
+        <Link to="/">
+          <img loading="lazy" decoding="async" src="/ng_white_logo.png" alt="Navgrow" className="h-10 w-auto object-contain" />
+        </Link>
+        <p className="text-xs text-gray-500 mt-2">Admin Console</p>
+      </div>
 
-        {/* Nav */}
-        <nav className="flex-1 p-3 overflow-y-auto">
-          {NAV_GROUPS.map(group => {
-            const groupItems = NAV_ITEMS.filter(i => i.group === group);
-            return (
-              <div key={group} className="mb-3">
-                <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest px-3 mb-1 mt-2">{group}</p>
-                {groupItems.map(({ path, label, icon: Icon, exact }) => {
-                  const active = exact ? location.pathname === path : location.pathname.startsWith(path) && path !== '/admin';
-                  const isExactActive = exact && location.pathname === '/admin';
-                  const isActive = active || isExactActive;
-                  return (
-                    <Link key={path} to={path}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors mb-0.5 ${
-                        isActive ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                      }`}>
-                      <Icon className="h-4 w-4 shrink-0" />
-                      {label}
-                    </Link>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </nav>
+      {/* Nav */}
+      <nav className="flex-1 p-3 overflow-y-auto">
+        {NAV_GROUPS.map(group => {
+          const groupItems = NAV_ITEMS.filter(i => i.group === group);
+          return (
+            <div key={group} className="mb-3">
+              <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest px-3 mb-1 mt-2">{group}</p>
+              {groupItems.map(({ path, label, icon: Icon, exact }) => {
+                const active = exact ? location.pathname === path : location.pathname.startsWith(path) && path !== '/admin';
+                const isExactActive = exact && location.pathname === '/admin';
+                const isActive = active || isExactActive;
+                return (
+                  <Link key={path} to={path}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors mb-0.5 ${
+                      isActive ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}>
+                    <Icon className="h-4 w-4 shrink-0" />
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          );
+        })}
+      </nav>
 
-        {/* User */}
-        <div className="p-4 border-t border-gray-800">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold">
-              {user?.email?.[0]?.toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-gray-300 truncate">{user?.email}</p>
-              <p className="text-[10px] text-gray-500">{isAdmin ? 'Admin' : 'Manager'}</p>
-            </div>
+      {/* User */}
+      <div className="p-4 border-t border-gray-800">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold">
+            {user?.email?.[0]?.toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-gray-300 truncate">{user?.email}</p>
+            <p className="text-[10px] text-gray-500">{isAdmin ? 'Admin' : isManager ? 'Manager' : 'Editor'}</p>
           </div>
         </div>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="flex min-h-screen bg-gray-950">
+      {/* Desktop sidebar — fixed column, hidden on small screens */}
+      <aside className="hidden lg:flex w-64 bg-gray-900 text-gray-300 flex-col shrink-0">
+        {SidebarContent}
       </aside>
 
-      {/* Main */}
-      <main className="flex-1 overflow-auto">
-        <Outlet />
-      </main>
+      {/* Mobile drawer + backdrop */}
+      {mobileNavOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setMobileNavOpen(false)} />
+          <aside className="absolute left-0 top-0 h-full w-72 max-w-[80vw] bg-gray-900 text-gray-300 flex flex-col shadow-2xl animate-in slide-in-from-left duration-200">
+            <button onClick={() => setMobileNavOpen(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 z-10">
+              <X className="h-5 w-5" />
+            </button>
+            {SidebarContent}
+          </aside>
+        </div>
+      )}
+
+      {/* Main column */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile top bar with hamburger — only on small screens */}
+        <header className="lg:hidden sticky top-0 z-40 flex items-center gap-3 px-4 h-14 bg-gray-900 border-b border-gray-800">
+          <button onClick={() => setMobileNavOpen(true)}
+            className="p-2 -ml-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-800" aria-label="Open menu">
+            <Menu className="h-5 w-5" />
+          </button>
+          <img loading="lazy" decoding="async" src="/ng_white_logo.png" alt="Navgrow" className="h-7 w-auto object-contain" />
+          <span className="text-xs text-gray-500 ml-auto">Admin</span>
+        </header>
+
+        <main className="flex-1 overflow-auto">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 };
@@ -152,19 +188,19 @@ const AdminHome = () => {
   ];
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-7">
-        <div>
-          <h1 className="text-2xl font-extrabold text-white mb-0.5">Dashboard</h1>
-          <p className="text-gray-400 text-sm">{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+      <div className="flex items-center justify-between gap-3 mb-6 sm:mb-7">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-white mb-0.5">Dashboard</h1>
+          <p className="text-gray-400 text-xs sm:text-sm truncate">{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
         </div>
-        <div className="flex gap-3">
-          <Link to="/admin/contacts" className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-gray-300 rounded-xl text-sm hover:bg-gray-700 transition-colors">
+        <div className="flex gap-2 sm:gap-3 shrink-0">
+          <Link to="/admin/contacts" className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-gray-800 text-gray-300 rounded-xl text-sm hover:bg-gray-700 transition-colors">
             <Bell className="h-4 w-4" />
             {stats?.unreadMessages ? <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">{stats.unreadMessages}</span> : null}
           </Link>
-          <Link to="/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm hover:bg-blue-500 transition-colors">
+          <Link to="/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-xl text-sm hover:bg-blue-500 transition-colors whitespace-nowrap">
             View Site
           </Link>
         </div>

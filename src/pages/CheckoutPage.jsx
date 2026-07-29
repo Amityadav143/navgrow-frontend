@@ -494,7 +494,7 @@ const CheckoutPage = () => {
       <section className="py-16 bg-gray-50 min-h-screen">
         <div className="container mx-auto px-4 max-w-2xl">
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-8 text-center">
             <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-5">
               <CheckCircle className="h-9 w-9 text-green-600" />
             </div>
@@ -554,7 +554,7 @@ const CheckoutPage = () => {
     return (
       <section className="py-16 bg-gray-50 min-h-screen">
         <div className="container mx-auto px-4 max-w-lg text-center">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-10">
             <ShoppingCart className="h-14 w-14 text-gray-200 mx-auto mb-4" />
             <h1 className="text-xl font-extrabold text-gray-900 mb-2">Your cart is empty</h1>
             <p className="text-gray-500 text-sm mb-6">Add a few items and they will show up here.</p>

@@ -335,7 +335,7 @@ const AdminCoupons = () => {
   const disabled= items.filter(c => !c.active);
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {confirm && <ConfirmDialog message={confirm.msg} onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)}/>}
 
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">

@@ -40,7 +40,7 @@ const AdminOrders = () => {
   };
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-extrabold text-white">Orders</h1>
         <div className="flex gap-3">
@@ -58,7 +58,8 @@ const AdminOrders = () => {
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               {['Order #','Customer','Items','Total','Payment','Status','Actions'].map(h => (
@@ -102,6 +103,7 @@ const AdminOrders = () => {
             ))}
           </tbody>
         </table>
+        </div>
 
         {orders.length === 0 && !loading && (
           <div className="text-center py-12 text-gray-400"><Package className="h-10 w-10 mx-auto mb-2 opacity-30" />No orders found</div>

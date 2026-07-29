@@ -709,7 +709,7 @@ const AdminProducts = () => {
   const lowStock = items.filter(p => (p.stockQty ?? 0) < 10);
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {confirm && (
         <ConfirmDialog message={confirm.msg} onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)}/>
       )}

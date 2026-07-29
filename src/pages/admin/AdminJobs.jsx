@@ -230,7 +230,7 @@ const AdminJobs = () => {
   const filtered = items.filter(j => !search || j.title?.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {confirm && <ConfirmDialog message={confirm.msg} onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)}/>}
       {viewApps && <ApplicationsPanel jobId={viewApps.id} jobTitle={viewApps.title} onClose={() => setViewApps(null)}/>}
 

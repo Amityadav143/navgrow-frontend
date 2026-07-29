@@ -38,7 +38,7 @@ const AdminQuotes = () => {
   };
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-extrabold text-white">Quote Requests</h1>
         <select onChange={e => setFilter('status', e.target.value || undefined)}

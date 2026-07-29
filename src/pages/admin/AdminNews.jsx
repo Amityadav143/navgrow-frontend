@@ -318,7 +318,7 @@ const AdminNews = () => {
   const STATUS_COLORS = { PUBLISHED: 'bg-green-100 text-green-700', DRAFT: 'bg-yellow-100 text-yellow-700', ARCHIVED: 'bg-gray-100 text-gray-500' };
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-white">News & Articles</h1>

@@ -131,7 +131,7 @@ const AdminDeliveryZones = () => {
   );
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {confirmDel && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
