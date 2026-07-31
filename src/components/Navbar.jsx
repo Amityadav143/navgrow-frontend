@@ -127,13 +127,27 @@ const Navbar = ({ scrolled, onSearchOpen }) => {
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
   const [servicesOpen, setServicesOpen] = useState(false);
   const [authOpen, setAuthOpen]         = useState(false);
+  const [authForgot, setAuthForgot]     = useState(false);
   const [catalogueOpen, setCatalogueOpen] = useState(false);
   const { totalItems, setCartOpen } = useCart();
   const { totalItems: rfqCount, setDrawerOpen: setRfqOpen } = useRfq();
   const { user, isLoggedIn, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
   const onDark = false;
-  // Promo note shown at top
+
+  // Open the sign-in modal from a query param (used by the password-reset page's
+  // "back to sign in" / "request a new link" links, and any deep link).
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    if (sp.get('login') === '1' || sp.get('forgot') === '1') {
+      setAuthForgot(sp.get('forgot') === '1');
+      setAuthOpen(true);
+      // Strip the param so refreshes/back don't reopen it.
+      sp.delete('login'); sp.delete('forgot');
+      const qs = sp.toString();
+      navigate({ pathname: location.pathname, search: qs ? `?${qs}` : '' }, { replace: true });
+    }
+  }, [location.search, location.pathname, navigate]);
 
   return (
     <>
@@ -348,7 +362,7 @@ const Navbar = ({ scrolled, onSearchOpen }) => {
         </AnimatePresence>
       </div>
 
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+      <AuthModal open={authOpen} onClose={() => { setAuthOpen(false); setAuthForgot(false); }} initialForgot={authForgot} />
       <CatalogueDownloadModal open={catalogueOpen} onClose={() => setCatalogueOpen(false)} source="navbar" />
     </>
   );

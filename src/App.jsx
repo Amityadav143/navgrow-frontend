@@ -33,6 +33,7 @@ const OrderTrackPage     = React.lazy(() => import('@/pages/OrderTrackPage'));
 const SavedQuotesPage    = React.lazy(() => import('@/pages/SavedQuotesPage'));
 const OAuthCallbackPage  = React.lazy(() => import('@/pages/OAuthCallbackPage'));
 const AccountPage        = React.lazy(() => import('@/pages/AccountPage'));
+const ResetPasswordPage  = React.lazy(() => import('@/pages/ResetPasswordPage'));
 const TermsPage          = React.lazy(() => import('@/pages/TermsPage'));
 const PrivacyPage        = React.lazy(() => import('@/pages/PrivacyPage'));
 const RefundPolicyPage   = React.lazy(() => import('@/pages/RefundPolicyPage'));
@@ -239,6 +240,7 @@ function App() {
           <Route path="track-order"   element={<W><OrderTrackPage /></W>} />
           <Route path="saved-quotes"  element={<W><SavedQuotesPage /></W>} />
           <Route path="oauth/callback" element={<W><OAuthCallbackPage /></W>} />
+          <Route path="reset-password" element={<W><ResetPasswordPage /></W>} />
           <Route path="account"       element={<W><AccountPage /></W>} />
           <Route path="account/orders"element={<W><AccountPage /></W>} />
           <Route path="terms"         element={<W><TermsPage /></W>} />

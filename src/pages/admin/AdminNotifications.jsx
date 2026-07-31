@@ -11,11 +11,11 @@ import { notificationSettingsApi } from '@/lib/api';
 import { useToast } from '@/components/ui/use-toast';
 
 const EMAIL_FIELDS = [
-  { key: 'careersEmail', label: 'Careers / Job applications', hint: 'Where job applications are sent' },
-  { key: 'ordersEmail',  label: 'New orders',                hint: 'Where new shop orders are notified' },
-  { key: 'quotesEmail',  label: 'Quotes & RFQ',              hint: 'Where quote/RFQ requests are sent' },
-  { key: 'contactEmail', label: 'Contact form',              hint: 'Where website enquiries are sent' },
-  { key: 'supportEmail', label: 'Support (catch-all)',       hint: 'General/fallback inbox' },
+  { key: 'careersEmail', label: 'Careers / Job applications', hint: 'Job applications & CV submissions' },
+  { key: 'ordersEmail',  label: 'New orders',                hint: 'New shop orders (COD & online)' },
+  { key: 'quotesEmail',  label: 'Quotes & RFQ',              hint: 'Quote/RFQ requests & accept-reject decisions' },
+  { key: 'contactEmail', label: 'Contact form',              hint: 'Website "Contact us" enquiries' },
+  { key: 'supportEmail', label: 'Support / Leads (catch-all)', hint: 'Catalogue leads & general fallback' },
   { key: 'fromEmail',    label: 'From address',              hint: 'The "From:" shown to recipients' },
 ];
 
@@ -93,6 +93,12 @@ const AdminNotifications = () => {
         emailEnabled: form.emailEnabled, smsEnabled: form.smsEnabled,
         smsProvider: form.smsProvider, smsSenderId: form.smsSenderId,
         msg91TemplateId: form.msg91TemplateId, twilioFromNumber: form.twilioFromNumber,
+        // Per-event MSG91 Flow template ids
+        tplWelcome: form.tplWelcome, tplOrderCod: form.tplOrderCod, tplOrderOnline: form.tplOrderOnline,
+        tplOrderShipped: form.tplOrderShipped, tplOrderDelivered: form.tplOrderDelivered,
+        tplOrderCancelled: form.tplOrderCancelled, tplOrderProcessing: form.tplOrderProcessing,
+        tplOrderRefunded: form.tplOrderRefunded, tplPasswordChanged: form.tplPasswordChanged,
+        tplRfqReceived: form.tplRfqReceived, tplRfqReady: form.tplRfqReady,
         msg91AuthKey: form.msg91AuthKeyNew || '',
         twilioAccountSid: form.twilioAccountSidNew || '',
         twilioAuthToken: form.twilioAuthTokenNew || '',
@@ -169,6 +175,36 @@ const AdminNotifications = () => {
           </div>
         )}
       </section>
+
+      {/* Per-event DLT/MSG91 Flow template IDs — only relevant for MSG91 */}
+      {form.smsProvider === 'msg91' && (
+        <section className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+          <h2 className="flex items-center gap-2 font-bold text-gray-900 mb-1"><MessageSquare className="h-4 w-4 text-blue-600" /> Transactional SMS templates (DLT)</h2>
+          <p className="text-[11px] text-gray-500 mb-4">
+            Paste the approved MSG91 Flow / DLT template ID for each event. Each transactional SMS
+            sends using its own template — see DLT_SMS_TEMPLATES_MSG91_SETUP.md for the exact
+            template text to register (C2–C12). Leave blank until approved.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            {[
+              ['tplOrderCod',        'Order confirmed — COD (C3)'],
+              ['tplOrderOnline',     'Order confirmed — online (C4)'],
+              ['tplOrderShipped',    'Order shipped (C5)'],
+              ['tplOrderDelivered',  'Order delivered (C6)'],
+              ['tplOrderCancelled',  'Order cancelled (C7)'],
+              ['tplOrderProcessing', 'Order processing (C8)'],
+              ['tplOrderRefunded',   'Order refunded (C9)'],
+              ['tplRfqReceived',     'RFQ received (C11)'],
+              ['tplRfqReady',        'RFQ quote ready (C12)'],
+              ['tplWelcome',         'Welcome / registration (C2)'],
+              ['tplPasswordChanged', 'Password changed (C10)'],
+            ].map(([key, label]) => (
+              <Field key={key} label={label} type="text" value={form[key]}
+                onChange={v => set(key, v)} placeholder="DLT template id" />
+            ))}
+          </div>
+        </section>
+      )}
 
       <button onClick={save} disabled={saving}
         className="inline-flex items-center gap-2 px-6 py-3 rounded-xl brand-gradient text-white font-bold hover:opacity-90 disabled:opacity-60">

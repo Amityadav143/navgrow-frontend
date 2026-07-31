@@ -299,7 +299,7 @@ const OtpLoginPanel = ({ onSuccess }) => {
 };
 
 /* ─────────────────────────────────────────────────────── Main Modal */
-const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
+const AuthModal = ({ open, onClose, defaultTab = 'login', initialForgot = false }) => {
   const { login, register, applySession, loading, error: authError, clearError } = useAuth();
 
   const [tab,          setTab]          = useState(defaultTab);
@@ -328,10 +328,10 @@ const AuthModal = ({ open, onClose, defaultTab = 'login' }) => {
       setForm({ name: '', email: '', phone: '', password: '', confirm: '' });
       setErrors({});
       setSuccess('');
-      setForgotStep(null);
+      setForgotStep(initialForgot ? 'email' : null);
       clearError?.();
     }
-  }, [open, defaultTab]);
+  }, [open, defaultTab, initialForgot]);
 
   const ch = key => e => {
     setForm(p => ({ ...p, [key]: e.target.value }));
