@@ -45,7 +45,7 @@ const PasswordInput = ({ label, value, onChange, placeholder, error }) => {
           onChange={onChange}
           placeholder={placeholder}
           className={`w-full pl-10 pr-10 py-2.5 border-2 rounded-xl text-sm focus:outline-none transition-colors ${
-            error ? 'border-red-300 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'
+            error ? 'border-red-300 focus:border-red-500' : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
           }`}
         />
         <button
@@ -106,16 +106,26 @@ const ResetPasswordPage = () => {
   }, [done, navigate]);
 
   return (
-    <div className="min-h-[70vh] flex items-center justify-center px-4 py-16 bg-gray-50">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
-          {/* Header band */}
-          <div className="brand-gradient px-8 py-7 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-white/15 flex items-center justify-center mx-auto mb-3">
-              <ShieldCheck className="h-7 w-7 text-white" />
+    <div className="min-h-[70vh] flex items-center justify-center px-4 py-16 relative overflow-hidden"
+         style={{ background: 'linear-gradient(135deg, #0C1D38 0%, #13294B 45%, #1E3A5F 100%)' }}>
+      {/* vibrant ambient glows */}
+      <div className="pointer-events-none absolute -top-24 -left-24 w-96 h-96 rounded-full opacity-30 blur-3xl"
+           style={{ background: 'radial-gradient(circle, #D4A028 0%, transparent 70%)' }} />
+      <div className="pointer-events-none absolute -bottom-32 -right-16 w-[28rem] h-[28rem] rounded-full opacity-25 blur-3xl"
+           style={{ background: 'radial-gradient(circle, #2FB8E6 0%, transparent 70%)' }} />
+      <div className="w-full max-w-md relative">
+        <div className="bg-white rounded-3xl shadow-2xl border border-white/10 overflow-hidden">
+          {/* Header band — vibrant gradient */}
+          <div className="px-8 py-8 text-center relative overflow-hidden"
+               style={{ background: 'linear-gradient(120deg, #13294B 0%, #1E3A5F 40%, #2563EB 100%)' }}>
+            <div className="pointer-events-none absolute inset-0 opacity-20"
+                 style={{ background: 'radial-gradient(circle at 70% 20%, #D4A028 0%, transparent 55%)' }} />
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg relative"
+                 style={{ background: 'linear-gradient(135deg, #D4A028 0%, #E0B23C 100%)' }}>
+              <ShieldCheck className="h-8 w-8 text-white drop-shadow" />
             </div>
-            <h1 className="text-xl font-extrabold text-white">Reset your password</h1>
-            <p className="text-white/80 text-sm mt-1">Choose a new password for your Navgrow account</p>
+            <h1 className="text-2xl font-extrabold text-white relative">Reset your password</h1>
+            <p className="text-blue-100 text-sm mt-1 relative">Choose a new password for your Navgrow account</p>
           </div>
 
           <div className="p-8">
@@ -128,7 +138,7 @@ const ResetPasswordPage = () => {
                 </p>
                 <Link
                   to="/?login=1"
-                  className="inline-flex items-center justify-center gap-2 w-full py-3 brand-gradient text-white font-bold rounded-xl text-sm hover:opacity-90 transition-opacity"
+                  style={{background:'linear-gradient(120deg, #2563EB 0%, #1E3A5F 55%, #D4A028 130%)'}} className="inline-flex items-center justify-center gap-2 w-full py-3 text-white font-bold rounded-xl text-sm shadow-lg shadow-blue-500/30 hover:shadow-xl hover:-translate-y-0.5 transition-all"
                 >
                   Continue to sign in <ArrowRight className="h-4 w-4" />
                 </Link>
@@ -144,7 +154,7 @@ const ResetPasswordPage = () => {
                 </p>
                 <Link
                   to="/?forgot=1"
-                  className="inline-flex items-center justify-center gap-2 w-full py-3 brand-gradient text-white font-bold rounded-xl text-sm hover:opacity-90 transition-opacity"
+                  style={{background:'linear-gradient(120deg, #2563EB 0%, #1E3A5F 55%, #D4A028 130%)'}} className="inline-flex items-center justify-center gap-2 w-full py-3 text-white font-bold rounded-xl text-sm shadow-lg shadow-blue-500/30 hover:shadow-xl hover:-translate-y-0.5 transition-all"
                 >
                   Request a new link <ArrowRight className="h-4 w-4" />
                 </Link>
@@ -187,7 +197,7 @@ const ResetPasswordPage = () => {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full py-3 brand-gradient text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 disabled:opacity-60 hover:opacity-90 transition-opacity"
+                  style={{background:'linear-gradient(120deg, #2563EB 0%, #1E3A5F 55%, #D4A028 130%)'}} className="w-full py-3 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30 disabled:opacity-60 hover:shadow-xl hover:-translate-y-0.5 transition-all"
                 >
                   {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
                   {submitting ? 'Updating…' : 'Update password'}

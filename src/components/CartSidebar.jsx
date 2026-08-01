@@ -19,6 +19,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/context/CartContext';
 import { couponsApi, rfqApi } from '@/lib/api';
 import { perProductDelivery } from '@/lib/utils';
+import PincodeCheck from '@/components/PincodeCheck';
 import { evaluateLocalCoupon, isOffline } from '@/lib/offers';
 import { track } from '@/lib/analytics';
 import { useToast } from '@/components/ui/use-toast';
@@ -242,10 +243,18 @@ const CartSidebar = () => {
       .filter(s => s.tax > 0.5)
       .sort((a, b) => a.rate - b.rate);
   }, [items, totalAmount, payableGoods]);
+  // Delivery is resolved from the shopper's PIN code when they enter it here, so
+  // the cart shows the real charge for their location rather than an estimate.
+  const [deliveryQuote, setDeliveryQuote] = useState(null);
   // Preview delivery is charged PER PRODUCT LINE: base × each line's qty ×
-  // slab(lineQty), summed. Chargeable outside Siliguri (no free-above waiver);
-  // the exact per-zone base is applied at checkout, this uses the ₹150 default.
-  const shipping    = payableGoods === 0 ? 0 : perProductDelivery(items, 150);
+  // slab(lineQty), summed. When a PIN code has been resolved we use its zone base
+  // (and free-delivery flag); otherwise we fall back to the ₹150 default estimate.
+  const deliveryResolved = !!deliveryQuote;
+  const shipping = payableGoods === 0
+    ? 0
+    : (deliveryQuote
+        ? (deliveryQuote.freeDelivery ? 0 : Number(deliveryQuote.standardCharge ?? perProductDelivery(items, 150)))
+        : perProductDelivery(items, 150));
   // Goods are already tax-inclusive, so only delivery is added.
   const grandTotal  = payableGoods + shipping;
 
@@ -450,9 +459,14 @@ const CartSidebar = () => {
                         <span className="font-medium">₹{gst.toFixed(0)}</span>
                       </div>
                     </div>
+                    <div className="pt-1">
+                      <PincodeCheck orderValue={payableGoods} compact onResolved={setDeliveryQuote} />
+                    </div>
                     <div className="flex justify-between text-gray-600 pt-1">
                       <span>Delivery
-                        <span className="block text-[11px] text-gray-400">per product × qty; Siliguri free</span>
+                        <span className="block text-[11px] text-gray-400">
+                          {deliveryResolved ? 'for your PIN code; Siliguri free' : 'estimate — enter PIN for exact charge'}
+                        </span>
                       </span>
                       <span>{shipping===0?'₹0':`₹${shipping}`}</span>
                     </div>
