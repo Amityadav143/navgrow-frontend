@@ -450,7 +450,21 @@ const ProductDetailPage = () => {
         "price": priceNum.toFixed(2),
         "priceValidUntil": validUntil.toISOString().slice(0, 10),
         "availability": product.inStock !== false ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-        "seller": { "@type": "Organization", "name": "Navgrow Engineering Service Pvt. Ltd." }
+        "itemCondition": "https://schema.org/NewCondition",
+        "seller": { "@type": "Organization", "name": "Navgrow Engineering Service Pvt. Ltd." },
+        "shippingDetails": {
+          "@type": "OfferShippingDetails",
+          "shippingRate": { "@type": "MonetaryAmount", "currency": "INR", "value": "150" },
+          "shippingDestination": { "@type": "DefinedRegion", "addressCountry": "IN" }
+        },
+        "hasMerchantReturnPolicy": {
+          "@type": "MerchantReturnPolicy",
+          "applicableCountry": "IN",
+          "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
+          "merchantReturnDays": 7,
+          "returnMethod": "https://schema.org/ReturnByMail",
+          "returnFees": "https://schema.org/FreeReturn"
+        }
       };
     }
     // Only add aggregateRating when there is a genuine rating value.

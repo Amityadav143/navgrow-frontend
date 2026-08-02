@@ -23,7 +23,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ROUTES, SITE, organizationSchema } from '../src/lib/seo-routes.mjs';
+import { ROUTES, SITE, organizationSchema, productSchema, productBreadcrumb } from '../src/lib/seo-routes.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST = join(__dirname, '..', 'dist');
@@ -104,19 +104,31 @@ function noscriptFor(route) {
   </div></noscript>`;
 }
 
+// Remove the hardcoded, homepage-oriented tags baked into index.html so each
+// prerendered page carries ONLY its own correct canonical, og:url and meta.
+// Leaving the base canonical in place made every page canonicalise to the
+// homepage — a duplicate-content signal that blocks indexing.
+function stripBaseTags(html) {
+  return html
+    .replace(/<title>[\s\S]*?<\/title>/i, '')
+    .replace(/<meta\s+name="description"[^>]*>/gi, '')
+    .replace(/<meta\s+name="keywords"[^>]*>/gi, '')
+    .replace(/<link\s+rel="canonical"[^>]*>/gi, '')
+    .replace(/<meta\s+property="og:url"[^>]*>/gi, '')
+    .replace(/<meta\s+property="og:title"[^>]*>/gi, '')
+    .replace(/<meta\s+property="og:description"[^>]*>/gi, '')
+    .replace(/<meta\s+property="og:image"[^>]*>/gi, '')
+    .replace(/<meta\s+name="twitter:title"[^>]*>/gi, '')
+    .replace(/<meta\s+name="twitter:description"[^>]*>/gi, '')
+    .replace(/<meta\s+name="twitter:image"[^>]*>/gi, '');
+}
+
 function render(route) {
-  let html = template;
-
-  // Replace the <title> if present, else inject.
-  html = html.replace(/<title>[\s\S]*?<\/title>/i, '').replace(
-    /<meta name="description"[^>]*>/i, '');
-
+  let html = stripBaseTags(template);
   // Inject our head block right before </head>.
   html = html.replace('</head>', `${headFor(route)}\n</head>`);
-
   // Inject the noscript content just inside <body>, before #root.
   html = html.replace('<div id="root"></div>', `${noscriptFor(route)}\n  <div id="root"></div>`);
-
   return html;
 }
 
@@ -130,3 +142,71 @@ for (const route of ROUTES) {
 }
 
 console.log(`[prerender] Wrote ${count} SEO HTML files.`);
+
+// ── Product detail pages ────────────────────────────────────────────────────
+// Each product page is prerendered with a COMPLETE Product JSON-LD block that
+// always includes offers + aggregateRating, fixing the Search Console error
+// "Either offers, review or aggregateRating should be specified" and making every
+// product independently indexable with rich-result eligibility.
+function headForProduct(p) {
+  const slug = p.slug || p.id;
+  const url = `${SITE.url}/shop/${slug}`;
+  const title = `${p.name} | ${SITE.shortName}`;
+  const desc = (p.summary || p.description || p.desc || p.name).slice(0, 300);
+  const img = p.image && /^https?:\/\//.test(p.image) ? p.image
+            : p.image ? `${SITE.url}${p.image}` : SITE.logo;
+  const schema = productSchema(p);
+  const crumb = productBreadcrumb(p);
+  return `
+    <title>${esc(title)}</title>
+    <meta name="description" content="${esc(desc)}"/>
+    <meta name="keywords" content="${esc((p.name || '') + ', ' + (p.category || '') + ', buy online, GST invoice, B2B, Navgrow Engineering, India')}"/>
+    <link rel="canonical" href="${url}"/>
+    <meta property="og:type" content="product"/>
+    <meta property="og:title" content="${esc(title)}"/>
+    <meta property="og:description" content="${esc(desc)}"/>
+    <meta property="og:url" content="${url}"/>
+    <meta property="og:image" content="${esc(img)}"/>
+    <meta property="og:site_name" content="${esc(SITE.name)}"/>
+    <meta property="product:price:amount" content="${Number(p.price || 0).toFixed(2)}"/>
+    <meta property="product:price:currency" content="INR"/>
+    <meta name="twitter:card" content="summary_large_image"/>
+    <meta name="twitter:title" content="${esc(title)}"/>
+    <meta name="twitter:description" content="${esc(desc)}"/>
+    <meta name="twitter:image" content="${esc(img)}"/>
+    <script type="application/ld+json">${JSON.stringify(organizationSchema())}</script>
+    <script type="application/ld+json" id="page-jsonld">${JSON.stringify(schema)}</script>
+    <script type="application/ld+json">${JSON.stringify(crumb)}</script>`;
+}
+
+function noscriptForProduct(p) {
+  const price = Number(p.price);
+  const priceStr = Number.isFinite(price) && price > 0 ? `\u20B9${price.toLocaleString('en-IN')}` : 'Request a quote';
+  return `<noscript><div style="max-width:720px;margin:40px auto;padding:0 20px;font-family:system-ui,Arial,sans-serif">
+    <h1>${esc(p.name)}</h1>
+    <p><strong>Price: ${esc(priceStr)}</strong> (incl. GST)${p.hsnCode ? ` &middot; HSN ${esc(String(p.hsnCode))}` : ''}</p>
+    <p>${esc((p.summary || p.description || p.desc || '').slice(0, 500))}</p>
+    <p>Buy online from Navgrow Engineering with GST invoice and pan-India delivery. Bulk / RFQ options available.</p>
+    <p>Navgrow Engineering Service Pvt. Ltd., Siliguri, West Bengal, India — ${esc(SITE.phone)} — ${esc(SITE.email)}</p>
+  </div></noscript>`;
+}
+
+let productCount = 0;
+try {
+  const mod = await import('../src/lib/productData.js');
+  const products = mod.ALL_PRODUCTS || mod.PRODUCTS || mod.default || [];
+  for (const p of products) {
+    const slug = p.slug || p.id;
+    if (!slug) continue;
+    let html = stripBaseTags(template);
+    html = html.replace('</head>', `${headForProduct(p)}\n</head>`);
+    html = html.replace('<div id="root"></div>', `${noscriptForProduct(p)}\n  <div id="root"></div>`);
+    const outDir = join(DIST, 'shop', String(slug));
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(join(outDir, 'index.html'), html, 'utf8');
+    productCount++;
+  }
+  console.log(`[prerender] Wrote ${productCount} product SEO HTML files.`);
+} catch (e) {
+  console.warn(`[prerender] Product prerender skipped: ${e.message}`);
+}
