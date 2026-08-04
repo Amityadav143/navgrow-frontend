@@ -17,17 +17,35 @@
   RewriteEngine On
   RewriteBase /
 
-  # Never rewrite real files (sitemap.xml, robots.txt, assets, llms.txt, ...)
-  # or directories -- only fall back to the SPA for virtual routes.
-  RewriteCond %{REQUEST_FILENAME} -f [OR]
-  RewriteCond %{REQUEST_FILENAME} -d
-  RewriteRule ^ - [L]
-
-  # Explicitly short-circuit the crawler files so nothing can shadow them.
+  # Short-circuit the crawler files so nothing can shadow them.
   RewriteRule ^(sitemap\.xml|sitemap-index\.xml|robots\.txt|llms\.txt)$ - [L]
 
-  # SPA fallback for everything else.
+  # Serve real static files (hashed JS/CSS, images, fonts, manifest) as-is.
+  RewriteCond %{REQUEST_FILENAME} -f
+  RewriteRule ^ - [L]
+
+  # ---- Serve PRERENDERED HTML for extensionless routes -------------------
+  # Every marketing + product route is prerendered to <route>/index.html so
+  # crawlers receive real HTML with JSON-LD (never the empty SPA shell). If a
+  # prerendered index.html exists for the requested path, serve it directly and
+  # deterministically -- serving the file (not the directory) avoids any
+  # trailing-slash redirect, so crawlers get a clean 200 with the schema.
+  RewriteCond %{DOCUMENT_ROOT}/$1/index.html -f
+  RewriteRule ^(.+?)/?$ /$1/index.html [L]
+
+  # Root: serve the homepage's index.html explicitly.
+  RewriteRule ^/?$ index.html [L]
+
+  # SPA fallback for everything else (genuinely dynamic/unknown routes).
   RewriteRule ^ index.html [L]
+</IfModule>
+
+# Avoid the automatic trailing-slash 301 on directory requests: we serve the
+# prerendered index.html for extensionless URLs above, so the redirect would
+# only add a needless hop for crawlers. Guarded so it never errors if the host
+# restricts this directive.
+<IfModule mod_dir.c>
+  DirectorySlash Off
 </IfModule>
 
 <IfModule mod_headers.c>

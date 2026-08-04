@@ -23,7 +23,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ROUTES, SITE, organizationSchema, productSchema, productBreadcrumb } from '../src/lib/seo-routes.mjs';
+import { ROUTES, SITE, organizationSchema, productSchema, productBreadcrumb, siteNavigationSchema } from '../src/lib/seo-routes.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST = join(__dirname, '..', 'dist');
@@ -49,11 +49,13 @@ function headFor(route) {
   const webPage = {
     '@context': 'https://schema.org',
     '@type': 'WebPage',
+    '@id': `${url}#webpage`,
     name: fullTitle,
     description: route.description,
     url,
-    isPartOf: { '@type': 'WebSite', name: SITE.name, url: SITE.url },
-    publisher: { '@type': 'Organization', name: SITE.name, logo: SITE.logo },
+    isPartOf: { '@id': `${SITE.url}/#website` },
+    about: { '@id': `${SITE.url}/#organization` },
+    publisher: { '@id': `${SITE.url}/#organization` },
   };
 
   const breadcrumb = {
@@ -89,9 +91,9 @@ function headFor(route) {
     <meta name="twitter:title" content="${esc(fullTitle)}" />
     <meta name="twitter:description" content="${esc(route.description)}" />
     <meta name="twitter:image" content="${esc(img)}" />
-    <script type="application/ld+json">${JSON.stringify(organizationSchema())}</script>
     <script type="application/ld+json">${JSON.stringify(webPage)}</script>
-    <script type="application/ld+json">${JSON.stringify(breadcrumb)}</script>`;
+    <script type="application/ld+json">${JSON.stringify(breadcrumb)}</script>${route.path === '/' ? `
+    <script type="application/ld+json">${JSON.stringify(siteNavigationSchema())}</script>` : ''}`;
 }
 
 // A real-text fallback so a non-JS crawl still sees the page's purpose.
@@ -156,12 +158,30 @@ function headForProduct(p) {
   const img = p.image && /^https?:\/\//.test(p.image) ? p.image
             : p.image ? `${SITE.url}${p.image}` : SITE.logo;
   const schema = productSchema(p);
+  // Connect the product into the site's entity graph.
+  schema['@id'] = `${url}#product`;
+  schema.isPartOf = { '@id': `${SITE.url}/#website` };
+  if (schema.offers) schema.offers.seller = { '@id': `${SITE.url}/#organization` };
   const crumb = productBreadcrumb(p);
+  const webPage = {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    '@id': `${url}#webpage`,
+    url,
+    name: title,
+    isPartOf: { '@id': `${SITE.url}/#website` },
+    primaryImageOfPage: img ? { '@type': 'ImageObject', url: img } : undefined,
+    breadcrumb: { '@id': `${url}#breadcrumb` },
+  };
+  crumb['@id'] = `${url}#breadcrumb`;
   return `
     <title>${esc(title)}</title>
     <meta name="description" content="${esc(desc)}"/>
     <meta name="keywords" content="${esc((p.name || '') + ', ' + (p.category || '') + ', buy online, GST invoice, B2B, Navgrow Engineering, India')}"/>
     <link rel="canonical" href="${url}"/>
+    <link rel="alternate" hreflang="en-in" href="${url}"/>
+    <link rel="alternate" hreflang="x-default" href="${url}"/>
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
     <meta property="og:type" content="product"/>
     <meta property="og:title" content="${esc(title)}"/>
     <meta property="og:description" content="${esc(desc)}"/>
@@ -174,8 +194,8 @@ function headForProduct(p) {
     <meta name="twitter:title" content="${esc(title)}"/>
     <meta name="twitter:description" content="${esc(desc)}"/>
     <meta name="twitter:image" content="${esc(img)}"/>
-    <script type="application/ld+json">${JSON.stringify(organizationSchema())}</script>
     <script type="application/ld+json" id="page-jsonld">${JSON.stringify(schema)}</script>
+    <script type="application/ld+json">${JSON.stringify(webPage)}</script>
     <script type="application/ld+json">${JSON.stringify(crumb)}</script>`;
 }
 

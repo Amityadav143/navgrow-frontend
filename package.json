@@ -12,7 +12,8 @@
     "check:syntax": "node scripts/check-syntax.cjs",
     "check:imports": "node scripts/check-imports.cjs",
     "check": "npm run check:syntax && npm run check:imports",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify:seo": "node scripts/verify-seo-live.mjs"
   },
   "dependencies": {
     "@emailjs/browser": "^4.3.3",

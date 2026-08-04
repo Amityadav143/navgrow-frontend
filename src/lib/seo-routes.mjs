@@ -240,3 +240,33 @@ export function productBreadcrumb(p) {
   };
 }
 
+/**
+ * Primary site navigation as structured data. This tells search engines the
+ * site's main sections explicitly, which is a strong signal for generating the
+ * indented "sitelinks" shown under the main result for a brand/site search.
+ */
+export function siteNavigationSchema() {
+  const nav = [
+    ['Home', '/'],
+    ['About', '/about'],
+    ['Services', '/services'],
+    ['Projects', '/projects'],
+    ['Shop', '/shop'],
+    ['News', '/news'],
+    ['Careers', '/careers'],
+    ['Contact', '/contact'],
+    ['Get a Quote', '/quote-calculator'],
+  ];
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: 'Primary navigation',
+    itemListElement: nav.map(([name, path], i) => ({
+      '@type': 'SiteNavigationElement',
+      position: i + 1,
+      name,
+      url: SITE.url + (path === '/' ? '/' : path),
+    })),
+  };
+}
+
