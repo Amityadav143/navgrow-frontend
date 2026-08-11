@@ -17,7 +17,7 @@ import {
   Plus, Edit2, Trash2, Newspaper, Search, CheckCircle,
   Eye, EyeOff, X, AlertCircle, RefreshCw, Calendar,
   Tag, User, Globe, FileText, Image, Bold, Italic,
-  List, Type, AlignLeft, Heading,
+  List, Type, AlignLeft, Heading, Link as LinkIcon,
 } from 'lucide-react';
 import { newsApi } from '@/lib/api';
 import ImageUploadInput, { MultiImageUploadButton } from '@/components/admin/ImageUploadInput';
@@ -74,6 +74,19 @@ const RichToolbar = ({ textareaRef, onChange }) => {
     apply(newVal, lineStart + insert.length, lineStart + insert.length);
   };
 
+  // Insert a markdown link around the selection (or a placeholder).
+  const insertLink = () => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const { selectionStart: s, selectionEnd: e, value } = ta;
+    const sel = value.slice(s, e) || 'link text';
+    const url = window.prompt('Link URL (https://…)', 'https://');
+    if (!url) return;
+    const md = `[${sel}](${url})`;
+    const newVal = value.slice(0, s) + md + value.slice(e);
+    apply(newVal, s + 1, s + 1 + sel.length);
+  };
+
   const tools = [
     { icon: Heading,   label: 'H2',    action: () => prefixLines('## ') },
     { icon: Heading,   label: 'H3',    action: () => prefixLines('### ') },
@@ -81,6 +94,7 @@ const RichToolbar = ({ textareaRef, onChange }) => {
     { icon: Italic,    label: 'Italic',action: () => wrap('_') },
     { icon: List,      label: 'Bullets', action: () => prefixLines('- ') },
     { icon: List,      label: 'Numbered', action: () => prefixLines('', { ordered: true }) },
+    { icon: LinkIcon,  label: 'Link',  action: insertLink },
     { icon: FileText,  label: 'Quote', action: () => prefixLines('> ') },
   ];
   return (
@@ -137,7 +151,7 @@ const ArticleForm = ({ initial, onSave, onCancel, saving }) => {
           <span className="text-xs font-bold text-blue-600 uppercase">{form.category}</span>
           <h2 className="text-2xl font-extrabold text-gray-900 mt-2 mb-3">{form.title || 'Article Title'}</h2>
           <p className="text-gray-500 mb-4 italic">{form.excerpt}</p>
-          <div className="prose prose-sm max-w-none text-gray-700"
+          <div className="article-body prose prose-sm max-w-none text-gray-700"
             dangerouslySetInnerHTML={{ __html: renderArticleHtml(form.content || 'Article content here…') }}/>
         </div>
       ) : (

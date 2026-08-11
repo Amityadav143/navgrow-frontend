@@ -667,7 +667,7 @@ const ChatBot = () => {
       <motion.button
         onClick={() => { setOpen(o => !o); setMin(false); }}
         aria-label={open ? "Close NavBot" : "Open NavBot AI"} title="NavBot AI"
-        className="fixed bottom-6 left-6 z-[90] w-14 h-14 rounded-full shadow-2xl flex items-center justify-center brand-gradient text-white focus-visible:ring-4 focus-visible:ring-blue-400 focus:outline-none"
+        className="fixed bottom-[92px] md:bottom-6 left-6 z-[90] w-14 h-14 rounded-full shadow-2xl flex items-center justify-center brand-gradient text-white focus-visible:ring-4 focus-visible:ring-blue-400 focus:outline-none"
         whileHover={{ scale: 1.1 }} whileTap={{ scale: .9 }}>
         <AnimatePresence mode="wait">
           {open
@@ -688,7 +688,7 @@ const ChatBot = () => {
       </motion.button>
 
       {/* Ping ring */}
-      {!open && <span className="fixed bottom-6 left-6 z-[89] w-14 h-14 rounded-full brand-gradient opacity-20 pointer-events-none"
+      {!open && <span className="fixed bottom-[92px] md:bottom-6 left-6 z-[89] w-14 h-14 rounded-full brand-gradient opacity-20 pointer-events-none"
         style={{ animation: "nb-ping 3s cubic-bezier(0,0,.2,1) infinite" }}/>}
       <style>{`@keyframes nb-ping{0%{transform:scale(1);opacity:.2}75%,100%{transform:scale(2.1);opacity:0}}`}</style>
 
@@ -698,7 +698,7 @@ const ChatBot = () => {
           <motion.div
             initial={{ opacity: 0, y: 30, scale: .92 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 30, scale: .92 }}
             transition={{ type: "spring", stiffness: 340, damping: 32 }}
-            className="fixed bottom-24 left-4 z-[91] w-[calc(100vw-2rem)] sm:w-[400px] flex flex-col rounded-3xl overflow-hidden border border-white/5"
+            className="fixed bottom-[92px] md:bottom-24 left-4 z-[91] w-[calc(100vw-2rem)] sm:w-[400px] flex flex-col rounded-3xl overflow-hidden border border-white/5"
             style={{ maxHeight: min ? "auto" : "min(88vh, 640px)", boxShadow: "0 32px 80px rgba(0,0,0,.65),0 0 0 1px rgba(255,255,255,.05)" }}
             role="dialog" aria-modal="true" aria-label="NavBot AI chat">
 
@@ -946,7 +946,7 @@ const ChatBot = () => {
                       <div className="flex items-center gap-2">
                         <div className="flex items-center gap-1">
                           <Sparkles className="h-2.5 w-2.5 text-blue-500"/>
-                          <span className="text-[10px] text-gray-700">Claude AI</span>
+                          <span className="text-[10px] text-gray-700">NavBot AI</span>
                         </div>
                         <a href="/privacy" onClick={() => setOpen(false)} className="text-[10px] text-gray-700 hover:text-gray-500 flex items-center gap-0.5 transition-colors">
                           Privacy<ExternalLink className="h-2 w-2"/>

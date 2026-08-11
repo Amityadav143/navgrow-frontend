@@ -45,7 +45,7 @@ const SocialProof = () => {
   if (!settings.socialProof?.enabled) return null;
 
   return (
-    <div className="fixed bottom-28 left-4 z-[88] pointer-events-none">
+    <div className="fixed bottom-[168px] md:bottom-28 left-4 z-[88] pointer-events-none">
       <AnimatePresence>
         {current && (
           <motion.div

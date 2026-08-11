@@ -270,3 +270,84 @@ export function siteNavigationSchema() {
   };
 }
 
+
+/**
+ * The Navgrow news/blog catalogue as a single importable source of truth for the
+ * build-time SEO scripts (sitemap + prerender). Bodies live in the React page;
+ * this carries the metadata needed to prerender each article shell with a valid
+ * BlogPosting schema so posts are immediately indexable.
+ */
+export const NEWS_ARTICLES = [
+  { slug: 'wabtec-lube-oil-storage-commissioned', title: 'Wabtec Lube Oil Storage Project Successfully Commissioned', category: 'Project Update', publishedAt: '2026-03-15', image: '/wltpsguj.jpeg', excerpt: 'Navgrow Engineering delivered and commissioned specialised lube oil storage solutions for Wabtec Locomotives Pvt. Ltd. at their Siliguri facility.' },
+  { slug: 'hand-brake-fitment-siliguri-loco-shed', title: 'Modified Hand Brake Fitment Completed at Siliguri Diesel Loco Shed', category: 'Project Update', publishedAt: '2026-01-10', image: '/handbreak.jpg', excerpt: 'Our team completed the fitment of modified, RDSO-approved hand brake assemblies across multiple locomotives at the Siliguri Diesel Loco Shed.' },
+  { slug: 'dpiit-startup-india-recognition', title: 'Navgrow Receives DPIIT Startup India Recognition', category: 'Milestone', publishedAt: '2025-12-05', image: '/DPIIT.png', excerpt: 'Navgrow Engineering Service Pvt. Ltd. has been officially recognised under the Government of India DPIIT Startup India programme.' },
+  { slug: 'rainwater-testing-plant-commissioned', title: 'Rainwater Leakage Testing Plant Commissioned at Siliguri Diesel Loco Shed', category: 'Project Update', publishedAt: '2025-09-20', image: '/wltpsguj.jpeg', excerpt: 'Navgrow designed and commissioned a water-efficient Rainwater Leakage Testing Plant that verifies locomotive water-tightness before return to service.' },
+  { slug: 'navgrow-online-engineering-shop-launch', title: 'Navgrow Online Engineering Shop Now Live', category: 'Company News', publishedAt: '2025-08-01', image: '/placeholder.jpg', excerpt: 'Navgrow launched its B2B online store with ISI-certified safety equipment, railway tools and PPE — GST invoices and pan-India delivery.' },
+  { slug: 'indian-railways-budget-fy26-infrastructure', title: 'Indian Railways Announces \u20b92.5 Lakh Crore Infrastructure Push for FY26', category: 'Industry', publishedAt: '2025-06-15', image: '/barricading.jpg', excerpt: 'The Union Budget 2025-26 allocated a record capital outlay to Indian Railways — a major opportunity for MSME engineering contractors via GeM and IREPS.' },
+];
+
+/** BlogPosting/Article JSON-LD for a news article, connected to the site graph. */
+export function articleSchema(a) {
+  const url = `${SITE.url}/news/${a.slug}`;
+  const img = a.image && /^https?:\/\//.test(a.image) ? a.image : `${SITE.url}${a.image || '/ng_logo.png'}`;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    '@id': `${url}#article`,
+    headline: a.title,
+    description: a.excerpt,
+    image: img,
+    datePublished: a.publishedAt,
+    dateModified: a.publishedAt,
+    articleSection: a.category,
+    inLanguage: 'en-IN',
+    mainEntityOfPage: { '@type': 'WebPage', '@id': `${url}#webpage` },
+    author: { '@type': 'Organization', name: SITE.name, url: SITE.url },
+    publisher: { '@id': `${SITE.url}/#organization` },
+    isPartOf: { '@id': `${SITE.url}/#website` },
+  };
+}
+
+/** Breadcrumb for a news article (Home › News › Article). */
+export function articleBreadcrumb(a) {
+  const url = `${SITE.url}/news/${a.slug}`;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    '@id': `${url}#breadcrumb`,
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: SITE.url },
+      { '@type': 'ListItem', position: 2, name: 'News', item: `${SITE.url}/news` },
+      { '@type': 'ListItem', position: 3, name: a.title, item: url },
+    ],
+  };
+}
+
+/**
+ * FAQ JSON-LD for the homepage. Prerendered so crawlers see it immediately and
+ * the site is eligible for FAQ rich results — accurate to the live policies.
+ */
+export function faqSchema() {
+  const qa = [
+    ['What types of engineering projects does Navgrow handle?',
+     'Navgrow handles Indian Railways infrastructure (locomotive works, shed construction, testing plants, track-side works), industrial engineering and fabrication, civil construction, government/PSU contracts via GeM and IREPS, plus sustainability solutions — solar, water treatment (STP/ETP/ZLD), rainwater harvesting and energy audits.'],
+    ['Is Navgrow registered with Indian Railways and recognised by the government?',
+     'Yes. Navgrow Engineering Service Pvt. Ltd. is a DPIIT-recognised startup and Udyam MSME-registered enterprise, working to Indian Railways / RDSO vendor norms, with a Make in India focus.'],
+    ['How do I get a project quote from Navgrow?',
+     'Use the free Quote Calculator at navgrow.org/quote-calculator, call or WhatsApp +91 89270 70972, or email info@navgrow.org with your drawings or requirement. You receive a formal, GST-compliant quotation, typically within 24 business hours.'],
+    ['Does Navgrow work outside the railway sector?',
+     'Yes. Navgrow serves Indian Railways, industrial plants, government departments and private developers across civil construction, solar energy, water treatment and maintenance/AMC — in North Bengal, the North-East and, for larger works, across India.'],
+    ['What products does the Navgrow shop sell and is a GST invoice provided?',
+     'The Navgrow B2B shop sells ISI-certified safety equipment, railway tools, testing instruments and PPE. Every order includes a proper GST invoice with HSN codes. Delivery is free within Siliguri and charged transparently by PIN code elsewhere in India, with Cash-on-Delivery and online payment options.'],
+  ];
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    '@id': `${SITE.url}/#faq`,
+    mainEntity: qa.map(([q, a]) => ({
+      '@type': 'Question',
+      name: q,
+      acceptedAnswer: { '@type': 'Answer', text: a },
+    })),
+  };
+}

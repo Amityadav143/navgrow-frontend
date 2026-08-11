@@ -17,7 +17,7 @@ const Footer = () => {
   const [catalogueOpen, setCatalogueOpen] = useState(false);
 
   return (
-    <footer className="bg-gray-950 text-gray-400">
+    <footer className="bg-gray-950 text-gray-400 pb-[76px] md:pb-0">
       {/* Cert strip */}
       <div className="bg-white border-b border-gray-100 py-5">
         <div className="container mx-auto px-4 flex flex-wrap items-center justify-center gap-10">

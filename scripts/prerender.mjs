@@ -23,7 +23,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ROUTES, SITE, organizationSchema, productSchema, productBreadcrumb, siteNavigationSchema } from '../src/lib/seo-routes.mjs';
+import { ROUTES, SITE, organizationSchema, productSchema, productBreadcrumb, siteNavigationSchema, NEWS_ARTICLES, articleSchema, articleBreadcrumb, faqSchema } from '../src/lib/seo-routes.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST = join(__dirname, '..', 'dist');
@@ -93,7 +93,8 @@ function headFor(route) {
     <meta name="twitter:image" content="${esc(img)}" />
     <script type="application/ld+json">${JSON.stringify(webPage)}</script>
     <script type="application/ld+json">${JSON.stringify(breadcrumb)}</script>${route.path === '/' ? `
-    <script type="application/ld+json">${JSON.stringify(siteNavigationSchema())}</script>` : ''}`;
+    <script type="application/ld+json">${JSON.stringify(siteNavigationSchema())}</script>
+    <script type="application/ld+json">${JSON.stringify(faqSchema())}</script>` : ''}`;
 }
 
 // A real-text fallback so a non-JS crawl still sees the page's purpose.
@@ -229,4 +230,70 @@ try {
   console.log(`[prerender] Wrote ${productCount} product SEO HTML files.`);
 } catch (e) {
   console.warn(`[prerender] Product prerender skipped: ${e.message}`);
+}
+
+// ── News / blog articles ────────────────────────────────────────────────────
+// Each article is prerendered with a BlogPosting + Breadcrumb schema and full
+// meta, so posts are immediately indexable and eligible for article rich results.
+function headForArticle(a) {
+  const url = `${SITE.url}/news/${a.slug}`;
+  const title = `${a.title} | Navgrow News`;
+  const desc = (a.excerpt || a.title).slice(0, 300);
+  const img = a.image && /^https?:\/\//.test(a.image) ? a.image : `${SITE.url}${a.image || '/ng_logo.png'}`;
+  const schema = articleSchema(a);
+  const crumb = articleBreadcrumb(a);
+  const webPage = {
+    '@context': 'https://schema.org', '@type': 'WebPage', '@id': `${url}#webpage`,
+    url, name: title, isPartOf: { '@id': `${SITE.url}/#website` },
+    breadcrumb: { '@id': `${url}#breadcrumb` },
+  };
+  return `
+    <title>${esc(title)}</title>
+    <meta name="description" content="${esc(desc)}"/>
+    <meta name="keywords" content="${esc((a.category || '') + ', Navgrow Engineering, Indian Railways, Siliguri, ' + a.title)}"/>
+    <link rel="canonical" href="${url}"/>
+    <link rel="alternate" hreflang="en-in" href="${url}"/>
+    <link rel="alternate" hreflang="x-default" href="${url}"/>
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
+    <meta property="og:type" content="article"/>
+    <meta property="article:published_time" content="${esc(a.publishedAt)}"/>
+    <meta property="article:section" content="${esc(a.category || 'News')}"/>
+    <meta property="og:title" content="${esc(title)}"/>
+    <meta property="og:description" content="${esc(desc)}"/>
+    <meta property="og:url" content="${url}"/>
+    <meta property="og:image" content="${esc(img)}"/>
+    <meta property="og:site_name" content="${esc(SITE.name)}"/>
+    <meta name="twitter:card" content="summary_large_image"/>
+    <meta name="twitter:title" content="${esc(title)}"/>
+    <meta name="twitter:description" content="${esc(desc)}"/>
+    <meta name="twitter:image" content="${esc(img)}"/>
+    <script type="application/ld+json" id="page-jsonld">${JSON.stringify(schema)}</script>
+    <script type="application/ld+json">${JSON.stringify(webPage)}</script>
+    <script type="application/ld+json">${JSON.stringify(crumb)}</script>`;
+}
+
+function noscriptForArticle(a) {
+  return `<noscript><article style="max-width:720px;margin:40px auto;padding:0 20px;font-family:system-ui,Arial,sans-serif">
+    <p style="color:#666;text-transform:uppercase;font-size:12px;letter-spacing:1px">${esc(a.category || 'News')} &middot; ${esc(a.publishedAt)}</p>
+    <h1>${esc(a.title)}</h1>
+    <p>${esc(a.excerpt || '')}</p>
+    <p>Read more from Navgrow Engineering Service Pvt. Ltd., Siliguri, West Bengal &mdash; ${esc(SITE.phone)} &middot; ${esc(SITE.email)}.</p>
+  </article></noscript>`;
+}
+
+let newsCount = 0;
+try {
+  for (const a of NEWS_ARTICLES) {
+    if (!a.slug) continue;
+    let html = stripBaseTags(template);
+    html = html.replace('</head>', `${headForArticle(a)}\n</head>`);
+    html = html.replace('<div id="root"></div>', `${noscriptForArticle(a)}\n  <div id="root"></div>`);
+    const outDir = join(DIST, 'news', a.slug);
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(join(outDir, 'index.html'), html, 'utf8');
+    newsCount++;
+  }
+  console.log(`[prerender] Wrote ${newsCount} news SEO HTML files.`);
+} catch (e) {
+  console.warn(`[prerender] News prerender skipped: ${e.message}`);
 }

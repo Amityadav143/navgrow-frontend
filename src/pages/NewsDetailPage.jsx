@@ -75,6 +75,131 @@ const STATIC_DETAIL = {
 <p>This recognition opens doors to government grants, incubation support, and investor visibility through the Startup India platform. We are committed to continuing our growth as a trusted engineering partner for Indian Railways and industrial clients across North-East India.</p>
     `,
   },
+
+  'hand-brake-fitment-siliguri-loco-shed': {
+    title: 'Modified Hand Brake Fitment Completed at Siliguri Diesel Loco Shed',
+    category: 'Project Update', publishedAt: '2026-01-10',
+    imageUrl: '/handbreak.jpg', authorName: 'Navgrow Team', viewCount: 98,
+    tags: ['Indian Railways', 'Hand Brake', 'Loco Shed', 'RDSO'],
+    content: `
+<h2>Project Overview</h2>
+<p>Navgrow Engineering Service Pvt. Ltd. has completed the fitment of modified hand brake assemblies across multiple diesel-electric locomotives at the Siliguri Diesel Loco Shed, one of the key maintenance facilities serving the Northeast Frontier Railway zone. The upgrade improves parking-brake reliability and brings the fleet in line with the latest Indian Railways safety directives.</p>
+
+<h2>Why the Modification Matters</h2>
+<p>The hand brake is a locomotive's last line of defence against unintended movement when it is stabled or under maintenance. Worn or non-standard assemblies increase the risk of roll-away incidents on graded sidings — a genuine concern in the hilly terrain around Siliguri and the Dooars. The modified design increases mechanical advantage, reduces the effort a loco pilot needs to apply, and improves holding force on gradients.</p>
+
+<h2>Scope of Work</h2>
+<ul>
+  <li>Removal and inspection of legacy hand brake assemblies</li>
+  <li>Fitment of modified assemblies to RDSO-approved drawings and material specifications</li>
+  <li>Load and holding-force testing on graded track</li>
+  <li>Documentation of measurement books, material test certificates and inspection records</li>
+  <li>On-shed training for maintenance staff on the revised assembly</li>
+</ul>
+
+<h2>Standards & Compliance</h2>
+<p>All work was carried out to Research Designs and Standards Organisation (RDSO) specifications, using ISI-marked components and approved-vendor materials. Every stage was executed under qualified supervision with defined hold points, and a full handover dossier — drawings, certificates, and test results — was submitted for audit.</p>
+
+<h2>Outcome</h2>
+<p>The fitment programme was completed on schedule with zero safety incidents and no disruption to the shed's routine maintenance schedule. The upgraded assemblies have improved braking consistency across the treated locomotives, and Navgrow continues to support the shed with railway maintenance and fabrication services.</p>
+
+<blockquote>Navgrow specialises in railway infrastructure and rolling-stock support — from shed and testing-plant works to track-side fabrication — delivered to Indian Railways vendor norms. <a href="/services">Explore our railway services</a> or <a href="/contact">request a quotation</a>.</blockquote>
+    `,
+  },
+
+  'rainwater-testing-plant-commissioned': {
+    title: 'Rainwater Leakage Testing Plant Commissioned at Siliguri Diesel Loco Shed',
+    category: 'Project Update', publishedAt: '2025-09-20',
+    imageUrl: '/wltpsguj.jpeg', authorName: 'Navgrow Team', viewCount: 215,
+    tags: ['Indian Railways', 'Testing Plant', 'Innovation', 'Rolling Stock'],
+    content: `
+<h2>Project Overview</h2>
+<p>Navgrow Engineering has designed, built and commissioned a Rainwater Leakage Testing Plant for electric locomotives at the Siliguri Diesel Loco Shed. The facility simulates heavy monsoon conditions to verify that a locomotive's roof, windows, doors and cable entries are fully watertight before the machine returns to service.</p>
+
+<h2>The Problem It Solves</h2>
+<p>Water ingress is a leading cause of electrical faults in rolling stock, particularly in the high-rainfall belt of North Bengal and the Northeast. A single leak can short high-voltage equipment, corrode cabling and cause expensive in-service failures. A controlled rain-simulation test lets the shed catch leaks in the workshop rather than on the main line.</p>
+
+<h2>How the Plant Works</h2>
+<ul>
+  <li>An overhead spray gantry delivers a calibrated, monsoon-intensity water flow across the full locomotive body</li>
+  <li>Adjustable nozzles target known weak points — roof seams, windscreen seals, door gaskets and cable glands</li>
+  <li>A recirculation and filtration loop conserves water between test cycles</li>
+  <li>Inspection walkways allow staff to observe the interior for ingress during the test</li>
+  <li>Test duration and flow are standardised so results are repeatable and auditable</li>
+</ul>
+
+<h2>Engineering & Sustainability</h2>
+<p>The plant was engineered for water efficiency: the closed-loop recirculation system reuses the majority of test water, reflecting Navgrow's focus on sustainable infrastructure. The structure was fabricated to withstand continuous exposure and designed for low-maintenance operation.</p>
+
+<h2>Outcome</h2>
+<p>Since commissioning, the shed has been able to certify locomotive water-tightness in-house, reducing rain-related electrical failures and improving fleet availability during the monsoon. The project showcases Navgrow's ability to combine railway domain knowledge with practical, water-smart engineering.</p>
+
+<blockquote>From testing plants to water-recycling systems, Navgrow builds infrastructure that lasts. <a href="/services">See our capabilities</a> or <a href="/quote-calculator">get an instant estimate</a>.</blockquote>
+    `,
+  },
+
+  'indian-railways-budget-fy26-infrastructure': {
+    title: 'Indian Railways Announces \u20b92.5 Lakh Crore Infrastructure Push for FY26',
+    category: 'Industry', publishedAt: '2025-06-15',
+    imageUrl: '/barricading.jpg', authorName: 'Navgrow Team', viewCount: 489,
+    tags: ['Indian Railways', 'Infrastructure', 'Budget 2025-26', 'Tenders', 'GeM'],
+    content: `
+<h2>A Record Capital Outlay</h2>
+<p>The Union Budget 2025-26 allocated a record capital expenditure to Indian Railways, continuing the government's multi-year modernisation drive. For engineering contractors and suppliers, this sustained investment translates into a large and steady pipeline of work across track, electrification, station redevelopment, rolling-stock support and safety systems.</p>
+
+<h2>Where the Spending Goes</h2>
+<ul>
+  <li><strong>Track renewal &amp; new lines</strong> — doubling, tripling and gauge-conversion projects nationwide</li>
+  <li><strong>Electrification</strong> — overhead equipment (OHE) as the network approaches full electrification</li>
+  <li><strong>Station redevelopment</strong> — the Amrit Bharat Station Scheme upgrading hundreds of stations</li>
+  <li><strong>Safety</strong> — Kavach train-collision-avoidance deployment, signalling and level-crossing works</li>
+  <li><strong>Rolling stock &amp; sheds</strong> — new manufacturing plus maintenance and testing-plant upgrades</li>
+</ul>
+
+<h2>What It Means for MSME Engineering Firms</h2>
+<p>A significant share of railway work reaches the market through the Government e-Marketplace (GeM) and the Indian Railways E-Procurement System (IREPS), where MSMEs enjoy procurement preferences. For a DPIIT-recognised, Udyam-registered firm, this is a genuine opportunity — provided the firm can meet the documentation, quality and safety bar that railway contracts demand.</p>
+
+<h2>How Navgrow Is Positioned</h2>
+<p>Navgrow Engineering works to Indian Railways and departmental vendor norms, with hands-on experience in shed works, testing plants, fabrication and track-side infrastructure around the strategic Siliguri corridor — a gateway to the Northeast, Nepal, Bhutan and Bangladesh. We combine approved-vendor discipline, ISI-marked materials and audit-ready documentation with a single accountable point of responsibility from design to handover.</p>
+
+<h2>Turning Budget Into Delivery</h2>
+<p>Record allocations only create value when they are executed well. Navgrow helps government departments and prime contractors deliver on time and to standard — with GST-compliant billing and full traceability. As the FY26 pipeline opens up, we are ready to support railway and infrastructure projects across the region.</p>
+
+<blockquote>Planning a railway or infrastructure project? Navgrow delivers tender-based execution via GeM and IREPS with complete documentation. <a href="/contact">Talk to our team</a> or <a href="/quote-calculator">request a quote</a>.</blockquote>
+    `,
+  },
+
+  'navgrow-online-engineering-shop-launch': {
+    title: 'Navgrow Online Engineering Shop Now Live',
+    category: 'Company News', publishedAt: '2025-08-01',
+    imageUrl: '/placeholder.jpg', authorName: 'Navgrow Team', viewCount: 312,
+    tags: ['E-commerce', 'Shop Launch', 'B2B', 'Safety Equipment', 'PPE'],
+    content: `
+<h2>Engineering Supplies, Now a Click Away</h2>
+<p>Navgrow Engineering has launched its B2B online store at <a href="/shop">navgrow.org/shop</a>, bringing industrial safety equipment, railway tools and personal protective equipment (PPE) online with transparent pricing, GST invoices and pan-India delivery. The store is built for contractors, factories, government departments and MSMEs who want a reliable, compliant supplier without the friction of phone-and-paper procurement.</p>
+
+<h2>What You Can Buy</h2>
+<ul>
+  <li><strong>ISI-marked safety helmets</strong> and high-visibility vests for site and track work</li>
+  <li><strong>Safety footwear</strong> — steel-toe boots built for industrial environments</li>
+  <li><strong>Hand and cut protection</strong> — impact gloves, cut-resistant sleeves, knee pads</li>
+  <li><strong>Respiratory &amp; face protection</strong> — full-face respirators and arc-flash shields</li>
+  <li><strong>Precision tools &amp; instruments</strong> — torque wrenches, vernier calipers, infrared thermometers, vibration analysers</li>
+  <li><strong>Railway-specific items</strong> — track gauges, fish-bolt sets and maintenance consumables</li>
+</ul>
+
+<h2>Built for B2B Buyers</h2>
+<p>Every order generates a proper GST invoice with HSN codes — essential for input-tax-credit claims. Prices are shown GST-inclusive with a clear tax breakdown, and delivery charges are transparent by PIN code. For larger requirements, buyers can raise a bulk enquiry or full Request for Quotation (RFQ) and receive institutional pricing, typically within 24 hours.</p>
+
+<h2>Why It Matters</h2>
+<p>Sourcing safety gear and tools in regional India often means chasing quotes over WhatsApp with no audit trail. Navgrow's store replaces that with a professional, compliant experience: quality-first products, honest pricing, and documentation that stands up to audit. It is the same engineering rigour we bring to our project work, applied to everyday procurement.</p>
+
+<h2>Getting Started</h2>
+<p>Browse the catalogue, add items to your cart, enter your PIN code for an exact delivery charge, and check out online or by Cash on Delivery. Need a formal quotation for a tender or bulk order? Use the RFQ option and our team will respond quickly.</p>
+
+<blockquote>Explore the store at <a href="/shop">navgrow.org/shop</a>, or <a href="/quote-calculator">request a bulk quote</a> for institutional pricing.</blockquote>
+    `,
+  },
 };
 
 const CAT_COLORS = {
@@ -229,7 +354,7 @@ const NewsDetailPage = () => {
 
         {/* Content */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
-          className="prose prose-lg prose-blue max-w-none
+          className="article-body prose prose-lg prose-blue max-w-none
             prose-headings:font-bold prose-headings:text-gray-900
             prose-h2:text-2xl prose-h2:mt-8 prose-h2:mb-4
             prose-p:text-gray-700 prose-p:leading-relaxed

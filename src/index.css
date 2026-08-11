@@ -648,3 +648,95 @@ code, pre, kbd, .font-mono {
   background-size: 1000px 100%;
   animation: shimmer 2s infinite;
 }
+
+/* ============================================================================
+   Article / news body — self-contained typography.
+   The Tailwind `prose` classes depend on @tailwindcss/typography; to guarantee
+   correct rendering (list bullets/numbers, headings, spacing) even without that
+   plugin, we style the `.article-body` container explicitly here. Tailwind's
+   base reset removes list markers, so lists MUST be restored for markdown/HTML
+   articles to display bullets and numbers.
+   ========================================================================== */
+.article-body {
+  color: #374151;
+  font-size: 1.05rem;
+  line-height: 1.8;
+}
+.article-body > :first-child { margin-top: 0; }
+.article-body p {
+  margin: 0 0 1.15em;
+}
+.article-body h1,
+.article-body h2,
+.article-body h3,
+.article-body h4 {
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.25;
+}
+.article-body h1 { font-size: 1.9rem; margin: 1.6em 0 0.6em; }
+.article-body h2 { font-size: 1.55rem; margin: 1.6em 0 0.6em; padding-bottom: 0.3em; border-bottom: 1px solid #eef2f7; }
+.article-body h3 { font-size: 1.25rem; margin: 1.4em 0 0.5em; }
+.article-body h4 { font-size: 1.08rem; margin: 1.2em 0 0.4em; }
+
+/* Lists — the critical fix: restore markers that Tailwind's reset removes. */
+.article-body ul,
+.article-body ol {
+  margin: 0 0 1.2em;
+  padding-left: 1.6em;
+}
+.article-body ul { list-style: disc outside; }
+.article-body ol { list-style: decimal outside; }
+.article-body ul ul { list-style: circle outside; margin: 0.3em 0 0.3em; }
+.article-body li {
+  margin: 0.4em 0;
+  padding-left: 0.25em;
+  display: list-item;      /* ensure the marker box renders */
+}
+.article-body li::marker {
+  color: #2563eb;          /* brand-blue bullets/numbers */
+  font-weight: 700;
+}
+
+.article-body a {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.article-body a:hover { color: #1d4ed8; }
+
+.article-body strong { color: #0f172a; font-weight: 700; }
+.article-body em { font-style: italic; }
+.article-body code {
+  background: #f1f5f9;
+  padding: 0.15em 0.4em;
+  border-radius: 0.35em;
+  font-size: 0.9em;
+  color: #0f172a;
+}
+.article-body blockquote {
+  margin: 1.4em 0;
+  border-left: 4px solid #2563eb;
+  background: #eff6ff;
+  border-radius: 0 0.75rem 0.75rem 0;
+  padding: 0.8rem 1.25rem;
+  color: #1e40af;
+}
+.article-body blockquote p { margin: 0.3em 0; }
+.article-body hr { border: 0; border-top: 1px solid #e5e7eb; margin: 2em 0; }
+.article-body img { border-radius: 0.75rem; width: 100%; margin: 1.5em 0; }
+.article-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.4em 0;
+  font-size: 0.95em;
+}
+.article-body th,
+.article-body td {
+  border: 1px solid #e5e7eb;
+  padding: 0.6em 0.8em;
+  text-align: left;
+}
+.article-body th { background: #f8fafc; font-weight: 700; color: #0f172a; }

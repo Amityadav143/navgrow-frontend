@@ -12,7 +12,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ROUTES, SITE } from '../src/lib/seo-routes.mjs';
+import { ROUTES, SITE, NEWS_ARTICLES } from '../src/lib/seo-routes.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST = join(__dirname, '..', 'dist');
@@ -48,6 +48,17 @@ for (const slug of productSlugs()) {
     lastmod: today,
     changefreq: 'weekly',
     priority: 0.7,
+  });
+}
+
+// One entry per news article, using the article's own publish date as lastmod.
+for (const a of NEWS_ARTICLES) {
+  if (!a.slug) continue;
+  urls.push({
+    loc: `${SITE.url}/news/${a.slug}`,
+    lastmod: (a.publishedAt || today).slice(0, 10),
+    changefreq: 'monthly',
+    priority: 0.6,
   });
 }
 
