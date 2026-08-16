@@ -498,6 +498,7 @@ const ProductDetailPage = () => {
     description: product ? `Buy ${product.name} online at ₹${product.price?.toLocaleString('en-IN')}. ${product.summary || product.desc || ''}. ISI-certified. GST invoice with HSN. Pan-India delivery.` : '',
     path: product ? `/shop/${product.slug || product.id}` : '/shop',
     keywords: product ? `buy ${product.name}, ${product.cat}, engineering products India, ${product.name} price` : '',
+    image: product?.image || product?.imageUrl || '/og-share.jpg',
     type: 'product',
     schema: productSchema,
   });

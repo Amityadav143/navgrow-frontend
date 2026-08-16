@@ -11,7 +11,7 @@
  */
 import { renderArticleHtml } from '@/lib/richText';
 import { useConfirm } from '@/components/ConfirmDialog';
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Edit2, Trash2, Newspaper, Search, CheckCircle,
@@ -19,7 +19,7 @@ import {
   Tag, User, Globe, FileText, Image, Bold, Italic,
   List, Type, AlignLeft, Heading, Link as LinkIcon,
 } from 'lucide-react';
-import { newsApi } from '@/lib/api';
+import { newsApi, catalogApi } from '@/lib/api';
 import ImageUploadInput, { MultiImageUploadButton } from '@/components/admin/ImageUploadInput';
 import { usePaginated, useMutation } from '@/hooks/useApi';
 import { useToast } from '@/components/ui/use-toast';
@@ -111,10 +111,18 @@ const RichToolbar = ({ textareaRef, onChange }) => {
 };
 
 /* ── Article form ─────────────────────────────────────────────────────────── */
-const ArticleForm = ({ initial, onSave, onCancel, saving }) => {
+const ArticleForm = ({ initial, onSave, onCancel, saving, categories }) => {
   const contentRef = useRef(null);
+  // Categories come from the admin-managed taxonomy (News Categories in the
+  // Catalog admin). Fall back to the built-in defaults, and always include the
+  // article's own current category so editing an existing post never loses it.
+  const catList = (() => {
+    const base = (categories && categories.length) ? categories : CATEGORIES;
+    const cur = (initial && initial.category) ? [initial.category] : [];
+    return [...new Set([...base, ...cur])];
+  })();
   const [form, setForm] = useState({
-    title: '', slug: '', excerpt: '', content: '', category: 'Project Update',
+    title: '', slug: '', excerpt: '', content: '', category: (categories && categories[0]) || 'Project Update',
     imageUrl: '', imageUrls: '', authorName: 'Navgrow Team', tags: '', status: 'DRAFT',
     ...(initial || {}),
   });
@@ -176,7 +184,7 @@ const ArticleForm = ({ initial, onSave, onCancel, saving }) => {
               <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Category</label>
               <select value={form.category} onChange={ch('category')}
                 className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500">
-                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                {catList.map(c => <option key={c}>{c}</option>)}
               </select>
             </div>
             {/* Author */}
@@ -272,6 +280,17 @@ const AdminNews = () => {
   const [editing,  setEditing]  = useState(null);
   const [search,   setSearch]   = useState('');
 
+  // Load admin-managed News Categories (from the Catalog taxonomy) so the post
+  // editor's dropdown reflects what admins add there. Falls back to defaults.
+  const [newsCategories, setNewsCategories] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    catalogApi.list('NEWS_CATEGORY')
+      .then(res => { if (alive) setNewsCategories((res.data || []).map(c => c.name).filter(Boolean)); })
+      .catch(() => { /* keep defaults on failure */ });
+    return () => { alive = false; };
+  }, []);
+
   // /news/manage returns DRAFT + PUBLISHED + ARCHIVED. The public /news list
   // only serves PUBLISHED — using it here made drafts "disappear" from the
   // panel the moment they were saved.
@@ -355,6 +374,7 @@ const AdminNews = () => {
         {(showForm || editing) && (
           <ArticleForm
             initial={editing}
+            categories={newsCategories}
             onSave={handleSave}
             onCancel={() => { setShowForm(false); setEditing(null); }}
             saving={creating || updating}

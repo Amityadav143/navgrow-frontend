@@ -15,7 +15,7 @@ import {
   Download, Upload, FileText, X, AlertCircle, RefreshCw,
   Image, Tag, DollarSign, BarChart2, Eye, EyeOff, AlertTriangle,
 } from 'lucide-react';
-import { productsApi } from '@/lib/api';
+import { productsApi, catalogApi } from '@/lib/api';
 import { usePaginated, useMutation } from '@/hooks/useApi';
 import { useToast } from '@/components/ui/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -609,12 +609,17 @@ const AdminProducts = () => {
   // legacy categories already used on products; static list as offline fallback.
   const [liveCategories, setLiveCategories] = React.useState(CATEGORIES);
   React.useEffect(() => {
-    productsApi.categories()
-      .then(r => {
-        const merged = [...new Set([...(Array.isArray(r.data) ? r.data : []), ...CATEGORIES])];
-        if (merged.length) setLiveCategories(merged);
-      })
-      .catch(() => {});
+    // Pull from BOTH sources so newly-added admin categories (which may have no
+    // products yet) and categories already in use on products all appear.
+    Promise.allSettled([
+      productsApi.categories(),                 // derived from existing products
+      catalogApi.list('PRODUCT_CATEGORY'),      // admin-managed taxonomy
+    ]).then(([fromProducts, fromCatalog]) => {
+      const a = fromProducts.status === 'fulfilled' && Array.isArray(fromProducts.value.data) ? fromProducts.value.data : [];
+      const b = fromCatalog.status === 'fulfilled' && Array.isArray(fromCatalog.value.data) ? fromCatalog.value.data.map(c => c.name).filter(Boolean) : [];
+      const merged = [...new Set([...b, ...a, ...CATEGORIES])];
+      if (merged.length) setLiveCategories(merged);
+    });
   }, []);
 
   const { items, loading, setFilter, refetch } = usePaginated(productsApi.list, { size: 50 });

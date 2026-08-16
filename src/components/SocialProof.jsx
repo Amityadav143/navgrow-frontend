@@ -37,10 +37,11 @@ const SocialProof = () => {
   }, [idx]);
 
   useEffect(() => {
+    const secs = Number(settings.socialProof?.intervalSecs) || 14;
     const first = setTimeout(show, 8000);
-    const interval = setInterval(show, 14000);
+    const interval = setInterval(show, Math.max(5, secs) * 1000);
     return () => { clearTimeout(first); clearInterval(interval); };
-  }, [show]);
+  }, [show, settings.socialProof?.intervalSecs]);
 
   if (!settings.socialProof?.enabled) return null;
 

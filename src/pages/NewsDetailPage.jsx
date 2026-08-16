@@ -226,6 +226,7 @@ const NewsDetailPage = () => {
     title: article ? `${article.title} | Navgrow News` : 'Article | Navgrow News',
     description: article?.excerpt || article?.content?.replace(/<[^>]+>/g,'').slice(0,160) || '',
     path: `/news/${slug}`,
+    image: article?.imageUrl || article?.image || '/og-share.jpg',
     type: 'article',
   });
 

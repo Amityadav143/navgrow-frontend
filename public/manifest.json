@@ -11,9 +11,10 @@
   "lang": "en-IN",
   "categories": ["business", "shopping", "utilities"],
   "icons": [
-    { "src": "/favicon.png",    "sizes": "32x32",   "type": "image/png", "purpose": "any" },
-    { "src": "/favicon.png",    "sizes": "192x192",  "type": "image/png", "purpose": "any maskable" },
-    { "src": "/favicon.png",    "sizes": "512x512",  "type": "image/png", "purpose": "any maskable" }
+    { "src": "/favicon.png",             "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192.png",            "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png",            "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png",   "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
     { "name": "Engineering Shop",   "url": "/shop",             "description": "B2B engineering products" },

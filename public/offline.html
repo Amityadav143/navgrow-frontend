@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en-IN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offline · Navgrow Engineering</title>
+  <meta name="robots" content="noindex" />
+  <style>
+    :root { --navy:#13294B; --gold:#D4A028; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #13294B 0%, #0C1D38 100%); color: #fff; padding: 24px;
+      text-align: center;
+    }
+    .card { max-width: 460px; }
+    .logo { width: 180px; max-width: 70%; margin: 0 auto 28px; display: block; }
+    h1 { font-size: 1.6rem; margin: 0 0 12px; font-weight: 800; }
+    p { color: #c3cbd9; line-height: 1.6; margin: 0 0 24px; }
+    .bar { height: 4px; width: 64px; background: var(--gold); border-radius: 4px; margin: 0 auto 28px; }
+    button {
+      background: var(--gold); color: #13294B; border: 0; font-weight: 800; font-size: 0.95rem;
+      padding: 12px 28px; border-radius: 12px; cursor: pointer; transition: transform .15s, box-shadow .15s;
+    }
+    button:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.3); }
+    .contact { margin-top: 28px; font-size: .85rem; color: #97a3b6; }
+    .contact a { color: var(--gold); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <img src="/ng_white_logo.png" alt="Navgrow Engineering" class="logo"
+         onerror="this.style.display='none'" />
+    <div class="bar"></div>
+    <h1>You're offline</h1>
+    <p>It looks like your internet connection dropped. Your last-viewed pages are still
+       available, and everything will load normally once you're back online.</p>
+    <button onclick="location.reload()">Try again</button>
+    <div class="contact">
+      Need to reach us? <a href="tel:+918927070972">+91 89270 70972</a> ·
+      <a href="mailto:info@navgrow.org">info@navgrow.org</a>
+    </div>
+  </div>
+</body>
+</html>

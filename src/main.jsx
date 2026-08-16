@@ -48,3 +48,26 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 );
 
 initVitals();
+
+// ── Progressive Web App: register the service worker (production only) ────────
+// Gives repeat visitors instant loads and offline browsing. Registered after
+// load so it never competes with the initial render. Safe to no-op if
+// unsupported. The SW itself never caches the API or HTML aggressively, so new
+// deploys are always picked up.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').then((reg) => {
+      // When a new SW is installed and there's an existing controller, a new
+      // version is available — activate it on next navigation automatically.
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', () => {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+            nw.postMessage('SKIP_WAITING');
+          }
+        });
+      });
+    }).catch(() => { /* SW registration is best-effort */ });
+  });
+}

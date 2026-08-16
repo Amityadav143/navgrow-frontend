@@ -17,6 +17,17 @@
   RewriteEngine On
   RewriteBase /
 
+  # ---- Canonical domain --------------------------------------------------
+  # Other domains/subdomains (e.g. navgrow.tech, www.navgrow.org) point at this
+  # same hosting, which would let Google index the site under several hostnames
+  # and split ranking signals as "duplicate content". Force ONE canonical host:
+  # 301-redirect every request whose host is not navgrow.org to navgrow.org.
+  # (Skipped automatically on localhost so local dev is unaffected.)
+  RewriteCond %{HTTP_HOST} !^navgrow\.org$ [NC]
+  RewriteCond %{HTTP_HOST} !^localhost [NC]
+  RewriteCond %{HTTP_HOST} !^127\.0\.0\.1 [NC]
+  RewriteRule ^(.*)$ https://navgrow.org/$1 [R=301,L]
+
   # Short-circuit the crawler files so nothing can shadow them.
   RewriteRule ^(sitemap\.xml|sitemap-index\.xml|robots\.txt|llms\.txt)$ - [L]
 
@@ -32,6 +43,17 @@
   # trailing-slash redirect, so crawlers get a clean 200 with the schema.
   RewriteCond %{DOCUMENT_ROOT}/$1/index.html -f
   RewriteRule ^(.+?)/?$ /$1/index.html [L]
+
+  # ---- Social crawlers on DB-ONLY products/posts -------------------------
+  # Admin-created products/news live only in the database, so they have no
+  # prerendered file above. Social/link crawlers don't run JS, so hand THEM a
+  # PHP-rendered shell with the correct Open Graph image (the admin-uploaded
+  # one) instead of the bare SPA. Humans fall through to the normal SPA below.
+  # (og.php itself double-checks the user-agent and fails safe to the shell.)
+  RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|facebot|WhatsApp|LinkedInBot|Twitterbot|Slackbot|TelegramBot|Pinterest|redditbot|Discordbot|SkypeUriPreview|vkShare|Embedly|Googlebot|bingbot|Applebot) [NC]
+  RewriteRule ^shop/([^/]+)/?$ /og.php?type=product&slug=$1 [L,QSA]
+  RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|facebot|WhatsApp|LinkedInBot|Twitterbot|Slackbot|TelegramBot|Pinterest|redditbot|Discordbot|SkypeUriPreview|vkShare|Embedly|Googlebot|bingbot|Applebot) [NC]
+  RewriteRule ^news/([^/]+)/?$ /og.php?type=news&slug=$1 [L,QSA]
 
   # Root: serve the homepage's index.html explicitly.
   RewriteRule ^/?$ index.html [L]
@@ -64,6 +86,11 @@
   # --- HTML entrypoint: always revalidate so deploys are picked up --------
   <FilesMatch "\.(html)$">
     Header set Cache-Control "public, max-age=0, must-revalidate"
+  </FilesMatch>
+
+  # --- Service worker: never cache, so SW updates roll out immediately -----
+  <FilesMatch "sw\.js$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
   </FilesMatch>
 
   # --- Crawler files: short cache -----------------------------------------

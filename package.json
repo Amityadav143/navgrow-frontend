@@ -13,7 +13,8 @@
     "check:imports": "node scripts/check-imports.cjs",
     "check": "npm run check:syntax && npm run check:imports",
     "test": "vitest run",
-    "verify:seo": "node scripts/verify-seo-live.mjs"
+    "verify:seo": "node scripts/verify-seo-live.mjs",
+    "verify:social": "node scripts/verify-social.mjs"
   },
   "dependencies": {
     "@emailjs/browser": "^4.3.3",

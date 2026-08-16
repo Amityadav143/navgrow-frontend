@@ -14,7 +14,7 @@ const useSeo = ({
   description,
   path = '',
   keywords,
-  image = '/ng_logo.png',
+  image = '/og-share.jpg',
   type = 'website',
   schema,
   noindex    = false,

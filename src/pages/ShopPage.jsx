@@ -19,6 +19,7 @@ import { debounce } from '@/lib/api';
 import CtaSection from '@/components/CtaSection';
 import { useCompare } from '@/components/CompareDrawer';
 import useSeo from '@/hooks/useSeo';
+import { useSiteSettings } from '@/hooks/useSiteSettings';
 import { toCartItem } from '@/lib/cartItem';
 
 const CATS    = ['All', ...Array.from(new Set(PRODUCTS.map(p => p.cat)))];
@@ -44,6 +45,10 @@ const trackView = (product) => {
 /* ── Product card ─────────────────────────────────────────────────────────── */
 const ProductCard = ({ product, onBuyNow }) => {
   const { addItem, items, toggleWishlist, inWishlist } = useCart();
+  const settings = useSiteSettings();
+  // Admin toggles (Settings → Shop). Default to on when settings unavailable.
+  const showStock    = settings?.shopSettings?.showStockBadge !== false;
+  const wishlistOn   = settings?.shopSettings?.enableWishlist !== false;
   const { addToRfq, inRfq } = useRfq();
   const { addToCompare, removeFromCompare, inCompare } = useCompare();
   const inCart    = items.some(i => i.id === product.id);
@@ -67,12 +72,13 @@ const ProductCard = ({ product, onBuyNow }) => {
         <div className="absolute top-2.5 left-2.5 flex flex-col gap-1.5">
           {product.badge && <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-600 text-white shadow">{product.badge}</span>}
           {d > 0 && <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-500 text-white shadow">{d}% OFF</span>}
-          {product.stockQty > 0 && product.stockQty <= 10 && (
+          {showStock && product.stockQty > 0 && product.stockQty <= 10 && (
             <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500 text-white shadow animate-pulse">
               Only {product.stockQty} left!
             </span>
           )}
         </div>
+        {wishlistOn && (
         <button
           onClick={(e) => { e.stopPropagation(); toggleWishlist({ id: product.id, name: product.name, price: product.price, image: product.image }); }}
           className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-white/90 flex items-center justify-center shadow-sm transition-colors hover:bg-red-50"
@@ -80,6 +86,7 @@ const ProductCard = ({ product, onBuyNow }) => {
         >
           <Heart className={`h-4 w-4 transition-colors ${wished ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
         </button>
+        )}
       </Link>
 
       {/* Info */}
@@ -113,8 +120,9 @@ const ProductCard = ({ product, onBuyNow }) => {
           <span className="block text-[10px] text-gray-400 mt-0.5">Incl. GST · GST invoice with HSN</span>
         </div>
 
-        {/* Stock status — honest availability at a glance */}
-        {product.stockQty != null && (
+        {/* Stock status — honest availability at a glance. Out-of-stock is always
+            shown (it affects buying); positive counts follow the admin toggle. */}
+        {product.stockQty != null && (product.stockQty <= 0 || showStock) && (
           <div className="mb-2 text-[11px] font-semibold">
             {product.stockQty <= 0 ? (
               <span className="text-red-500">● Out of stock — RFQ available</span>

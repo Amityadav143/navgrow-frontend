@@ -22,6 +22,7 @@ import PageProgress from '@/components/PageProgress';
 import CartSidebar from '@/components/CartSidebar';
 import RfqDrawer from '@/components/RfqDrawer';
 import TenderBanner from '@/components/TenderBanner';
+import AnnouncementBar from '@/components/AnnouncementBar';
 import CookieBanner from '@/components/CookieBanner';
 import MobileContactBar from '@/components/MobileContactBar';
 import SocialProof from '@/components/SocialProof';
@@ -83,6 +84,7 @@ const MainLayout = () => {
 
       {/* Fixed header wrapper — TenderBanner + Navbar stacked together */}
       <div ref={headerRef} className="fixed top-0 left-0 right-0 z-50" style={{ paddingTop: '3px' }}>
+        <AnnouncementBar />
         <TenderBanner />
         <Navbar scrolled={scrolled} onSearchOpen={() => setSearchOpen(true)} />
       </div>

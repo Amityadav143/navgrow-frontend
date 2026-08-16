@@ -39,12 +39,46 @@ const esc = (s) => String(s || '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;');
 
+// Social platforms (WhatsApp, Facebook, LinkedIn, X) render a large link preview
+// only when og:image is a reliably-fetchable, correctly-sized image (ideally
+// 1200x630). Product photos are Unsplash URLs; we normalise them to a cropped
+// 1200x630 rendition so they always come back at the right ratio and size, and
+// we emit og:image:width/height/alt so platforms know to show the big card.
+// Returns { url, width, height } — falls back to the branded share image.
+const OG_W = 1200, OG_H = 630;
+function socialImage(rawImage, altText) {
+  let url = rawImage;
+  if (url && /images\.unsplash\.com/.test(url)) {
+    // Strip existing sizing params and request an explicit social crop.
+    url = url.split('?')[0] +
+      `?ixlib=rb-4.0.3&auto=format&fit=crop&w=${OG_W}&h=${OG_H}&q=80`;
+  }
+  if (!url || !/^https?:\/\//.test(url)) {
+    // Local path or missing → use the on-domain branded share image.
+    url = url && url.startsWith('/') ? `${SITE.url}${url}` : `${SITE.url}/og-share.jpg`;
+  }
+  return { url, width: OG_W, height: OG_H, alt: altText || SITE.name };
+}
+
+// Render the full set of OG/Twitter image tags with dimensions.
+function ogImageTags(image, altText) {
+  const s = socialImage(image, altText);
+  return `
+    <meta property="og:image" content="${esc(s.url)}"/>
+    <meta property="og:image:secure_url" content="${esc(s.url)}"/>
+    <meta property="og:image:width" content="${s.width}"/>
+    <meta property="og:image:height" content="${s.height}"/>
+    <meta property="og:image:alt" content="${esc(s.alt)}"/>
+    <meta name="twitter:image" content="${esc(s.url)}"/>
+    <meta name="twitter:image:alt" content="${esc(s.alt)}"/>`;
+}
+
 function headFor(route) {
   const url = SITE.url + (route.path === '/' ? '/' : route.path);
   const fullTitle = route.path === '/'
     ? `${SITE.name} | ${route.title}`
     : `${route.title} | ${SITE.shortName}`;
-  const img = SITE.logo;
+  const img = `${SITE.url}/og-share.jpg`;
 
   const webPage = {
     '@context': 'https://schema.org',
@@ -86,11 +120,9 @@ function headFor(route) {
     <meta property="og:url" content="${esc(url)}" />
     <meta property="og:title" content="${esc(fullTitle)}" />
     <meta property="og:description" content="${esc(route.description)}" />
-    <meta property="og:image" content="${esc(img)}" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${esc(fullTitle)}" />
-    <meta name="twitter:description" content="${esc(route.description)}" />
-    <meta name="twitter:image" content="${esc(img)}" />
+    <meta name="twitter:description" content="${esc(route.description)}" />${ogImageTags(img, fullTitle)}
     <script type="application/ld+json">${JSON.stringify(webPage)}</script>
     <script type="application/ld+json">${JSON.stringify(breadcrumb)}</script>${route.path === '/' ? `
     <script type="application/ld+json">${JSON.stringify(siteNavigationSchema())}</script>
@@ -118,12 +150,15 @@ function stripBaseTags(html) {
     .replace(/<meta\s+name="keywords"[^>]*>/gi, '')
     .replace(/<link\s+rel="canonical"[^>]*>/gi, '')
     .replace(/<meta\s+property="og:url"[^>]*>/gi, '')
+    .replace(/<meta\s+property="og:locale"[^>]*>/gi, '')
     .replace(/<meta\s+property="og:title"[^>]*>/gi, '')
     .replace(/<meta\s+property="og:description"[^>]*>/gi, '')
-    .replace(/<meta\s+property="og:image"[^>]*>/gi, '')
+    // Remove ALL og:image* variants (image, secure_url, width, height, type, alt)
+    // so each page emits exactly one, correctly-sized image with no duplicates.
+    .replace(/<meta\s+property="og:image(:[a-z_]+)?"[^>]*>/gi, '')
     .replace(/<meta\s+name="twitter:title"[^>]*>/gi, '')
     .replace(/<meta\s+name="twitter:description"[^>]*>/gi, '')
-    .replace(/<meta\s+name="twitter:image"[^>]*>/gi, '');
+    .replace(/<meta\s+name="twitter:image(:[a-z]+)?"[^>]*>/gi, '');
 }
 
 function render(route) {
@@ -187,14 +222,12 @@ function headForProduct(p) {
     <meta property="og:title" content="${esc(title)}"/>
     <meta property="og:description" content="${esc(desc)}"/>
     <meta property="og:url" content="${url}"/>
-    <meta property="og:image" content="${esc(img)}"/>
     <meta property="og:site_name" content="${esc(SITE.name)}"/>
     <meta property="product:price:amount" content="${Number(p.price || 0).toFixed(2)}"/>
     <meta property="product:price:currency" content="INR"/>
     <meta name="twitter:card" content="summary_large_image"/>
     <meta name="twitter:title" content="${esc(title)}"/>
-    <meta name="twitter:description" content="${esc(desc)}"/>
-    <meta name="twitter:image" content="${esc(img)}"/>
+    <meta name="twitter:description" content="${esc(desc)}"/>${ogImageTags(img, p.name)}
     <script type="application/ld+json" id="page-jsonld">${JSON.stringify(schema)}</script>
     <script type="application/ld+json">${JSON.stringify(webPage)}</script>
     <script type="application/ld+json">${JSON.stringify(crumb)}</script>`;
@@ -261,12 +294,10 @@ function headForArticle(a) {
     <meta property="og:title" content="${esc(title)}"/>
     <meta property="og:description" content="${esc(desc)}"/>
     <meta property="og:url" content="${url}"/>
-    <meta property="og:image" content="${esc(img)}"/>
     <meta property="og:site_name" content="${esc(SITE.name)}"/>
     <meta name="twitter:card" content="summary_large_image"/>
     <meta name="twitter:title" content="${esc(title)}"/>
-    <meta name="twitter:description" content="${esc(desc)}"/>
-    <meta name="twitter:image" content="${esc(img)}"/>
+    <meta name="twitter:description" content="${esc(desc)}"/>${ogImageTags(img, a.title)}
     <script type="application/ld+json" id="page-jsonld">${JSON.stringify(schema)}</script>
     <script type="application/ld+json">${JSON.stringify(webPage)}</script>
     <script type="application/ld+json">${JSON.stringify(crumb)}</script>`;

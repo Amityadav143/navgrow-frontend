@@ -19,8 +19,9 @@
  *   preview     — show image preview (default true; off for PDFs)
  */
 import React, { useRef, useState } from 'react';
-import { Upload, Link2, X, Loader2, ImageIcon } from 'lucide-react';
+import { Upload, Link2, X, Loader2, ImageIcon, Crop as CropIcon } from 'lucide-react';
 import { filesApi } from '@/lib/api';
+import ImageCropper from './ImageCropper';
 
 const ImageUploadInput = ({
   value = '',
@@ -29,21 +30,22 @@ const ImageUploadInput = ({
   accept = 'image/jpeg,image/png,image/webp,image/gif',
   placeholder = 'https://… or upload a file',
   preview = true,
+  cropRatio = 'social',   // default crop preset; set to null to disable cropping
+  enableCrop = true,      // allow the adjust/crop step
 }) => {
   const fileRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [pendingFile, setPendingFile] = useState(null); // file awaiting crop
 
   const pickFile = () => fileRef.current?.click();
 
-  const handleFile = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = ''; // allow re-selecting the same file
-    if (!file) return;
-    if (file.size > 8 * 1024 * 1024) { setError('File is too large (max 8 MB).'); return; }
+  // Upload a File or Blob to the server and set the returned URL.
+  const uploadBlob = async (blob, filename) => {
     setUploading(true); setError('');
     try {
-      const { data } = await filesApi.upload(file);
+      const asFile = blob instanceof File ? blob : new File([blob], filename || 'image.jpg', { type: blob.type || 'image/jpeg' });
+      const { data } = await filesApi.upload(asFile);
       onChange(data.url);
     } catch (err) {
       const status = err.response?.status;
@@ -58,6 +60,20 @@ const ImageUploadInput = ({
       }
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (!file) return;
+    if (file.size > 12 * 1024 * 1024) { setError('File is too large (max 12 MB).'); return; }
+    setError('');
+    if (enableCrop && cropRatio && /^image\//.test(file.type) && !/gif$/i.test(file.type)) {
+      // Open the cropper first; upload happens after the admin frames it.
+      setPendingFile(file);
+    } else {
+      uploadBlob(file, file.name);
     }
   };
 
@@ -93,7 +109,26 @@ const ImageUploadInput = ({
             className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center shadow">
             <X className="h-3 w-3" />
           </button>
+          {enableCrop && cropRatio && (
+            <button type="button" onClick={pickFile} title="Replace & adjust"
+              className="absolute -bottom-2 -right-2 w-5 h-5 rounded-full bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center shadow">
+              <CropIcon className="h-3 w-3" />
+            </button>
+          )}
         </div>
+      )}
+
+      {/* Crop / optimize dialog — shown after picking a file (before upload). */}
+      {pendingFile && (
+        <ImageCropper
+          file={pendingFile}
+          initialRatio={cropRatio || 'social'}
+          onCancel={() => setPendingFile(null)}
+          onCropped={(blob) => {
+            setPendingFile(null);
+            if (blob) uploadBlob(blob, 'navgrow-image.jpg');
+          }}
+        />
       )}
       {preview && !value && (
         <p className="flex items-center gap-1.5 text-[11px] text-gray-500 mt-1.5">
