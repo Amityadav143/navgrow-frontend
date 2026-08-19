@@ -26,7 +26,16 @@
 
 // ---- Config ---------------------------------------------------------------
 $SITE   = 'https://navgrow.org';
-$API    = getenv('NAVGROW_API_BASE') ?: 'http://127.0.0.1:8080/api'; // same-box backend
+// The backend is reachable at the site's own /api path (nginx/Apache proxies it
+// to the Spring Boot app). On shared hosting the API is NOT on 127.0.0.1, so we
+// build the public same-origin base from the incoming host and fall back through
+// a few candidates. Override with the NAVGROW_API_BASE env var if needed.
+$HOST = $_SERVER['HTTP_HOST'] ?? 'navgrow.org';
+$API_CANDIDATES = array_values(array_filter([
+    getenv('NAVGROW_API_BASE') ?: null,
+    'https://' . $HOST . '/api',          // same-origin, proxied to backend
+    'https://navgrow.org/api',            // explicit production
+]));
 $SHELL  = __DIR__ . '/index.html';
 $FALLBACK_IMAGE = $SITE . '/og-share.jpg';
 $TIMEOUT = 2.5; // seconds — keep crawlers fast; fall back to shell on timeout
@@ -86,7 +95,20 @@ function social_image($img, $SITE, $FALLBACK) {
     return $FALLBACK;
 }
 
-function serve_shell($SHELL) {
+function serve_shell($SHELL, $type = '', $slug = '') {
+    // Prefer the PRERENDERED page for this slug if one exists (static products /
+    // posts) -- it already has the correct Open Graph image. Only if there's no
+    // prerendered file do we serve the bare SPA shell. This prevents a static
+    // post from ever falling back to the generic share image.
+    if ($type && $slug) {
+        $dir = $type === 'product' ? 'shop' : 'news';
+        $pre = __DIR__ . '/' . $dir . '/' . basename($slug) . '/index.html';
+        if (is_readable($pre)) {
+            header('Content-Type: text/html; charset=UTF-8');
+            readfile($pre);
+            exit;
+        }
+    }
     // Serve the untouched SPA shell (normal behaviour).
     if (is_readable($SHELL)) { header('Content-Type: text/html; charset=UTF-8'); readfile($SHELL); }
     else { http_response_code(404); echo 'Not found'; }
@@ -111,10 +133,14 @@ if (!$type || !$slug) {
 $slug = trim($slug);
 if (!$type || !$slug) serve_shell($SHELL);
 
-// Fetch the record from the backend API.
+// Fetch the record from the backend API (try each candidate base URL).
 $endpoint = $type === 'product' ? "/products/" : "/news/";
-$data = http_get_json(rtrim($API, '/') . $endpoint . rawurlencode($slug), $TIMEOUT);
-if (!$data) serve_shell($SHELL); // API down / not found → safe fallback
+$data = null;
+foreach ($API_CANDIDATES as $base) {
+    $data = http_get_json(rtrim($base, '/') . $endpoint . rawurlencode($slug), $TIMEOUT);
+    if ($data) break;
+}
+if (!$data) serve_shell($SHELL, $type, $slug); // API unreachable / not found -> prerendered file or shell
 
 // Build the OG fields from the record.
 if ($type === 'product') {

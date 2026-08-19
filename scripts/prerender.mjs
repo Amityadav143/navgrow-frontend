@@ -27,6 +27,9 @@ import { ROUTES, SITE, organizationSchema, productSchema, productBreadcrumb, sit
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST = join(__dirname, '..', 'dist');
+// Local images live in dist/ after the Vite build (public/ is copied there);
+// fall back to the source public/ folder just in case.
+const PUBLIC_DIR = existsSync(join(DIST, 'favicon.png')) ? DIST : join(__dirname, '..', 'public');
 const TEMPLATE_PATH = join(DIST, 'index.html');
 
 if (!existsSync(TEMPLATE_PATH)) {
@@ -46,28 +49,88 @@ const esc = (s) => String(s || '')
 // we emit og:image:width/height/alt so platforms know to show the big card.
 // Returns { url, width, height } — falls back to the branded share image.
 const OG_W = 1200, OG_H = 630;
-function socialImage(rawImage, altText) {
-  let url = rawImage;
-  if (url && /images\.unsplash\.com/.test(url)) {
-    // Strip existing sizing params and request an explicit social crop.
-    url = url.split('?')[0] +
-      `?ixlib=rb-4.0.3&auto=format&fit=crop&w=${OG_W}&h=${OG_H}&q=80`;
-  }
-  if (!url || !/^https?:\/\//.test(url)) {
-    // Local path or missing → use the on-domain branded share image.
-    url = url && url.startsWith('/') ? `${SITE.url}${url}` : `${SITE.url}/og-share.jpg`;
-  }
-  return { url, width: OG_W, height: OG_H, alt: altText || SITE.name };
+// Read intrinsic dimensions of a local image (PNG/JPEG/GIF/WebP) from the public
+// folder — dependency-free, by parsing header bytes. Returns {w,h} or null.
+// This lets us declare ACCURATE og:image:width/height (a mismatch between the
+// declared size and the real image makes some platforms drop the preview and
+// fall back to a cached logo).
+function localImageSize(publicPath) {
+  try {
+    const rel = publicPath.replace(/^\//, '');
+    const file = join(PUBLIC_DIR, rel);
+    if (!existsSync(file)) return null;
+    const b = readFileSync(file);
+    // PNG
+    if (b.length > 24 && b[0] === 0x89 && b[1] === 0x50) {
+      return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
+    }
+    // GIF
+    if (b.length > 10 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) {
+      return { w: b.readUInt16LE(6), h: b.readUInt16LE(8) };
+    }
+    // JPEG — scan for Start-Of-Frame marker
+    if (b.length > 4 && b[0] === 0xFF && b[1] === 0xD8) {
+      let i = 2;
+      while (i < b.length) {
+        if (b[i] !== 0xFF) { i++; continue; }
+        const marker = b[i + 1];
+        // SOF0..SOF15 (except DHT=C4, DNL=C8, DRI=CC) carry dimensions
+        if (marker >= 0xC0 && marker <= 0xCF && marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC) {
+          return { h: b.readUInt16BE(i + 5), w: b.readUInt16BE(i + 7) };
+        }
+        const len = b.readUInt16BE(i + 2);
+        i += 2 + len;
+      }
+    }
+    // WebP (VP8X)
+    if (b.length > 30 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP') {
+      const fmt = b.toString('ascii', 12, 16);
+      if (fmt === 'VP8X') return { w: 1 + (b[24] | (b[25] << 8) | (b[26] << 16)), h: 1 + (b[27] | (b[28] << 8) | (b[29] << 16)) };
+    }
+  } catch { /* ignore */ }
+  return null;
 }
 
-// Render the full set of OG/Twitter image tags with dimensions.
+function socialImage(rawImage, altText) {
+  let url = rawImage;
+  let width = OG_W, height = OG_H, sizeKnown = true;
+  if (url && /images\.unsplash\.com/.test(url)) {
+    // Strip existing sizing params and request an explicit social crop → 1200x630.
+    url = url.split('?')[0] +
+      `?ixlib=rb-4.0.3&auto=format&fit=crop&w=${OG_W}&h=${OG_H}&q=80`;
+  } else if (url && url.startsWith('/')) {
+    // Local image on our domain — declare its ACTUAL size (not an assumed 1200x630).
+    const size = localImageSize(url);
+    if (size && (size.w < 300 || size.h < 200)) {
+      // Too small for a good social card — platforms may drop it. Use the
+      // branded 1200x630 share image instead so the preview always looks right.
+      url = `${SITE.url}/og-share.jpg`;
+      width = OG_W; height = OG_H;
+    } else {
+      url = `${SITE.url}${url}`;
+      if (size) { width = size.w; height = size.h; }
+      else { sizeKnown = false; }
+    }
+  } else if (!url || !/^https?:\/\//.test(url)) {
+    // Missing/unknown → branded 1200x630 share image.
+    url = `${SITE.url}/og-share.jpg`;
+  } else {
+    // Absolute external (non-Unsplash) URL — size unknown, don't assert it.
+    sizeKnown = false;
+  }
+  return { url, width, height, sizeKnown, alt: altText || SITE.name };
+}
+
+// Render the full set of OG/Twitter image tags. Dimensions are emitted only when
+// known and correct, so we never declare a size that mismatches the real image.
 function ogImageTags(image, altText) {
   const s = socialImage(image, altText);
+  const dims = s.sizeKnown
+    ? `\n    <meta property="og:image:width" content="${s.width}"/>\n    <meta property="og:image:height" content="${s.height}"/>`
+    : '';
   return `
     <meta property="og:image" content="${esc(s.url)}"/>
-    <meta property="og:image:secure_url" content="${esc(s.url)}"/>
-    <meta property="og:image:width" content="${s.width}"/>
-    <meta property="og:image:height" content="${s.height}"/>
+    <meta property="og:image:secure_url" content="${esc(s.url)}"/>${dims}
     <meta property="og:image:alt" content="${esc(s.alt)}"/>
     <meta name="twitter:image" content="${esc(s.url)}"/>
     <meta name="twitter:image:alt" content="${esc(s.alt)}"/>`;
@@ -78,7 +141,7 @@ function headFor(route) {
   const fullTitle = route.path === '/'
     ? `${SITE.name} | ${route.title}`
     : `${route.title} | ${SITE.shortName}`;
-  const img = `${SITE.url}/og-share.jpg`;
+  const img = '/og-share.jpg';
 
   const webPage = {
     '@context': 'https://schema.org',
@@ -130,12 +193,52 @@ function headFor(route) {
 }
 
 // A real-text fallback so a non-JS crawl still sees the page's purpose.
+// A compact, crawlable navigation block included in every prerendered page's
+// noscript. Static <a href> links in the initial HTML help search engines
+// understand site structure and are a key input to Google sitelinks — which the
+// JS-rendered SPA nav alone does not provide to a non-executing crawler.
+function crawlableNav() {
+  const links = [
+    ['/', 'Home'], ['/about', 'About Us'], ['/services', 'Engineering & Sustainability Services'],
+    ['/projects', 'Projects'], ['/shop', 'B2B Engineering Shop'], ['/news', 'News & Insights'],
+    ['/careers', 'Careers'], ['/quote-calculator', 'Get a Quote'], ['/contact', 'Contact'],
+  ];
+  const items = links.map(([href, label]) =>
+    `<li><a href="${href}">${esc(label)}</a></li>`).join('');
+  return `<nav aria-label="Primary"><ul>${items}</ul></nav>`;
+}
+
+// A persistent, crawlable footer of internal links injected AFTER #root. The SPA
+// only manages #root, so this survives hydration and is seen by search engines
+// that render JS — giving Google a reliable static map of the site's main
+// sections (a strong input to sitelinks) even though the app nav is JS-driven.
+// It is visually minimal and placed at the very bottom so it doesn't affect UX.
+function crawlableFooter() {
+  const links = [
+    ['/', 'Home'], ['/about', 'About Navgrow'], ['/services', 'Services'],
+    ['/projects', 'Projects'], ['/shop', 'Shop'], ['/news', 'News'],
+    ['/careers', 'Careers'], ['/quote-calculator', 'Get a Quote'], ['/contact', 'Contact'],
+  ];
+  const items = links.map(([href, label]) =>
+    `<a href="${href}">${esc(label)}</a>`).join(' · ');
+  return `\n  <footer id="site-crawl-links" style="border-top:1px solid #eee;padding:16px;text-align:center;font:13px system-ui,Arial,sans-serif;color:#555">
+    <nav aria-label="Site links">${items}</nav>
+  </footer>
+  <script>/* Hide the static crawl-links footer once the app has rendered its own nav,
+     so human visitors don't see a duplicate. Search crawlers render the initial
+     HTML and still index these links. */
+  (function(){function h(){var r=document.getElementById('root');var f=document.getElementById('site-crawl-links');if(f&&r&&r.children.length>0){f.style.display='none';}}
+  if(document.readyState!=='loading'){setTimeout(h,1200);}else{document.addEventListener('DOMContentLoaded',function(){setTimeout(h,1200);});}})();
+  </script>`;
+}
+
 function noscriptFor(route) {
   const heading = route.title.split(' — ')[0].split(' | ')[0];
-  return `<noscript><div style="max-width:720px;margin:40px auto;padding:0 20px;font-family:system-ui,Arial,sans-serif">
+  return `<noscript><div style="max-width:820px;margin:40px auto;padding:0 20px;font-family:system-ui,Arial,sans-serif">
     <h1>${esc(heading)}</h1>
     <p>${esc(route.description)}</p>
-    <p>Navgrow Engineering Service Pvt. Ltd., Siliguri, West Bengal, India — ${esc(SITE.phone)} — ${esc(SITE.email)}</p>
+    ${crawlableNav()}
+    <p>Navgrow Engineering Service Pvt. Ltd., Ward No-47, Old Matigara Road, Pati Colony, Siliguri, West Bengal – 734001, India — ${esc(SITE.phone)} — ${esc(SITE.email)}</p>
   </div></noscript>`;
 }
 
@@ -148,6 +251,7 @@ function stripBaseTags(html) {
     .replace(/<title>[\s\S]*?<\/title>/i, '')
     .replace(/<meta\s+name="description"[^>]*>/gi, '')
     .replace(/<meta\s+name="keywords"[^>]*>/gi, '')
+    .replace(/<meta\s+name="robots"[^>]*>/gi, '')
     .replace(/<link\s+rel="canonical"[^>]*>/gi, '')
     .replace(/<meta\s+property="og:url"[^>]*>/gi, '')
     .replace(/<meta\s+property="og:locale"[^>]*>/gi, '')
@@ -166,7 +270,7 @@ function render(route) {
   // Inject our head block right before </head>.
   html = html.replace('</head>', `${headFor(route)}\n</head>`);
   // Inject the noscript content just inside <body>, before #root.
-  html = html.replace('<div id="root"></div>', `${noscriptFor(route)}\n  <div id="root"></div>`);
+  html = html.replace('<div id="root"></div>', `${noscriptFor(route)}\n  <div id="root"></div>${crawlableFooter()}`);
   return html;
 }
 
@@ -192,7 +296,7 @@ function headForProduct(p) {
   const title = `${p.name} | ${SITE.shortName}`;
   const desc = (p.summary || p.description || p.desc || p.name).slice(0, 300);
   const img = p.image && /^https?:\/\//.test(p.image) ? p.image
-            : p.image ? `${SITE.url}${p.image}` : SITE.logo;
+            : (p.image || '/og-share.jpg');
   const schema = productSchema(p);
   // Connect the product into the site's entity graph.
   schema['@id'] = `${url}#product`;
@@ -254,7 +358,7 @@ try {
     if (!slug) continue;
     let html = stripBaseTags(template);
     html = html.replace('</head>', `${headForProduct(p)}\n</head>`);
-    html = html.replace('<div id="root"></div>', `${noscriptForProduct(p)}\n  <div id="root"></div>`);
+    html = html.replace('<div id="root"></div>', `${noscriptForProduct(p)}\n  <div id="root"></div>${crawlableFooter()}`);
     const outDir = join(DIST, 'shop', String(slug));
     mkdirSync(outDir, { recursive: true });
     writeFileSync(join(outDir, 'index.html'), html, 'utf8');
@@ -272,7 +376,7 @@ function headForArticle(a) {
   const url = `${SITE.url}/news/${a.slug}`;
   const title = `${a.title} | Navgrow News`;
   const desc = (a.excerpt || a.title).slice(0, 300);
-  const img = a.image && /^https?:\/\//.test(a.image) ? a.image : `${SITE.url}${a.image || '/ng_logo.png'}`;
+  const img = a.image && /^https?:\/\//.test(a.image) ? a.image : (a.image || '/og-share.jpg');
   const schema = articleSchema(a);
   const crumb = articleBreadcrumb(a);
   const webPage = {
@@ -318,7 +422,7 @@ try {
     if (!a.slug) continue;
     let html = stripBaseTags(template);
     html = html.replace('</head>', `${headForArticle(a)}\n</head>`);
-    html = html.replace('<div id="root"></div>', `${noscriptForArticle(a)}\n  <div id="root"></div>`);
+    html = html.replace('<div id="root"></div>', `${noscriptForArticle(a)}\n  <div id="root"></div>${crawlableFooter()}`);
     const outDir = join(DIST, 'news', a.slug);
     mkdirSync(outDir, { recursive: true });
     writeFileSync(join(outDir, 'index.html'), html, 'utf8');

@@ -50,7 +50,7 @@ const getGreeting = (name) => {
 
 const buildWelcome = (name) => ({
   id: "welcome", role: "assistant", ts: Date.now(), done: true,
-  content: `${getGreeting(name)} I'm **NavBot**, Navgrow's AI assistant.\n\nI can help you with:\n• Engineering services & project quotes\n• Safety products & B2B shop orders\n• Order tracking & support\n• Career opportunities\n• Certifications & company info\n\nWhat can I help you with today?`,
+  content: `${getGreeting(name)} I'm **NavBot**, Navgrow's AI assistant.\n\nI can help you with:\n• Engineering services & project quotes\n• Safety products & B2B shop orders\n• Order tracking & support\n• International & bulk enquiries\n• Certifications & company info\n\nYou can chat with me in **English, हिन्दी or বাংলা**. What can I help you with today?`,
 });
 
 const STARTERS = [
@@ -63,6 +63,7 @@ const STARTERS = [
   { e:"🏭", label:"Industrial",        text:"Do you serve manufacturing and industrial clients?" },
   { e:"🎟", label:"Offers",            text:"Are there any discount codes or ongoing offers?" },
   { e:"🏆", label:"Certifications",    text:"What certifications does Navgrow hold?" },
+  { e:"🌍", label:"International",      text:"I'm outside India — can you supply or work with global clients?" },
   { e:"📞", label:"Contact",           text:"How can I reach Navgrow quickly?" },
 ];
 

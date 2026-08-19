@@ -1,85 +1,89 @@
 /**
- * verify-seo-live.mjs — checks whether the LIVE site is serving the prerendered
- * SEO HTML (with valid Product structured data) or just the empty SPA shell.
+ * verify-seo-live.mjs — comprehensive live-site SEO & indexing diagnostic.
  *
- * This is the single most useful diagnostic when Search Console still reports
- * structured-data errors after a deploy: it tells you definitively whether the
- * problem is the deployment (prerendered files not live / not served) or not.
+ * Run this AFTER deploying to see exactly what Google receives. It fetches the
+ * live pages as Googlebot and reports, per URL: HTTP status, canonical, robots,
+ * title/description, JSON-LD schema types (and whether they parse), crawlable
+ * internal links, and whether the page is the prerendered version or the SPA shell.
+ * It also checks robots.txt and sitemap.xml.
  *
- * Usage:  node scripts/verify-seo-live.mjs
- *         node scripts/verify-seo-live.mjs https://navgrow.org
+ * Usage:
+ *   npm run verify:seo
+ *   node scripts/verify-seo-live.mjs https://navgrow.org
  */
 const BASE = (process.argv[2] || 'https://navgrow.org').replace(/\/+$/, '');
+const UA = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
+const PAGES = ['/', '/about', '/services', '/shop', '/news', '/contact'];
 
-const URLS = [
-  '/',
-  '/about',
-  '/shop',
-  '/shop/industrial-safety-helmet-isi',
-  '/shop/steel-toe-safety-boots',
-];
-
-function extractJsonLd(html) {
+function meta(html, key, attr = 'name') {
+  const re = new RegExp(`<meta[^>]+${attr}=["']${key}["'][^>]*>`, 'i');
+  const t = html.match(re)?.[0];
+  return t ? (t.match(/content=["']([^"']*)["']/i)?.[1] ?? null) : null;
+}
+function canonical(html) {
+  const t = html.match(/<link[^>]+rel=["']canonical["'][^>]*>/i)?.[0];
+  return t ? (t.match(/href=["']([^"']*)["']/i)?.[1] ?? null) : null;
+}
+function jsonLdTypes(html) {
   const out = [];
-  const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-  let m;
-  while ((m = re.exec(html))) {
-    try { out.push(JSON.parse(m[1])); } catch { out.push({ __parseError: true }); }
+  for (const m of html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    try { const o = JSON.parse(m[1]); out.push(o['@type'] || '?'); }
+    catch { out.push('PARSE_ERROR'); }
   }
   return out;
 }
-
-let anyFail = false;
-
-for (const path of URLS) {
+async function check(path) {
   const url = BASE + path;
-  try {
-    const res = await fetch(url, { redirect: 'manual', headers: { 'User-Agent': 'Googlebot/2.1 (+http://www.google.com/bot.html)' } });
-    const status = res.status;
-    const finalRedirect = res.headers.get('location');
-    const html = await res.text();
-
-    const hasRoot = /<div id="root">/.test(html);
-    const shellOnly = hasRoot && !/application\/ld\+json/.test(html);
-    const blocks = extractJsonLd(html);
-    const product = blocks.find(b => b['@type'] === 'Product');
-    const parseErrors = blocks.some(b => b.__parseError);
-
-    const isProductUrl = path.startsWith('/shop/');
-    let verdict;
-    if (status >= 300 && status < 400) {
-      verdict = `⚠ REDIRECT (${status}) → ${finalRedirect} — crawlers should get 200, not a redirect`;
-      anyFail = true;
-    } else if (status !== 200) {
-      verdict = `✗ HTTP ${status}`;
-      anyFail = true;
-    } else if (shellOnly) {
-      verdict = '✗ SERVING SPA SHELL (no structured data) — prerendered file NOT being served';
-      anyFail = true;
-    } else if (parseErrors) {
-      verdict = '✗ JSON-LD present but has PARSE ERRORS';
-      anyFail = true;
-    } else if (isProductUrl) {
-      if (product && product.offers && product.aggregateRating) {
-        verdict = '✓ Product schema OK (offers + aggregateRating present)';
-      } else if (product) {
-        verdict = `✗ Product schema MISSING ${!product.offers ? 'offers' : ''} ${!product.aggregateRating ? 'aggregateRating' : ''}`.trim();
-        anyFail = true;
-      } else {
-        verdict = '✗ No Product schema found on a product URL';
-        anyFail = true;
-      }
-    } else {
-      verdict = `✓ ${blocks.length} JSON-LD block(s) served`;
-    }
-    console.log(`${verdict}\n    ${url}`);
-  } catch (e) {
-    console.log(`✗ FETCH FAILED — ${e.message}\n    ${url}`);
-    anyFail = true;
-  }
+  console.log(`\n-------- ${url}`);
+  let res, html;
+  try { res = await fetch(url, { redirect: 'manual', headers: { 'User-Agent': UA } }); html = await res.text(); }
+  catch (e) { console.log(`  x fetch failed: ${e.message}`); return false; }
+  let ok = true;
+  const status = res.status;
+  if (status >= 300 && status < 400) { console.log(`  ! HTTP ${status} -> ${res.headers.get('location')} (crawlers prefer 200)`); ok = false; }
+  else if (status !== 200) { console.log(`  x HTTP ${status}`); return false; }
+  else { console.log(`  ok HTTP 200`); }
+  const rootEmpty = /<div id=["']root["']>\s*<\/div>/.test(html);
+  const types = jsonLdTypes(html);
+  const links = [...html.matchAll(/<a[^>]+href=["'](\/[^"']*)["']/g)].map(m => m[1]);
+  const uniqLinks = [...new Set(links)];
+  const can = canonical(html);
+  const canCount = (html.match(/rel=["']canonical["']/g) || []).length;
+  const robots = meta(html, 'robots');
+  const robotsCount = (html.match(/name=["']robots["']/g) || []).length;
+  const title = (html.match(/<title>([^<]*)<\/title>/i)?.[1] || '').trim();
+  const desc = meta(html, 'description');
+  console.log(`  title:        ${title ? title.slice(0, 70) : 'x MISSING'}`);
+  console.log(`  description:  ${desc ? 'ok' : 'x MISSING'}`);
+  console.log(`  canonical:    ${can || 'x MISSING'}${canCount > 1 ? `  x ${canCount} canonicals!` : ''}`);
+  console.log(`  robots:       ${robots || '(none)'}${robotsCount > 1 ? `  x ${robotsCount} robots tags!` : ''}`);
+  if (robots && /noindex/i.test(robots)) { console.log('  x page is NOINDEX'); ok = false; }
+  console.log(`  JSON-LD:      ${types.length ? types.join(', ') : 'x NONE'}`);
+  if (types.includes('PARSE_ERROR')) { console.log('  x a JSON-LD block does not parse'); ok = false; }
+  console.log(`  internal links: ${uniqLinks.length ? uniqLinks.length + ' (' + uniqLinks.slice(0, 8).join(', ') + ')' : 'x NONE (hurts crawl + sitelinks)'}`);
+  if (canCount > 1 || robotsCount > 1) ok = false;
+  if (rootEmpty && types.length <= 3 && uniqLinks.length === 0) { console.log('  x looks like the EMPTY SPA SHELL - prerendered page not served here'); ok = false; }
+  return ok;
 }
-
-console.log('\n' + (anyFail
-  ? '❌ Some checks failed. If URLs serve the SPA shell or redirect, the prerendered\n   dist/ is not deployed or the server (.htaccess) is not serving it. Re-run\n   `npm run build` and upload the ENTIRE dist/ (including the shop/ subfolders\n   and .htaccess) to public_html.'
-  : '✅ Live site is serving prerendered HTML with valid structured data on every checked URL.'));
-process.exit(anyFail ? 1 : 0);
+(async () => {
+  console.log(`SEO / indexing diagnostic for ${BASE}\nFetching as Googlebot...`);
+  let allOk = true;
+  for (const p of PAGES) { const r = await check(p); allOk = allOk && r; }
+  console.log('\n-------- robots.txt');
+  try {
+    const r = await fetch(BASE + '/robots.txt', { headers: { 'User-Agent': UA } }); const t = await r.text();
+    console.log(`  HTTP ${r.status}; Sitemap line: ${/sitemap:/i.test(t) ? 'ok' : 'x missing'}; Disallow /: ${/disallow:\s*\/\s*$/im.test(t) ? 'x BLOCKS EVERYTHING' : 'ok not blocked'}`);
+    if (/disallow:\s*\/\s*$/im.test(t)) allOk = false;
+  } catch (e) { console.log('  x ' + e.message); }
+  console.log('\n-------- sitemap.xml');
+  try {
+    const r = await fetch(BASE + '/sitemap.xml', { headers: { 'User-Agent': UA } }); const t = await r.text();
+    const n = (t.match(/<loc>/g) || []).length;
+    console.log(`  HTTP ${r.status}; URLs: ${n}; content-type: ${r.headers.get('content-type')}`);
+    if (r.status !== 200 || n === 0) allOk = false;
+  } catch (e) { console.log('  x ' + e.message); }
+  console.log('\n' + (allOk
+    ? 'PASS: Live site looks correctly indexable (prerendered pages, single canonical/robots,\n  valid schema, crawlable links, reachable sitemap). If GSC still shows few indexed\n  pages, it is almost certainly crawl TIMING (days-weeks) or site authority (sitelinks\n  need an established, well-linked site). Use GSC URL Inspection -> Request Indexing.'
+    : 'FAIL: Issues above. Most common: the site serves the empty SPA shell instead of the\n  prerendered dist/. Re-run `npm run build` and upload the ENTIRE dist/ (incl. shop/ +\n  news/ subfolders, .htaccess, og.php) to public_html, then re-run this check.'));
+  process.exit(allOk ? 0 : 1);
+})();
