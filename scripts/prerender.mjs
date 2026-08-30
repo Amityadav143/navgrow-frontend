@@ -24,6 +24,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ROUTES, SITE, organizationSchema, productSchema, productBreadcrumb, siteNavigationSchema, NEWS_ARTICLES, articleSchema, articleBreadcrumb, faqSchema } from '../src/lib/seo-routes.mjs';
+import { SEO_CONTENT, renderSeoContent } from '../src/lib/seo-content.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST = join(__dirname, '..', 'dist');
@@ -233,9 +234,7 @@ function crawlableFooter() {
 }
 
 function noscriptFor(route) {
-  const heading = route.title.split(' — ')[0].split(' | ')[0];
   return `<noscript><div style="max-width:820px;margin:40px auto;padding:0 20px;font-family:system-ui,Arial,sans-serif">
-    <h1>${esc(heading)}</h1>
     <p>${esc(route.description)}</p>
     ${crawlableNav()}
     <p>Navgrow Engineering Service Pvt. Ltd., Ward No-47, Old Matigara Road, Pati Colony, Siliguri, West Bengal – 734001, India — ${esc(SITE.phone)} — ${esc(SITE.email)}</p>
@@ -269,8 +268,19 @@ function render(route) {
   let html = stripBaseTags(template);
   // Inject our head block right before </head>.
   html = html.replace('</head>', `${headFor(route)}\n</head>`);
-  // Inject the noscript content just inside <body>, before #root.
-  html = html.replace('<div id="root"></div>', `${noscriptFor(route)}\n  <div id="root"></div>${crawlableFooter()}`);
+  // Real, crawlable page content rendered INSIDE #root. React replaces #root on
+  // hydration, so human visitors never see this — but search engines (and users
+  // with JS disabled) get substantive, indexable content immediately instead of
+  // an empty div. This is the key fix for thin server-rendered content.
+  const contentSections = SEO_CONTENT[route.path];
+  const prerenderedBody = contentSections
+    ? `<div id="prerendered-seo-content" style="max-width:900px;margin:0 auto;padding:24px;font-family:system-ui,Arial,sans-serif;line-height:1.6">
+    <h1>${esc(route.title.split(' — ')[0].split(' | ')[0])}</h1>
+    ${renderSeoContent(contentSections)}
+  </div>`
+    : '';
+  html = html.replace('<div id="root"></div>',
+    `${noscriptFor(route)}\n  <div id="root">${prerenderedBody}</div>${crawlableFooter()}`);
   return html;
 }
 
@@ -341,7 +351,6 @@ function noscriptForProduct(p) {
   const price = Number(p.price);
   const priceStr = Number.isFinite(price) && price > 0 ? `\u20B9${price.toLocaleString('en-IN')}` : 'Request a quote';
   return `<noscript><div style="max-width:720px;margin:40px auto;padding:0 20px;font-family:system-ui,Arial,sans-serif">
-    <h1>${esc(p.name)}</h1>
     <p><strong>Price: ${esc(priceStr)}</strong> (incl. GST)${p.hsnCode ? ` &middot; HSN ${esc(String(p.hsnCode))}` : ''}</p>
     <p>${esc((p.summary || p.description || p.desc || '').slice(0, 500))}</p>
     <p>Buy online from Navgrow Engineering with GST invoice and pan-India delivery. Bulk / RFQ options available.</p>
@@ -358,7 +367,16 @@ try {
     if (!slug) continue;
     let html = stripBaseTags(template);
     html = html.replace('</head>', `${headForProduct(p)}\n</head>`);
-    html = html.replace('<div id="root"></div>', `${noscriptForProduct(p)}\n  <div id="root"></div>${crawlableFooter()}`);
+    const price = Number(p.price);
+    const priceStr = Number.isFinite(price) && price > 0 ? `\u20B9${price.toLocaleString('en-IN')}` : 'Request a quote';
+    const prodBody = `<div id="prerendered-seo-content" style="max-width:900px;margin:0 auto;padding:24px;font-family:system-ui,Arial,sans-serif;line-height:1.6">
+      <h1>${esc(p.name)}</h1>
+      <p><strong>Price: ${esc(priceStr)}</strong> (incl. GST)${p.hsnCode ? ` &middot; HSN ${esc(String(p.hsnCode))}` : ''}${p.category ? ` &middot; Category: ${esc(p.category)}` : ''}</p>
+      <p>${esc((p.summary || p.description || p.desc || '').slice(0, 800))}</p>
+      <h2>Buy ${esc(p.name)} online from Navgrow Engineering</h2>
+      <p>Certified product with a GST tax invoice (HSN codes) for input-tax credit, pan-India delivery (free within Siliguri), and bulk / RFQ options for B2B and institutional buyers. Contact ${esc(SITE.phone)} or ${esc(SITE.email)}.</p>
+    </div>`;
+    html = html.replace('<div id="root"></div>', `${noscriptForProduct(p)}\n  <div id="root">${prodBody}</div>${crawlableFooter()}`);
     const outDir = join(DIST, 'shop', String(slug));
     mkdirSync(outDir, { recursive: true });
     writeFileSync(join(outDir, 'index.html'), html, 'utf8');
@@ -410,7 +428,6 @@ function headForArticle(a) {
 function noscriptForArticle(a) {
   return `<noscript><article style="max-width:720px;margin:40px auto;padding:0 20px;font-family:system-ui,Arial,sans-serif">
     <p style="color:#666;text-transform:uppercase;font-size:12px;letter-spacing:1px">${esc(a.category || 'News')} &middot; ${esc(a.publishedAt)}</p>
-    <h1>${esc(a.title)}</h1>
     <p>${esc(a.excerpt || '')}</p>
     <p>Read more from Navgrow Engineering Service Pvt. Ltd., Siliguri, West Bengal &mdash; ${esc(SITE.phone)} &middot; ${esc(SITE.email)}.</p>
   </article></noscript>`;
@@ -422,7 +439,15 @@ try {
     if (!a.slug) continue;
     let html = stripBaseTags(template);
     html = html.replace('</head>', `${headForArticle(a)}\n</head>`);
-    html = html.replace('<div id="root"></div>', `${noscriptForArticle(a)}\n  <div id="root"></div>${crawlableFooter()}`);
+    const artBody = `<div id="prerendered-seo-content" style="max-width:900px;margin:0 auto;padding:24px;font-family:system-ui,Arial,sans-serif;line-height:1.6">
+      <article>
+      <h1>${esc(a.title)}</h1>
+      <p><em>${esc(a.category || 'News')} &middot; ${esc(a.publishedAt || '')} &middot; Navgrow Engineering</em></p>
+      <p>${esc(a.excerpt || '')}</p>
+      <p>Read more news and insights from Navgrow Engineering Service Pvt. Ltd., a DPIIT-recognised engineering firm in Siliguri, West Bengal, India, serving railways, industry and government across India.</p>
+      </article>
+    </div>`;
+    html = html.replace('<div id="root"></div>', `${noscriptForArticle(a)}\n  <div id="root">${artBody}</div>${crawlableFooter()}`);
     const outDir = join(DIST, 'news', a.slug);
     mkdirSync(outDir, { recursive: true });
     writeFileSync(join(outDir, 'index.html'), html, 'utf8');
