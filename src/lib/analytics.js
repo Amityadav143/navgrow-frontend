@@ -16,6 +16,47 @@ const SESSION_KEY = 'ng_sid';
 const OPTOUT_KEY = 'ng_analytics_optout';
 const SESSION_TTL_MS = 1000 * 60 * 30; // 30 minutes of inactivity ends a session
 
+// ── Google Analytics 4 (optional) ────────────────────────────────────────────
+// Activates ONLY when VITE_GA_ID is set (e.g. "G-XXXXXXXXXX") at build time, so
+// there's zero effect until you choose to add it. Every event tracked below is
+// mirrored to GA4, so you get both first-party AND Google reporting (useful for
+// Google Ads conversion tracking and familiar dashboards) with no extra calls.
+const GA_ID = import.meta.env.VITE_GA_ID;
+let gaReady = false;
+
+function initGA() {
+  if (gaReady || !GA_ID || typeof window === 'undefined') return;
+  try {
+    const s = document.createElement('script');
+    s.async = true;
+    s.src = `https://www.googletagmanager.com/gtag/js?id=${GA_ID}`;
+    document.head.appendChild(s);
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function () { window.dataLayer.push(arguments); };
+    window.gtag('js', new Date());
+    // We send page_view manually on route change, so disable automatic ones.
+    window.gtag('config', GA_ID, { send_page_view: false });
+    gaReady = true;
+  } catch { /* best-effort */ }
+}
+
+function gaSend(event, opts = {}) {
+  if (!GA_ID) return;
+  try {
+    if (!gaReady) initGA();
+    if (typeof window.gtag !== 'function') return;
+    if (event === 'page_view') {
+      window.gtag('event', 'page_view', { page_path: opts.path, page_location: window.location.href });
+    } else {
+      window.gtag('event', event, {
+        event_label: opts.label,
+        value: opts.value,
+        page_path: opts.path,
+      });
+    }
+  } catch { /* ignore */ }
+}
+
 /** Generate a short random id (anonymous, no PII). */
 function randomId() {
   try {
@@ -93,15 +134,18 @@ function flush() {
 export function track(event, opts = {}) {
   try {
     if (!event || isOptedOut()) return;
+    const path = opts.path || (typeof window !== 'undefined' ? window.location.pathname : undefined);
     queue.push({
       event,
       label: opts.label != null ? String(opts.label).slice(0, 200) : undefined,
       value: typeof opts.value === 'number' ? opts.value : undefined,
       sessionId: getSessionId(),
-      path: opts.path || (typeof window !== 'undefined' ? window.location.pathname : undefined),
+      path,
     });
     if (queue.length >= MAX_BATCH) flush();
     else scheduleFlush();
+    // Mirror to GA4 (no-op unless VITE_GA_ID is configured).
+    gaSend(event, { label: opts.label, value: opts.value, path });
   } catch { /* never break the UX */ }
 }
 

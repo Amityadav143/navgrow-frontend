@@ -20,7 +20,13 @@ import { sanitizeHtml } from './sanitize';
 // Heuristic: does this string already contain block-level HTML? If an author (or
 // the seed data) wrote real tags, we must not Markdown-process it.
 function looksLikeHtml(s) {
-  return /<(p|div|h[1-6]|ul|ol|li|table|blockquote|br|img|strong|em|span|a|figure)\b[^>]*>/i.test(s);
+  // Only treat content as ready-made HTML when it has real block structure
+  // (a closing block tag, or multiple block tags). A stray inline tag like a
+  // single <br> or <strong> must NOT disable Markdown processing, otherwise
+  // Markdown-authored posts with one inline tag render "##"/"*" as literal text.
+  if (/<\/(p|div|h[1-6]|ul|ol|li|table|blockquote|figure|section|article)>/i.test(s)) return true;
+  const blockOpens = (s.match(/<(p|div|h[1-6]|ul|ol|li|table|blockquote|figure)\b[^>]*>/gi) || []).length;
+  return blockOpens >= 2;
 }
 
 const escapeHtml = (s) => s
@@ -66,6 +72,32 @@ export function markdownToHtml(src) {
     text = text.replace(/(\S[^\n]*?[.!?:;,)"'\w])\s+([*•]\s)/g, '$1\n$2');
     text = text.replace(/(\S[^\n]*?[.!?:;,)"'\w])\s+(-\s)/g, '$1\n$2');
   } while (text !== prev);
+
+  // A heading jammed onto one line often absorbs the paragraph that follows it
+  // ("## 2. Choose Plants ... Select plants based on ..."). Split the heading
+  // title (up to its first sentence end or ~70 chars) from the body that trails
+  // it so the heading stays short and the rest becomes a paragraph.
+  text = text.split('\n').map((ln) => {
+    const m = ln.match(/^(#{1,6})\s+(.*)$/);
+    if (!m) return ln;
+    const hashes = m[1];
+    let title = m[2].trim();
+    // Prefer to cut at a sentence boundary that is followed by a capitalised word
+    // (the start of the body sentence). Keep a leading "N." section number.
+    const cut = title.match(/^(.{3,80}?[.!?])\s+([A-Z].*)$/);
+    if (cut) return `${hashes} ${cut[1].replace(/[.]$/, '')}\n\n${cut[2]}`;
+    // Otherwise, if the title is very long, break at the first run of 2+ words
+    // after ~60 chars so we don't emit a paragraph-length heading.
+    if (title.length > 90) {
+      const idx = title.indexOf(' ', 60);
+      if (idx > 0) return `${hashes} ${title.slice(0, idx)}\n\n${title.slice(idx + 1)}`;
+    }
+    return ln;
+  }).join('\n');
+
+  // Break before a standalone numbered section that starts a new line of prose
+  // ("... productive garden. 2. Choose Plants ...") so ordered items separate.
+  text = text.replace(/([.!?:;])\s+(\d{1,2}[.)]\s+[A-Z])/g, '$1\n\n$2');
 
   const lines = text.split('\n');
   const html = [];

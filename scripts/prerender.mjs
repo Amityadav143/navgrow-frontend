@@ -25,6 +25,32 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ROUTES, SITE, organizationSchema, productSchema, productBreadcrumb, siteNavigationSchema, NEWS_ARTICLES, articleSchema, articleBreadcrumb, faqSchema } from '../src/lib/seo-routes.mjs';
 import { SEO_CONTENT, renderSeoContent } from '../src/lib/seo-content.mjs';
+import { readFileSync as _rf } from 'node:fs';
+
+// ── Load listing data up-front for ItemList schema on /shop, /news, /services ──
+// ItemList/CollectionPage schema helps Google understand these collection pages
+// and can surface list/carousel rich results, improving reach for the catalogue.
+let _PRODUCTS_FOR_LIST = [];
+try {
+  const mod = await import('../src/lib/productData.js');
+  _PRODUCTS_FOR_LIST = mod.ALL_PRODUCTS || mod.PRODUCTS || mod.default || [];
+} catch { /* listing schema is best-effort */ }
+
+// Services are defined in the ServicesPage component; parse their id + title so
+// we can enumerate them without importing the React page (which pulls in JSX).
+let _SERVICES_FOR_LIST = [];
+try {
+  const src = _rf(new URL('../src/pages/ServicesPage.jsx', import.meta.url), 'utf8');
+  // Match { id: 'slug', ... title: 'Name' ... } blocks (title follows id nearby).
+  const re = /id:\s*'([a-z0-9-]+)'[\s\S]{0,200}?title:\s*'([^']+)'/g;
+  let m;
+  const seen = new Set();
+  while ((m = re.exec(src)) !== null) {
+    if (seen.has(m[1])) continue;
+    seen.add(m[1]);
+    _SERVICES_FOR_LIST.push({ id: m[1], title: m[2] });
+  }
+} catch { /* best-effort */ }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST = join(__dirname, '..', 'dist');
@@ -137,6 +163,48 @@ function ogImageTags(image, altText) {
     <meta name="twitter:image:alt" content="${esc(s.alt)}"/>`;
 }
 
+// Build an ItemList (within a CollectionPage) enumerating the items on a listing
+// page, so search engines see the collection's members with stable URLs.
+function listingSchema(route) {
+  const url = SITE.url + route.path;
+  let name, items;
+  if (route.path === '/shop') {
+    name = 'Navgrow Engineering Shop';
+    items = _PRODUCTS_FOR_LIST
+      .filter(p => (p.slug || p.id))
+      .map(p => ({ name: p.name, path: `/shop/${p.slug || p.id}` }));
+  } else if (route.path === '/news') {
+    name = 'Navgrow News & Insights';
+    items = NEWS_ARTICLES
+      .filter(a => a.slug)
+      .map(a => ({ name: a.title, path: `/news/${a.slug}` }));
+  } else if (route.path === '/services') {
+    name = 'Navgrow Engineering & Sustainability Services';
+    items = _SERVICES_FOR_LIST.map(s => ({ name: s.title, path: `/services/${s.id}` }));
+  } else {
+    return null;
+  }
+  if (!items.length) return null;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    '@id': `${url}#collection`,
+    name,
+    url,
+    isPartOf: { '@id': `${SITE.url}/#website` },
+    mainEntity: {
+      '@type': 'ItemList',
+      numberOfItems: items.length,
+      itemListElement: items.map((it, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        name: it.name,
+        url: `${SITE.url}${it.path}`,
+      })),
+    },
+  };
+}
+
 function headFor(route) {
   const url = SITE.url + (route.path === '/' ? '/' : route.path);
   const fullTitle = route.path === '/'
@@ -190,7 +258,10 @@ function headFor(route) {
     <script type="application/ld+json">${JSON.stringify(webPage)}</script>
     <script type="application/ld+json">${JSON.stringify(breadcrumb)}</script>${route.path === '/' ? `
     <script type="application/ld+json">${JSON.stringify(siteNavigationSchema())}</script>
-    <script type="application/ld+json">${JSON.stringify(faqSchema())}</script>` : ''}`;
+    <script type="application/ld+json">${JSON.stringify(faqSchema())}</script>` : ''}${(() => {
+      const ls = listingSchema(route);
+      return ls ? `\n    <script type="application/ld+json">${JSON.stringify(ls)}</script>` : '';
+    })()}`;
 }
 
 // A real-text fallback so a non-JS crawl still sees the page's purpose.

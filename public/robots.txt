@@ -30,5 +30,8 @@ Allow: /quote-calculator
 # Crawl delay for respectful bots
 Crawl-delay: 1
 
-# Sitemap location
+# Sitemaps — the static one (core pages, built at deploy) and the live one
+# (served by the API) that also lists admin-published posts & products so new
+# content is discovered as soon as it goes live.
 Sitemap: https://navgrow.org/sitemap.xml
+Sitemap: https://navgrow.org/api/sitemap-content.xml

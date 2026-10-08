@@ -310,6 +310,9 @@ export const adminUsersApi = {
   toggleActive:(id)   => api.patch(`/users/${id}/toggle-active`),
   delete:     (id)    => api.delete(`/users/${id}`),
   create:     (d)     => api.post('/users/admin/create', d),
+  // Super Admin: grant custom per-user admin permissions.
+  permissionsCatalog: ()                 => api.get('/users/permissions-catalog'),
+  updatePermissions:  (id, permissions)  => api.put(`/users/${id}/permissions`, { permissions }),
 };
 
 // ── Jobs admin API ────────────────────────────────────────────────────────────

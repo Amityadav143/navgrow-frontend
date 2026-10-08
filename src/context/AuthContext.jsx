@@ -36,6 +36,42 @@ const parseRoles = (roles) => {
   }).filter(Boolean);
 };
 
+// Normalise a permission list (array of names or GrantedAuthority objects,
+// possibly "PERM_"-prefixed) into a clean Set of bare permission names.
+const parsePermissions = (perms) => {
+  const out = new Set();
+  if (Array.isArray(perms)) {
+    perms.forEach(p => {
+      const v = typeof p === 'string' ? p : (p?.authority || '');
+      if (v) out.add(v.replace(/^PERM_/, '').toUpperCase());
+    });
+  }
+  return out;
+};
+
+// Derive the role booleans + effective permission set from a role list and an
+// explicit permissions list. SUPER_ADMIN and ADMIN implicitly get everything.
+const deriveFlags = (roles, permsList) => {
+  const isSuperAdmin = roles.includes('ROLE_SUPER_ADMIN');
+  const isAdmin      = roles.includes('ROLE_ADMIN');
+  const isManager    = roles.includes('ROLE_MANAGER');
+  const isEditor     = roles.includes('ROLE_EDITOR');
+  let permissions = parsePermissions(permsList);
+  if (isSuperAdmin || isAdmin) permissions = new Set(ALL_PERMISSIONS);
+  return {
+    isSuperAdmin, isAdmin, isManager, isEditor,
+    permissions: Array.from(permissions),
+  };
+};
+
+// Keep in sync with com.navgrow.enums.Permission. Used so ADMIN/SUPER_ADMIN get
+// the full set client-side even if the API didn't enumerate them.
+export const ALL_PERMISSIONS = [
+  'ORDERS','PRODUCTS','QUOTES','CATALOGUE_LEADS','TAX_RULES','DELIVERY_ZONES','RFQS','COUPONS',
+  'MESSAGES','USERS','NEWS','PROJECTS','GALLERY','JOBS','TENDERS','CATALOG',
+  'SETTINGS','NOTIFICATIONS','AUDIT',
+];
+
 export const AuthProvider = ({ children }) => {
   const [user,    setUser]    = useState(() => {
     try { return JSON.parse(localStorage.getItem(USER_KEY)) || null; }
@@ -45,9 +81,18 @@ export const AuthProvider = ({ children }) => {
   const [error,   setError]   = useState(null);
 
   const isLoggedIn = !!user;
+  const isSuperAdmin = user?.isSuperAdmin || false;
   const isAdmin   = user?.isAdmin   || false;
   const isManager = user?.isManager || false;
   const isEditor  = user?.isEditor  || false;
+  const permissions = user?.permissions || [];
+  // can('ORDERS') — does the current user have access to a given admin area?
+  // SUPER_ADMIN/ADMIN implicitly have all; others need the explicit grant.
+  const can = useCallback((perm) => {
+    if (!perm) return false;
+    if (user?.isSuperAdmin || user?.isAdmin) return true;
+    return (user?.permissions || []).includes(String(perm).toUpperCase());
+  }, [user]);
 
   // ── Session management ────────────────────────────────────────────────────
   const handleSessionExpire = useCallback(() => {
@@ -75,15 +120,14 @@ export const AuthProvider = ({ children }) => {
   const enrichUser = useCallback(async (base) => {
     try {
       const { data } = await userApi.profile();
-      // The profile is authoritative for the account's role — without this,
-      // admins signing in via Google/OTP would be stuck as plain users.
+      // The profile is authoritative for the account's role + permissions —
+      // without this, admins signing in via Google/OTP would be stuck as users.
       const roles = data.role ? [`ROLE_${data.role}`] : (base.roles || []);
+      const flags = deriveFlags(roles, data.effectivePermissions || base.permissions);
       return {
         ...base,
         roles,
-        isAdmin:   roles.includes('ROLE_ADMIN'),
-        isManager: roles.includes('ROLE_MANAGER'),
-        isEditor:  roles.includes('ROLE_EDITOR'),
+        ...flags,
         fullName:  data.fullName  || base.fullName  || '',
         phone:     data.phone     || '',
         avatarUrl: data.avatarUrl || base.avatarUrl || '',
@@ -109,9 +153,7 @@ export const AuthProvider = ({ children }) => {
       fullName:  data.fullName || '',
       avatarUrl: data.avatarUrl || '',
       roles,
-      isAdmin:   roles.some(r => r === 'ROLE_ADMIN'),
-      isManager: roles.some(r => r === 'ROLE_MANAGER'),
-      isEditor:  roles.some(r => r === 'ROLE_EDITOR'),
+      ...deriveFlags(roles, data.permissions),
     };
     const enriched = await enrichUser(userData);
     localStorage.setItem(USER_KEY, JSON.stringify(enriched));
@@ -138,9 +180,7 @@ export const AuthProvider = ({ children }) => {
         fullName:  data.fullName || '',
         avatarUrl: data.avatarUrl || '',
         roles,
-        isAdmin:   roles.some(r => r === 'ROLE_ADMIN'),
-        isManager: roles.some(r => r === 'ROLE_MANAGER'),
-        isEditor:  roles.some(r => r === 'ROLE_EDITOR'),
+        ...deriveFlags(roles, data.permissions),
       };
 
       const enriched = await enrichUser(userData);
@@ -192,7 +232,7 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider value={{
       user, loading, error, isLoggedIn,
-      isAdmin, isManager, isEditor,
+      isSuperAdmin, isAdmin, isManager, isEditor, permissions, can,
       login, register, logout, refreshUser, applySession,
       clearError: () => setError(null),
     }}>

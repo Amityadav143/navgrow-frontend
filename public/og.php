@@ -195,6 +195,75 @@ $tags .= '<meta name="twitter:title" content="' . e($title) . "\"/>\n";
 $tags .= '<meta name="twitter:description" content="' . e($desc) . "\"/>\n";
 $tags .= '<meta name="twitter:image" content="' . e($image) . "\"/>\n";
 
+// ── JSON-LD structured data for search engines ───────────────────────────────
+// DB-created products/posts were previously served to Google WITHOUT schema, so
+// they missed rich-result eligibility. Inject the proper Product/BlogPosting
+// JSON-LD here. aggregateRating is added ONLY when genuine reviews exist (never
+// fabricated) — `offers` alone keeps the Product rich result valid.
+$ld = null;
+if ($type === 'product') {
+    $avail = (isset($data['inStock']) && $data['inStock'] === false)
+          || (isset($data['stockQty']) && (int)$data['stockQty'] === 0)
+        ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock';
+    $ld = array(
+        '@context' => 'https://schema.org',
+        '@type'    => 'Product',
+        'name'     => $name,
+        'description' => $desc,
+        'sku'      => (string)($data['sku'] ?? $data['id'] ?? $slug),
+        'brand'    => array('@type' => 'Brand', 'name' => 'Navgrow Engineering'),
+        'category' => $data['category'] ?? 'Industrial & Engineering Supplies',
+        'url'      => $url,
+        'image'    => $image,
+        'offers'   => array(
+            '@type' => 'Offer',
+            'url' => $url,
+            'priceCurrency' => 'INR',
+            'price' => $price !== null ? $price : '0.00',
+            'availability' => $avail,
+            'itemCondition' => 'https://schema.org/NewCondition',
+            'seller' => array('@type' => 'Organization', 'name' => 'Navgrow Engineering Service Pvt. Ltd.'),
+        ),
+    );
+    // Real reviews only.
+    $rc = (int)($data['reviewCount'] ?? $data['reviews'] ?? $data['numReviews'] ?? 0);
+    $rv = (float)($data['rating'] ?? 0);
+    if ($rc > 0 && $rv > 0) {
+        $ld['aggregateRating'] = array(
+            '@type' => 'AggregateRating',
+            'ratingValue' => number_format($rv, 1, '.', ''),
+            'reviewCount' => $rc,
+            'bestRating' => '5', 'worstRating' => '1',
+        );
+    }
+} else {
+    $published = $data['publishedAt'] ?? $data['createdAt'] ?? null;
+    $modified  = $data['updatedAt'] ?? $published;
+    $ld = array(
+        '@context' => 'https://schema.org',
+        '@type'    => 'BlogPosting',
+        'headline' => mb_substr((string)($data['title'] ?? 'News'), 0, 110),
+        'description' => $desc,
+        'image'    => $image,
+        'url'      => $url,
+        'mainEntityOfPage' => array('@type' => 'WebPage', '@id' => $url),
+        'author'   => array('@type' => 'Organization', 'name' => 'Navgrow Engineering Service Pvt. Ltd.'),
+        'publisher' => array(
+            '@type' => 'Organization',
+            'name' => 'Navgrow Engineering Service Pvt. Ltd.',
+            'logo' => array('@type' => 'ImageObject', 'url' => $SITE . '/ng_logo.png'),
+        ),
+    );
+    if ($published) $ld['datePublished'] = $published;
+    if ($modified)  $ld['dateModified']  = $modified;
+}
+if ($ld) {
+    $json = json_encode($ld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    // Guard against a stray </script> inside any text value.
+    $json = str_replace('</', '<\/', $json);
+    $tags .= '<script type="application/ld+json">' . $json . "</script>\n";
+}
+
 $html = preg_replace('#</head>#i', $tags . "</head>", $html, 1);
 
 header('Content-Type: text/html; charset=UTF-8');

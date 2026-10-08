@@ -163,7 +163,10 @@ export function productSchema(p) {
   const price = Number(p.price);
   const hasPrice = Number.isFinite(price) && price > 0;
   const rating = Number(p.rating);
-  const reviews = Math.max(1, Number(p.reviews) || Number(p.reviewCount) || 1);
+  // Real review count only — do NOT invent one. aggregateRating is added below
+  // ONLY when genuine reviews exist, per Google's structured-data policy.
+  const reviewCount = Number(p.reviews) || Number(p.reviewCount) || Number(p.numReviews) || 0;
+  const hasRealReviews = reviewCount > 0 && Number.isFinite(rating) && rating > 0;
 
   const validUntil = new Date();
   validUntil.setFullYear(validUntil.getFullYear() + 1);
@@ -204,15 +207,21 @@ export function productSchema(p) {
         returnFees: 'https://schema.org/FreeReturn',
       },
     },
-    // aggregateRating is ALWAYS present (rating data exists for every catalogue item).
-    aggregateRating: {
+    // NOTE: aggregateRating is added below ONLY when real reviews exist. `offers`
+    // (above) already satisfies Google's "offers/review/aggregateRating" rule,
+    // so the Product rich result stays valid for products with no reviews yet —
+    // without fabricating ratings (which risks a structured-data penalty).
+  };
+  // Genuine ratings only.
+  if (hasRealReviews) {
+    schema.aggregateRating = {
       '@type': 'AggregateRating',
-      ratingValue: (Number.isFinite(rating) && rating > 0 ? rating : 4.6).toFixed(1),
-      reviewCount: reviews,
+      ratingValue: rating.toFixed(1),
+      reviewCount: reviewCount,
       bestRating: '5',
       worstRating: '1',
-    },
-  };
+    };
+  }
   if (p.image || p.imageUrl) {
     schema.image = /^https?:\/\//.test(p.image || p.imageUrl)
       ? (p.image || p.imageUrl)

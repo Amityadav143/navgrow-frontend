@@ -21,45 +21,54 @@ import { useAuth } from '@/context/AuthContext';
 import { useApi } from '@/hooks/useApi';
 import { analyticsApi } from '@/lib/api';
 
+// Each item declares the Permission it needs (perm). Items with no perm are
+// visible to any admin-area user. The sidebar hides items the user lacks access
+// to; SUPER_ADMIN/ADMIN see everything.
 const NAV_ITEMS = [
   // Overview
   { path: '/admin',           label: 'Dashboard',      icon: LayoutDashboard, exact: true, group: 'Overview' },
   // Commerce
-  { path: '/admin/orders',    label: 'Orders',         icon: ShoppingCart,                group: 'Commerce' },
-  { path: '/admin/products',  label: 'Products',       icon: Package,                     group: 'Commerce' },
-  { path: '/admin/quotes',    label: 'Quote Requests', icon: FileText,                    group: 'Commerce' },
-  { path: '/admin/catalogue-leads', label: 'Catalogue Leads', icon: FileDown,             group: 'Commerce' },
-  { path: '/admin/tax-rules', label: 'Tax Rules',       icon: Percent,              group: 'Commerce' },
-  { path: '/admin/delivery-zones', label: 'Delivery Zones', icon: Truck,         group: 'Commerce' },
-  { path: '/admin/rfqs',      label: 'RFQ Pipeline',   icon: ClipboardList,               group: 'Commerce' },
-  { path: '/admin/coupons',   label: 'Coupons',        icon: Tag,                         group: 'Commerce' },
+  { path: '/admin/orders',    label: 'Orders',         icon: ShoppingCart,                group: 'Commerce', perm: 'ORDERS' },
+  { path: '/admin/products',  label: 'Products',       icon: Package,                     group: 'Commerce', perm: 'PRODUCTS' },
+  { path: '/admin/quotes',    label: 'Quote Requests', icon: FileText,                    group: 'Commerce', perm: 'QUOTES' },
+  { path: '/admin/catalogue-leads', label: 'Catalogue Leads', icon: FileDown,             group: 'Commerce', perm: 'CATALOGUE_LEADS' },
+  { path: '/admin/tax-rules', label: 'Tax Rules',       icon: Percent,              group: 'Commerce', perm: 'TAX_RULES' },
+  { path: '/admin/delivery-zones', label: 'Delivery Zones', icon: Truck,         group: 'Commerce', perm: 'DELIVERY_ZONES' },
+  { path: '/admin/rfqs',      label: 'RFQ Pipeline',   icon: ClipboardList,               group: 'Commerce', perm: 'RFQS' },
+  { path: '/admin/coupons',   label: 'Coupons',        icon: Tag,                         group: 'Commerce', perm: 'COUPONS' },
   // CRM
-  { path: '/admin/contacts',  label: 'Messages',       icon: MessageSquare,               group: 'CRM' },
-  { path: '/admin/users',     label: 'Users',          icon: Users,                       group: 'CRM' },
+  { path: '/admin/contacts',  label: 'Messages',       icon: MessageSquare,               group: 'CRM', perm: 'MESSAGES' },
+  { path: '/admin/users',     label: 'Users',          icon: Users,                       group: 'CRM', perm: 'USERS' },
   // Content
-  { path: '/admin/news',      label: 'News & Posts',   icon: Newspaper,                   group: 'Content' },
-  { path: '/admin/projects',  label: 'Projects',       icon: Image,                       group: 'Content' },
-  { path: '/admin/gallery',   label: 'Gallery',        icon: Image,                       group: 'Content' },
-  { path: '/admin/jobs',      label: 'Careers / Jobs', icon: Briefcase,                   group: 'Content' },
-  { path: '/admin/tenders',   label: 'Tenders',        icon: Tag,                         group: 'Content' },
-  { path: '/admin/catalog',   label: 'Categories & Services', icon: Layers,               group: 'Content' },
+  { path: '/admin/news',      label: 'News & Posts',   icon: Newspaper,                   group: 'Content', perm: 'NEWS' },
+  { path: '/admin/projects',  label: 'Projects',       icon: Image,                       group: 'Content', perm: 'PROJECTS' },
+  { path: '/admin/gallery',   label: 'Gallery',        icon: Image,                       group: 'Content', perm: 'GALLERY' },
+  { path: '/admin/jobs',      label: 'Careers / Jobs', icon: Briefcase,                   group: 'Content', perm: 'JOBS' },
+  { path: '/admin/tenders',   label: 'Tenders',        icon: Tag,                         group: 'Content', perm: 'TENDERS' },
+  { path: '/admin/catalog',   label: 'Categories & Services', icon: Layers,               group: 'Content', perm: 'CATALOG' },
   // System
-  { path: '/admin/settings',  label: 'Site Settings',  icon: Settings,                    group: 'System' },
-  { path: '/admin/notifications', label: 'Notifications', icon: Bell,                       group: 'System' },
-  { path: '/admin/audit',     label: 'Audit Log',      icon: BarChart2,                   group: 'System' },
+  { path: '/admin/settings',  label: 'Site Settings',  icon: Settings,                    group: 'System', perm: 'SETTINGS' },
+  { path: '/admin/notifications', label: 'Notifications', icon: Bell,                       group: 'System', perm: 'NOTIFICATIONS' },
+  { path: '/admin/audit',     label: 'Audit Log',      icon: BarChart2,                   group: 'System', perm: 'AUDIT' },
 ];
 
 const NAV_GROUPS = ['Overview', 'Commerce', 'CRM', 'Content', 'System'];
 
 export const AdminLayout = () => {
-  const { isAdmin, isManager, isEditor, user } = useAuth();
+  const { isSuperAdmin, isAdmin, isManager, isEditor, can, user } = useAuth();
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
 
   // Close the mobile drawer whenever the route changes (a nav item was tapped).
   React.useEffect(() => { setMobileNavOpen(false); }, [location.pathname]);
 
-  if (!isAdmin && !isManager && !isEditor) return <Navigate to="/" replace />;
+  // Reachable if a known admin role OR any custom permission was granted.
+  const hasAnyPermission = (user?.permissions || []).length > 0;
+  if (!isSuperAdmin && !isAdmin && !isManager && !isEditor && !hasAnyPermission)
+    return <Navigate to="/" replace />;
+
+  // Only show nav items this user can access (Dashboard/no-perm always shown).
+  const visibleItems = NAV_ITEMS.filter(i => !i.perm || can(i.perm));
 
   const SidebarContent = (
     <>
@@ -74,7 +83,8 @@ export const AdminLayout = () => {
       {/* Nav */}
       <nav className="flex-1 p-3 overflow-y-auto">
         {NAV_GROUPS.map(group => {
-          const groupItems = NAV_ITEMS.filter(i => i.group === group);
+          const groupItems = visibleItems.filter(i => i.group === group);
+          if (groupItems.length === 0) return null;
           return (
             <div key={group} className="mb-3">
               <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest px-3 mb-1 mt-2">{group}</p>

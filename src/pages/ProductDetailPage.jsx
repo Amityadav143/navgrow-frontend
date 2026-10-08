@@ -467,13 +467,16 @@ const ProductDetailPage = () => {
         }
       };
     }
-    // Only add aggregateRating when there is a genuine rating value.
-    const ratingVal = Number(product.rating);
-    if (Number.isFinite(ratingVal) && ratingVal > 0) {
+    // Add aggregateRating ONLY when GENUINE reviews exist (real count > 0 and a
+    // real rating). Never fabricate a count — that violates Google's policy and
+    // risks a structured-data penalty. `offers` alone keeps the rich result valid.
+    const ratingVal   = Number(product.rating);
+    const realReviews = Number(product.reviews) || Number(product.reviewCount) || Number(product.numReviews) || 0;
+    if (realReviews > 0 && Number.isFinite(ratingVal) && ratingVal > 0) {
       schema.aggregateRating = {
         "@type": "AggregateRating",
         "ratingValue": ratingVal.toFixed(1),
-        "reviewCount": Math.max(1, Number(product.reviews) || Number(product.reviewCount) || 1),
+        "reviewCount": realReviews,
         "bestRating": "5",
         "worstRating": "1"
       };

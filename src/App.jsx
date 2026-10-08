@@ -9,8 +9,10 @@
  *
  * Licensed for: navgrow.org (Production Deployment Only)
  */
-import React, { Suspense } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import React, { Suspense, useEffect } from 'react';
+import { trackPageView } from '@/lib/analytics';
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
 import { AnimatePresence } from 'framer-motion';
 import MainLayout from '@/layouts/MainLayout';
 import { AdminLayout } from '@/pages/admin/AdminDashboard';
@@ -187,8 +189,23 @@ const PageLoader = () => (
 
 const W = ({ children }) => <Suspense fallback={<PageLoader />}>{children}</Suspense>;
 
+// Guards an admin section by permission. SUPER_ADMIN/ADMIN pass everything; other
+// users must have the specific grant, else they're sent back to the dashboard.
+// The backend enforces access too — this is for a clean UX, not the security line.
+const P = ({ perm, children }) => {
+  const { can, isSuperAdmin, isAdmin } = useAuth();
+  if (isSuperAdmin || isAdmin || can(perm)) return <W>{children}</W>;
+  return <Navigate to="/admin" replace />;
+};
+
 function App() {
   const location = useLocation();
+  // Record a pageview on every route change (SPA navigations) — feeds both the
+  // first-party funnel analytics and GA4 (when configured). Admin routes skipped.
+  useEffect(() => {
+    if (location.pathname.startsWith('/admin')) return;
+    trackPageView(location.pathname);
+  }, [location.pathname]);
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
@@ -196,25 +213,25 @@ function App() {
         {/* ── Admin routes (dark layout) ── */}
         <Route path="/admin" element={<W><AdminLayout /></W>}>
           <Route index         element={<W><AdminHome /></W>} />
-          <Route path="orders"  element={<W><AdminOrders /></W>} />
-          <Route path="products"element={<W><AdminProducts /></W>} />
-          <Route path="contacts"element={<W><AdminContacts /></W>} />
-          <Route path="quotes"  element={<W><AdminQuotes /></W>} />
-          <Route path="rfqs"    element={<W><AdminRfqs /></W>} />
-          <Route path="news"    element={<W><AdminNews /></W>} />
-          <Route path="coupons" element={<W><AdminCoupons /></W>} />
-          <Route path="settings"  element={<W><AdminSettings /></W>} />
-          <Route path="notifications" element={<W><AdminNotifications /></W>} />
-          <Route path="users"     element={<W><AdminUsers /></W>} />
-          <Route path="jobs"      element={<W><AdminJobs /></W>} />
-          <Route path="audit"     element={<W><AdminAuditLog /></W>} />
-          <Route path="gallery"   element={<W><AdminGallery /></W>} />
-          <Route path="projects"  element={<W><AdminProjects /></W>} />
-          <Route path="tenders"   element={<W><AdminTenders /></W>} />
-          <Route path="catalog"   element={<W><AdminCatalog /></W>} />
-          <Route path="catalogue-leads" element={<W><AdminCatalogueLeads /></W>} />
-          <Route path="tax-rules" element={<W><AdminTaxRules /></W>} />
-          <Route path="delivery-zones" element={<W><AdminDeliveryZones /></W>} />
+          <Route path="orders"  element={<P perm="ORDERS"><AdminOrders /></P>} />
+          <Route path="products"element={<P perm="PRODUCTS"><AdminProducts /></P>} />
+          <Route path="contacts"element={<P perm="MESSAGES"><AdminContacts /></P>} />
+          <Route path="quotes"  element={<P perm="QUOTES"><AdminQuotes /></P>} />
+          <Route path="rfqs"    element={<P perm="RFQS"><AdminRfqs /></P>} />
+          <Route path="news"    element={<P perm="NEWS"><AdminNews /></P>} />
+          <Route path="coupons" element={<P perm="COUPONS"><AdminCoupons /></P>} />
+          <Route path="settings"  element={<P perm="SETTINGS"><AdminSettings /></P>} />
+          <Route path="notifications" element={<P perm="NOTIFICATIONS"><AdminNotifications /></P>} />
+          <Route path="users"     element={<P perm="USERS"><AdminUsers /></P>} />
+          <Route path="jobs"      element={<P perm="JOBS"><AdminJobs /></P>} />
+          <Route path="audit"     element={<P perm="AUDIT"><AdminAuditLog /></P>} />
+          <Route path="gallery"   element={<P perm="GALLERY"><AdminGallery /></P>} />
+          <Route path="projects"  element={<P perm="PROJECTS"><AdminProjects /></P>} />
+          <Route path="tenders"   element={<P perm="TENDERS"><AdminTenders /></P>} />
+          <Route path="catalog"   element={<P perm="CATALOG"><AdminCatalog /></P>} />
+          <Route path="catalogue-leads" element={<P perm="CATALOGUE_LEADS"><AdminCatalogueLeads /></P>} />
+          <Route path="tax-rules" element={<P perm="TAX_RULES"><AdminTaxRules /></P>} />
+          <Route path="delivery-zones" element={<P perm="DELIVERY_ZONES"><AdminDeliveryZones /></P>} />
         </Route>
 
         {/* ── Editor routes ── */}
