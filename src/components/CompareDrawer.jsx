@@ -16,9 +16,10 @@
  */
 import React, { useState, createContext, useContext, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Scale, ChevronDown, ChevronUp, Star, ShoppingCart, ArrowRight } from 'lucide-react';
+import { X, Scale, ChevronDown, ChevronUp, Star, ShoppingCart, ArrowRight, FileText } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '@/context/CartContext';
+import { useRfq } from '@/context/RfqContext';
 import { toCartItem } from '@/lib/cartItem';
 
 const CompareContext = createContext(null);
@@ -79,6 +80,7 @@ const COMPARE_ROWS = [
 const CompareDrawer = () => {
   const { compareList, removeFromCompare, clearCompare, drawerOpen, setDrawerOpen } = useCompare();
   const { addItem, items: cartItems } = useCart();
+  const { addToRfq, inRfq } = useRfq();
   const [expanded, setExpanded] = useState(true);
 
   if (compareList.length < 1) return null;
@@ -180,6 +182,16 @@ const CompareDrawer = () => {
                       return (
                         <td key={p.id} className="px-4 py-4">
                           <div className="flex flex-col gap-2">
+                            {p.stockQty != null && Number(p.stockQty) <= 0 ? (
+                            <button
+                              onClick={() => addToRfq(p)}
+                              className={`flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all border-2 ${
+                                inRfq(p.id) ? 'border-green-400 bg-green-50 text-green-700' : 'border-amber-300 text-amber-700 hover:bg-amber-50'
+                              }`}>
+                              <FileText className="h-3.5 w-3.5"/>
+                              {inRfq(p.id) ? '✓ In Quote List' : 'Out of stock · Get Quote'}
+                            </button>
+                            ) : (
                             <button
                               onClick={() => addItem(toCartItem(p))}
                               className={`flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all border-2 ${
@@ -188,6 +200,7 @@ const CompareDrawer = () => {
                               <ShoppingCart className="h-3.5 w-3.5"/>
                               {inCart ? '✓ In Cart' : 'Add to Cart'}
                             </button>
+                            )}
                             <Link to={`/shop/${p.slug || p.id}`} onClick={() => setDrawerOpen(false)}
                               className="flex items-center justify-center gap-1 text-xs text-blue-600 hover:text-amber-600 font-semibold transition-colors">
                               View Details <ArrowRight className="h-3 w-3"/>

@@ -12,8 +12,9 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { ShoppingCart, ArrowRight, ShieldCheck, Package, Wrench, HardHat } from 'lucide-react';
+import { ShoppingCart, ArrowRight, ShieldCheck, Package, Wrench, HardHat, FileText } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
+import { useRfq } from '@/context/RfqContext';
 import { toCartItem } from '@/lib/cartItem';
 import { productsApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
@@ -121,6 +122,7 @@ const categories = [
 
 const ShopPreview = () => {
   const { addItem, items } = useCart();
+  const { addToRfq, inRfq } = useRfq();
   const { items: featured, source } = useFeaturedProducts();
   const isFeatured = source === 'live';
 
@@ -201,11 +203,19 @@ const ShopPreview = () => {
                   <p className="font-bold text-gray-900 text-sm mt-1 mb-3 line-clamp-2 leading-snug">{p.name}</p>
                   <div className="flex items-center justify-between">
                     <span className="font-extrabold text-gray-900">₹{p.price.toLocaleString('en-IN')}</span>
+                    {p.stockQty != null && Number(p.stockQty) <= 0 ? (
+                      <button onClick={() => addToRfq(p)} title="Out of stock — request a quote (backorder)"
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${inRfq(p.id) ? 'bg-green-100 text-green-700' : 'border-2 border-blue-200 text-blue-700 hover:bg-blue-50'}`}>
+                        <FileText className="h-3.5 w-3.5" />
+                        {inRfq(p.id) ? 'Quoted' : 'Get quote'}
+                      </button>
+                    ) : (
                     <button onClick={() => addItem(toCartItem(p))}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${inCart ? 'bg-green-100 text-green-700' : 'brand-gradient text-white shadow-sm hover:opacity-90'}`}>
                       <ShoppingCart className="h-3.5 w-3.5" />
                       {inCart ? 'Added' : 'Add'}
                     </button>
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -215,7 +225,7 @@ const ShopPreview = () => {
 
         <div className="text-center mt-8">
           <Link to="/shop" className="inline-flex items-center gap-2 px-8 py-3.5 brand-gradient text-white font-bold rounded-full shadow-lg shadow-blue-500/25 hover:opacity-90 transition-opacity">
-            <ShoppingCart className="h-4 w-4" /> Browse All 20 Products
+            <ShoppingCart className="h-4 w-4" /> Browse All Products
           </Link>
         </div>
       </div>

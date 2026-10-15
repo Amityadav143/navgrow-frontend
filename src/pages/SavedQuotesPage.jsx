@@ -90,6 +90,33 @@ const SavedQuotesPage = () => {
     }
   }, []);
 
+  // Signed-in buyers: pull every RFQ on their account (raised on any device, or
+  // with a different email while signed in) so nothing has to be typed in again.
+  useEffect(() => {
+    if (!user?.email) return undefined;
+    let cancelled = false;
+    rfqApi.mine({ size: 50 })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const list = Array.isArray(data?.content) ? data.content : (Array.isArray(data) ? data : []);
+        if (!list.length) return;
+        setQuotes((q) => {
+          const next = { ...q };
+          list.forEach((r) => { if (r?.rfqNumber) next[r.rfqNumber] = r; });
+          return next;
+        });
+        setRefs((prev) => {
+          const merged = [...prev];
+          list.forEach((r) => { if (r?.rfqNumber && !merged.includes(r.rfqNumber)) merged.push(r.rfqNumber); });
+          try { localStorage.setItem(keyFor(user), JSON.stringify(merged)); } catch { /* ignore */ }
+          return merged;
+        });
+      })
+      .catch(() => { /* not signed in / offline — the saved list still works */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.email]);
+
   // Fetch any refs we don't have data for yet
   useEffect(() => {
     refs.forEach((num) => {
@@ -296,7 +323,10 @@ const SavedQuotesPage = () => {
                           <div className="mb-4 max-h-32 overflow-auto pr-1">
                             {q.items.slice(0, 5).map((it, i) => (
                               <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-gray-50 last:border-0">
-                                <span className="text-gray-600 truncate pr-2">{it.productName} × {it.quantity}</span>
+                                <span className="text-gray-600 truncate pr-2">
+                                  {it.productName} × {it.quantity}
+                                  {it.backorder && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 text-[10px] font-bold">backorder</span>}
+                                </span>
                                 <span className="text-gray-400 shrink-0">{it.quotedUnitPrice != null ? money(it.quotedUnitPrice) : '—'}</span>
                               </div>
                             ))}

@@ -19,7 +19,7 @@ import {
 import { adminUsersApi } from '@/lib/api';
 import { usePaginated, useMutation } from '@/hooks/useApi';
 import { useToast } from '@/components/ui/use-toast';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth, ROLE_DEFAULT_PERMISSIONS } from '@/context/AuthContext';
 
 const ROLES = ['USER','EDITOR','MANAGER','ADMIN'];
 const SUPER_ROLES = ['USER','EDITOR','MANAGER','ADMIN','SUPER_ADMIN']; // roles a super admin may assign
@@ -66,16 +66,22 @@ const ConfirmDialog = ({ message, onConfirm, onCancel, danger=true }) => (
 const PermissionsModal = ({ user, onClose, onSaved }) => {
   const { toast } = useToast();
   const isAdminRole = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
+  // Sections the base role already includes (Manager / Editor). Shown locked —
+  // they can't be removed here; change the role to "User" for a narrower set.
+  const roleIncluded = React.useMemo(() => new Set(
+    Array.isArray(user.rolePermissions) ? user.rolePermissions : (ROLE_DEFAULT_PERMISSIONS[user.role] || [])
+  ), [user]);
   const [selected, setSelected] = useState(() => new Set());
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    // Seed from the user's current effective permissions.
-    const current = user.effectivePermissions || [];
+    // Seed with the EXTRA grants only (effective minus role baseline).
+    const current = (user.effectivePermissions || []).filter(p => !roleIncluded.has(p));
     setSelected(new Set(current));
-  }, [user]);
+  }, [user, roleIncluded]);
 
   const toggle = (perm) => {
+    if (roleIncluded.has(perm)) return;
     setSelected(prev => {
       const next = new Set(prev);
       next.has(perm) ? next.delete(perm) : next.add(perm);
@@ -85,12 +91,14 @@ const PermissionsModal = ({ user, onClose, onSaved }) => {
   const toggleGroup = (perms, on) => {
     setSelected(prev => {
       const next = new Set(prev);
-      perms.forEach(p => on ? next.add(p) : next.delete(p));
+      perms.filter(p => !roleIncluded.has(p)).forEach(p => on ? next.add(p) : next.delete(p));
       return next;
     });
   };
-  const selectAll = () => setSelected(new Set(Object.values(PERMISSION_GROUPS).flat()));
+  const selectAll = () => setSelected(new Set(Object.values(PERMISSION_GROUPS).flat().filter(p => !roleIncluded.has(p))));
   const clearAll  = () => setSelected(new Set());
+  const isOn = (p) => roleIncluded.has(p) || selected.has(p);
+  const totalAccess = new Set([...roleIncluded, ...selected]).size;
 
   const save = async () => {
     setSaving(true);
@@ -127,6 +135,14 @@ const PermissionsModal = ({ user, onClose, onSaved }) => {
           </div>
         ) : (
           <>
+            {roleIncluded.size > 0 && (
+              <div className="px-5 py-2.5 border-b border-gray-800 bg-purple-500/5">
+                <p className="text-[11px] text-purple-300 leading-relaxed">
+                  🔒 Locked items come with the <b>{user.role}</b> role. Tick extra sections to grant more,
+                  or change the role to <b>USER</b> to give only hand-picked sections.
+                </p>
+              </div>
+            )}
             <div className="px-5 py-3 border-b border-gray-800 flex items-center justify-between">
               <p className="text-[11px] text-gray-400">Grant access to specific admin sections</p>
               <div className="flex gap-2">
@@ -137,7 +153,7 @@ const PermissionsModal = ({ user, onClose, onSaved }) => {
             </div>
             <div className="p-5 overflow-y-auto space-y-4">
               {Object.entries(PERMISSION_GROUPS).map(([group, perms]) => {
-                const allOn = perms.every(p => selected.has(p));
+                const allOn = perms.every(p => isOn(p));
                 return (
                   <div key={group}>
                     <div className="flex items-center justify-between mb-1.5">
@@ -146,13 +162,20 @@ const PermissionsModal = ({ user, onClose, onSaved }) => {
                         className="text-[10px] font-bold text-gray-500 hover:text-gray-300">{allOn ? 'Uncheck all' : 'Check all'}</button>
                     </div>
                     <div className="grid grid-cols-2 gap-1.5">
-                      {perms.map(p => (
-                        <label key={p} className={`flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer text-xs transition-colors ${selected.has(p) ? 'bg-blue-600/20 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-750'}`}>
-                          <input type="checkbox" checked={selected.has(p)} onChange={() => toggle(p)}
-                            className="rounded accent-blue-500"/>
-                          {PERM_LABELS[p] || p}
-                        </label>
-                      ))}
+                      {perms.map(p => {
+                        const locked = roleIncluded.has(p);
+                        return (
+                          <label key={p} title={locked ? `Included with the ${user.role} role` : undefined}
+                            className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs transition-colors ${
+                              locked ? 'bg-purple-600/15 text-purple-200 cursor-not-allowed'
+                              : selected.has(p) ? 'bg-blue-600/20 text-white cursor-pointer' : 'bg-gray-800 text-gray-400 hover:bg-gray-700 cursor-pointer'}`}>
+                            <input type="checkbox" checked={isOn(p)} disabled={locked} onChange={() => toggle(p)}
+                              className="rounded accent-blue-500"/>
+                            <span className="flex-1">{PERM_LABELS[p] || p}</span>
+                            {locked && <span className="text-[9px] font-bold uppercase tracking-wide text-purple-300/80">role</span>}
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -162,7 +185,7 @@ const PermissionsModal = ({ user, onClose, onSaved }) => {
               <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs font-bold bg-gray-800 border border-gray-700 text-gray-300 hover:text-white">Cancel</button>
               <button onClick={save} disabled={saving}
                 className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-60">
-                {saving ? 'Saving…' : `Save access (${selected.size})`}
+                {saving ? 'Saving…' : `Save access (${totalAccess} section${totalAccess === 1 ? '' : 's'})`}
               </button>
             </div>
           </>
@@ -221,7 +244,9 @@ const CreateUserForm = ({ onSave, onCancel, saving, roles = ROLES }) => {
 
 const AdminUsers = () => {
   const { toast } = useToast();
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, isAdmin, user: me } = useAuth();
+  // PERM_USERS grants READ-ONLY access; only Super Admin / Admin can change accounts.
+  const canManage = isSuperAdmin || isAdmin;
   const [search, setSearch]       = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [confirm, setConfirm]     = useState(null);
@@ -238,8 +263,9 @@ const AdminUsers = () => {
       msg: `Change role to ${role}?`,
       danger: false,
       onConfirm: async () => {
-        await updateRole(id, role); setConfirm(null); refetch();
-        toast({ title:`✓ Role updated to ${role}` });
+        const res = await updateRole(id, role); setConfirm(null); refetch();
+        if (res.error) toast({ title: 'Role not changed', description: res.error, variant: 'destructive' });
+        else toast({ title:`✓ Role updated to ${role}` });
       },
     });
   };
@@ -248,8 +274,9 @@ const AdminUsers = () => {
       msg: `${active ? 'Disable' : 'Enable'} user "${name}"?`,
       danger: active,
       onConfirm: async () => {
-        await toggleActive(id); setConfirm(null); refetch();
-        toast({ title: `✓ User ${active?'disabled':'enabled'}` });
+        const res = await toggleActive(id); setConfirm(null); refetch();
+        if (res.error) toast({ title: 'Not changed', description: res.error, variant: 'destructive' });
+        else toast({ title: `✓ User ${active?'disabled':'enabled'}` });
       },
     });
   };
@@ -257,8 +284,9 @@ const AdminUsers = () => {
     setConfirm({
       msg: `Permanently delete user "${name}"? This cannot be undone.`,
       onConfirm: async () => {
-        await remove(id); setConfirm(null); refetch();
-        toast({ title:'✓ User deleted' });
+        const res = await remove(id); setConfirm(null); refetch();
+        if (res.error) toast({ title: 'Not deleted', description: res.error, variant: 'destructive' });
+        else toast({ title:'✓ User deleted' });
       },
     });
   };
@@ -284,10 +312,14 @@ const AdminUsers = () => {
           <h1 className="text-2xl font-extrabold text-white">User Management</h1>
           <p className="text-gray-400 text-sm mt-0.5">{items.length} registered users</p>
         </div>
-        <button onClick={() => setShowCreate(f=>!f)}
-          className="flex items-center gap-2 px-4 py-2 brand-gradient text-white font-bold rounded-xl text-sm hover:opacity-90">
-          <Plus className="h-4 w-4"/> Create User
-        </button>
+        {canManage ? (
+          <button onClick={() => setShowCreate(f=>!f)}
+            className="flex items-center gap-2 px-4 py-2 brand-gradient text-white font-bold rounded-xl text-sm hover:opacity-90">
+            <Plus className="h-4 w-4"/> Create User
+          </button>
+        ) : (
+          <span className="text-xs text-gray-400 bg-gray-800 border border-gray-700 px-3 py-1.5 rounded-lg">View-only access</span>
+        )}
       </div>
 
       <div className="relative mb-5 max-w-sm">
@@ -314,7 +346,12 @@ const AdminUsers = () => {
             <tbody>
               {loading
                 ? [...Array(5)].map((_,i) => <tr key={i} className="border-b">{[...Array(7)].map((_,j) => <td key={j} className="px-4 py-3"><div className="h-4 bg-gray-100 animate-pulse rounded w-20"/></td>)}</tr>)
-                : filtered.map(u => (
+                : filtered.map(u => {
+                  const isMe = !!(me?.email && u.email && u.email.toLowerCase() === me.email.toLowerCase());
+                  // Admin-tier accounts can only be changed by a Super Admin; nobody edits their own row here.
+                  const protectedRow = !isSuperAdmin && (u.role === 'ADMIN' || u.role === 'SUPER_ADMIN');
+                  const editable = canManage && !isMe && !protectedRow;
+                  return (
                   <tr key={u.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors group">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
@@ -322,15 +359,17 @@ const AdminUsers = () => {
                           {(u.fullName||u.email||'U')[0].toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-semibold text-gray-900 text-xs">{u.fullName||'—'}</p>
+                          <p className="font-semibold text-gray-900 text-xs">{u.fullName||'—'}
+                            {isMe && <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 align-middle">YOU</span>}</p>
                           <p className="text-[10px] text-gray-400">{u.phone||''}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-600">{u.email}</td>
                     <td className="px-4 py-3">
-                      <select value={u.role} onChange={e => handleRoleChange(u.id, e.target.value)}
-                        className={`px-2 py-1 rounded-lg text-[11px] font-bold border-0 cursor-pointer ${ROLE_COLORS[u.role]||'bg-gray-100 text-gray-600'}`}>
+                      <select value={u.role} onChange={e => handleRoleChange(u.id, e.target.value)} disabled={!editable}
+                        title={isMe ? "You can't change your own role" : protectedRow ? 'Only a Super Admin can change this account' : undefined}
+                        className={`px-2 py-1 rounded-lg text-[11px] font-bold border-0 ${editable ? 'cursor-pointer' : 'cursor-not-allowed opacity-80'} ${ROLE_COLORS[u.role]||'bg-gray-100 text-gray-600'}`}>
                         {roleOptions.map(r => <option key={r}>{r}</option>)}
                         {/* keep the current role visible even if not in the list */}
                         {!roleOptions.includes(u.role) && <option key={u.role}>{u.role}</option>}
@@ -340,7 +379,7 @@ const AdminUsers = () => {
                           className="ml-1.5 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-700 hover:bg-amber-100"
                           title="Grant custom access to specific sections">
                           <KeyRound className="h-3 w-3"/>
-                          {(u.effectivePermissions?.length || 0) > 0 ? `${u.effectivePermissions.length} perms` : 'Access'}
+                          {(u.effectivePermissions?.length || 0) > 0 ? `${u.effectivePermissions.length} sections` : 'Access'}
                         </button>
                       )}
                     </td>
@@ -354,7 +393,8 @@ const AdminUsers = () => {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {editable ? (
+                      <div className="flex gap-1.5 lg:opacity-0 lg:group-hover:opacity-100 lg:focus-within:opacity-100 transition-opacity">
                         <button onClick={() => handleToggle(u.id, u.fullName||u.email, u.active!==false)}
                           className={`p-1.5 rounded-lg text-xs transition-colors ${u.active!==false?'bg-amber-50 text-amber-600 hover:bg-amber-100':'bg-green-50 text-green-600 hover:bg-green-100'}`}
                           title={u.active!==false?'Disable':'Enable'}>
@@ -365,9 +405,11 @@ const AdminUsers = () => {
                           <Trash2 className="h-3.5 w-3.5"/>
                         </button>
                       </div>
+                      ) : <span className="text-[10px] text-gray-300">—</span>}
                     </td>
                   </tr>
-                ))
+                  );
+                })
               }
             </tbody>
           </table>

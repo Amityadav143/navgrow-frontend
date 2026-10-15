@@ -38,7 +38,13 @@ export default function PincodeCheck({
   onResolved,
   compact = false,
   autoCheck = true,
+  // Product id(s)/slug(s) to check against limited-delivery-area rules.
+  productRefs,
+  // Shown when a product can't go to the checked pincode, e.g. a "Request quote" button.
+  restrictedAction,
 }) {
+  // Stable string key so an array prop can't retrigger effects every render.
+  const refsKey = Array.isArray(productRefs) ? productRefs.filter(Boolean).join(',') : (productRefs || '');
   const [pin, setPin]         = useState(getRememberedPincode());
   const [editing, setEditing] = useState(!getRememberedPincode());
   const [quote, setQuote]     = useState(null);
@@ -50,7 +56,7 @@ export default function PincodeCheck({
     if (!PIN_RE.test(p)) { setError('Enter a valid 6-digit pincode'); setQuote(null); return; }
     setLoading(true); setError('');
     try {
-      const { data } = await deliveryApi.check(p, orderValue || 0);
+      const { data } = await deliveryApi.check(p, orderValue || 0, undefined, refsKey);
       setQuote(data);
       remember(p);
       setEditing(false);
@@ -61,19 +67,16 @@ export default function PincodeCheck({
     } finally {
       setLoading(false);
     }
-  }, [orderValue, onResolved]);
+  }, [orderValue, onResolved, refsKey]);
 
-  // Re-check when the basket value crosses a free-delivery threshold.
+  // Re-check when the basket value crosses a free-delivery threshold, or when the
+  // product(s) being checked change (e.g. live product data replaced the static one).
   useEffect(() => {
     if (autoCheck && PIN_RE.test(pin)) run(pin);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderValue]);
+  }, [orderValue, refsKey]);
 
-  // Check the remembered pincode once on mount.
-  useEffect(() => {
-    if (autoCheck && PIN_RE.test(getRememberedPincode())) run(getRememberedPincode());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // (The effect above also runs on mount, which checks the remembered pincode.)
 
   const money = (n) => `₹${Math.round(Number(n) || 0).toLocaleString('en-IN')}`;
 
@@ -124,7 +127,23 @@ export default function PincodeCheck({
             initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             className="mt-1 space-y-1.5">
 
-            {!quote.serviceable ? (
+            {Array.isArray(quote.restrictedItems) && quote.restrictedItems.length > 0 ? (
+              <div className="rounded-xl bg-red-50 border border-red-100 px-3 py-2.5">
+                <div className="flex items-start gap-2 text-sm">
+                  <XCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-red-700 font-semibold">Not available for delivery to {quote.pincode}</p>
+                    <p className="text-red-600/90 text-xs mt-0.5">
+                      {quote.restrictedItems.length === 1
+                        ? <>Delivery area for this product: <strong>{quote.restrictedItems[0].areaNote}</strong>.</>
+                        : <>{quote.restrictedItems.length} items are delivered only within their own areas.</>}
+                      {' '}Try another pincode, or ask us for a quote and we'll arrange it.
+                    </p>
+                  </div>
+                </div>
+                {restrictedAction && <div className="mt-2 pl-6">{restrictedAction}</div>}
+              </div>
+            ) : !quote.serviceable ? (
               <div className="flex items-start gap-2 text-sm">
                 <XCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
                 <p className="text-red-600">{quote.note || 'We do not deliver to this pincode yet.'}</p>

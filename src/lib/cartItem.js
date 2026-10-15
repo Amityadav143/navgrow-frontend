@@ -40,6 +40,11 @@ export function toCartItem(product, extra = {}) {
     // Tax — the two fields that must never be dropped.
     gstRate:  Number.isFinite(rate) && rate >= 0 ? rate : undefined,
     hsn:      product.hsn || product.hsnCode || product.hsn_code || undefined,
+    // Limited delivery area (admin-set) — lets the cart warn early. The server
+    // re-checks at checkout and when the order is placed.
+    deliveryRestricted: Boolean(product.deliveryRestricted),
+    allowedPincodes:    product.allowedPincodes || undefined,
+    deliveryAreaNote:   product.deliveryAreaNote || undefined,
     ...extra,
   };
 }

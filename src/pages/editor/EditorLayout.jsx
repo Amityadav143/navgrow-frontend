@@ -24,13 +24,13 @@ const EDITOR_ITEMS = [
 ];
 
 export default function EditorLayout() {
-  const { isEditor, isAdmin, user } = useAuth();
+  const { isEditor, isAdmin, isSuperAdmin, user } = useAuth();
   // useLocation MUST be called before any conditional return (React Hooks Rules)
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
   React.useEffect(() => { setMobileNavOpen(false); }, [location.pathname]);
 
-  if (!isEditor && !isAdmin) return <Navigate to="/" replace />;
+  if (!isEditor && !isAdmin && !isSuperAdmin) return <Navigate to="/" replace />;
 
   const SidebarContent = (
     <>

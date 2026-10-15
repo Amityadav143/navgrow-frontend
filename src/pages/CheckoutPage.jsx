@@ -25,16 +25,21 @@ import {
   FileText, ArrowLeft, Zap, Banknote, Tag,
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
+import { useRfq } from '@/context/RfqContext';
 import { ordersApi, deliveryApi, couponsApi } from '@/lib/api';
 import { perProductDelivery } from '@/lib/utils';
 import { LOCAL_OFFERS, evaluateLocalCoupon, isOffline } from '@/lib/offers';
 import PincodeCheck from '@/components/PincodeCheck';
 import { lookupPincode, detectLocation } from '@/lib/location';
+import { INDIAN_STATES, normalizeState } from '@/lib/indianStates';
 import RequireAuth from '@/components/RequireAuth';
 import { useAuth } from '@/context/AuthContext';
+import { toast } from '@/components/ui/use-toast';
 import useSeo from '@/hooks/useSeo';
 
-const STATES = ['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal','Delhi'];
+// Full list of 28 states + 8 union territories (J&K, Chandigarh, Puducherry…
+// were missing before, so buyers there could not check out).
+const STATES = INDIAN_STATES;
 
 // Navgrow bills from West Bengal: a buyer in the same state pays CGST+SGST,
 // anyone else pays IGST. This mirrors InvoiceService exactly so the figures the
@@ -97,7 +102,10 @@ const Field = ({ id, label, type = 'text', required, placeholder, value, onChang
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const { items, updateQty, removeItem, clearCart } = useCart();
+  const { addToRfq } = useRfq();
   const { user } = useAuth();
+  // Stable key of the cart's products — re-checks delivery when the cart changes.
+  const itemIdsKey = items.map(i => i.id).filter(Boolean).join(',');
 
   const [step, setStep]       = useState(1);
   const [maxStep, setMaxStep] = useState(1);
@@ -175,7 +183,7 @@ const CheckoutPage = () => {
       setForm(p => ({
         ...p,
         city:  p.city  && p.city.trim()  ? p.city  : (info.district || ''),
-        state: p.state && p.state.trim() ? p.state : (info.state || ''),
+        state: p.state && p.state.trim() ? p.state : normalizeState(info.state),
       }));
     });
     return () => { cancelled = true; };
@@ -189,7 +197,7 @@ const CheckoutPage = () => {
         ...p,
         pincode: loc.pincode || p.pincode,
         city:    loc.city    || p.city,
-        state:   loc.state   || p.state,
+        state:   normalizeState(loc.state) || p.state,
         address: p.address || [loc.area, loc.city].filter(Boolean).join(', '),
       }));
       setErrors(p => ({ ...p, pincode: undefined }));
@@ -355,7 +363,8 @@ const CheckoutPage = () => {
     let cancelled = false;
     // Total quantity drives the volume-based delivery tier, so the quote must be
     // refreshed when it changes (not only when the pincode or order value does).
-    deliveryApi.check(pin, totals.goods, totals.count)
+    // Product ids let the server flag items sold only in a limited delivery area.
+    deliveryApi.check(pin, totals.goods, totals.count, itemIdsKey)
       .then(({ data }) => {
         if (cancelled) return;
         setDelivery(data);
@@ -365,7 +374,19 @@ const CheckoutPage = () => {
       .catch(() => { if (!cancelled) setDelivery(null); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.pincode, totals.goods, totals.count]);
+  }, [form.pincode, totals.goods, totals.count, itemIdsKey]);
+
+  // Cart lines the server says can't go to this pincode (limited delivery area).
+  const restrictedItems = Array.isArray(delivery?.restrictedItems) ? delivery.restrictedItems : [];
+  const restrictedIds = new Set(restrictedItems.map(r => String(r.productId)));
+  const blockedLines = items.filter(i => restrictedIds.has(String(i.id)) || restrictedItems.some(r => r.slug && r.slug === i.slug));
+
+  // Move a line we can't ship here into the quote list — the team can arrange it.
+  const moveToQuote = (item) => {
+    addToRfq({ id: item.id, name: item.name, slug: item.slug, image: item.image, price: item.price,
+               gstRate: item.gstRate, stockQty: item.stockQty }, item.qty || 1);
+    removeItem(item.id);
+  };
 
   const validateDelivery = () => {
     const e = {};
@@ -384,6 +405,8 @@ const CheckoutPage = () => {
     // A buyer must not be able to pay for an address we cannot ship to.
     if (delivery && !delivery.serviceable)
       e.pincode = delivery.note || 'We do not deliver to this pincode yet.';
+    else if (blockedLines.length)
+      e.pincode = `${blockedLines.length} item${blockedLines.length === 1 ? '' : 's'} in your cart can't be delivered to ${form.pincode} — see below.`;
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -409,6 +432,11 @@ const CheckoutPage = () => {
     if (!totals.deliveryKnown) {
       setStep(1);
       setError('Enter your PIN code so we can calculate delivery before payment.');
+      return;
+    }
+    if (blockedLines.length) {
+      setStep(1);
+      setError(`${blockedLines.length} item${blockedLines.length === 1 ? '' : 's'} can't be delivered to ${form.pincode}. Remove ${blockedLines.length === 1 ? 'it' : 'them'} or move to a quote.`);
       return;
     }
     if (payMethod !== 'COD' && !window.Razorpay) {
@@ -803,6 +831,38 @@ const CheckoutPage = () => {
                       </div>
                       <Field id="gstin" label="GSTIN (optional)" value={form.gstin} onChange={ch('gstin')} error={errors.gstin} placeholder="For a business GST invoice" />
                     </div>
+                    {delivery && delivery.serviceable && blockedLines.length > 0 && (
+                      <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                        <p className="text-sm font-semibold text-red-700 flex items-center gap-1.5">
+                          <MapPin className="h-4 w-4" /> Not deliverable to {form.pincode}
+                        </p>
+                        <p className="text-xs text-red-600/90 mt-0.5 mb-2.5">
+                          {blockedLines.length === 1 ? 'This item is' : 'These items are'} sold only within a limited delivery area.
+                          Remove {blockedLines.length === 1 ? 'it' : 'them'} to continue, or move to a quote and our team will arrange delivery.
+                        </p>
+                        <div className="space-y-2">
+                          {blockedLines.map(it => {
+                            const info = restrictedItems.find(r => String(r.productId) === String(it.id) || (r.slug && r.slug === it.slug));
+                            return (
+                              <div key={it.id} className="flex items-center gap-3 bg-white rounded-lg border border-red-100 px-3 py-2">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-semibold text-gray-900 truncate">{it.name}</p>
+                                  <p className="text-[11px] text-gray-500 truncate">Delivery area: {info?.areaNote || 'selected pincodes only'}</p>
+                                </div>
+                                <button onClick={() => moveToQuote(it)}
+                                  className="shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border-2 border-blue-200 text-blue-700 hover:bg-blue-50">
+                                  Move to quote
+                                </button>
+                                <button onClick={() => removeItem(it.id)} aria-label={`Remove ${it.name}`}
+                                  className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50">
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                     {delivery && (
                       <div className="mt-5">
                         {!delivery.serviceable ? (

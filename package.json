@@ -5,8 +5,8 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/prerender.mjs && node scripts/generate-sitemap.mjs",
-    "build:fast": "vite build",
+    "build": "vite build && node scripts/check-chunks.mjs && node scripts/prerender.mjs && node scripts/generate-sitemap.mjs",
+    "build:fast": "vite build && node scripts/check-chunks.mjs",
     "preview": "vite preview",
     "start": "vite preview",
     "check:syntax": "node scripts/check-syntax.cjs",

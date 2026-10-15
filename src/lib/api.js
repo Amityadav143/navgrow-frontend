@@ -60,22 +60,36 @@ function surfaceUnexpectedError(error) {
   } catch { /* the safety net itself must never throw */ }
 }
 
+// One refresh at a time: when several calls fail with 401 together (e.g. the
+// admin dashboard loading five widgets after the access token expired), they all
+// wait for the same refresh instead of racing five of them.
+let _refreshing = null;
+function refreshAccessToken(refreshToken) {
+  if (!_refreshing) {
+    _refreshing = axios.post(`${API_BASE}/auth/refresh`, null, { params: { refreshToken } })
+      .then(({ data }) => {
+        localStorage.setItem('ng_access_token', data.accessToken);
+        if (data.refreshToken) localStorage.setItem('ng_refresh_token', data.refreshToken);
+        return data.accessToken;
+      })
+      .finally(() => { setTimeout(() => { _refreshing = null; }, 0); });
+  }
+  return _refreshing;
+}
+
+const isAuthCall = (url = '') => /\/auth\/(login|login-with-phone|refresh|verify-otp|send-otp|register)/.test(url);
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const original = error.config;
-    if (error.response?.status === 401 && !original._retry) {
+    const original = error.config || {};
+    if (error.response?.status === 401 && !original._retry && !isAuthCall(original.url)) {
       original._retry = true;
       const refreshToken = localStorage.getItem('ng_refresh_token');
       if (refreshToken) {
         try {
-          const { data } = await axios.post(
-            `${API_BASE}/auth/refresh`,
-            null,
-            { params: { refreshToken } },
-          );
-          localStorage.setItem('ng_access_token', data.accessToken);
-          original.headers.Authorization = `Bearer ${data.accessToken}`;
+          const accessToken = await refreshAccessToken(refreshToken);
+          original.headers = { ...(original.headers || {}), Authorization: `Bearer ${accessToken}` };
           return api(original);
         } catch {
           // Refresh failed — clear tokens
@@ -84,6 +98,12 @@ api.interceptors.response.use(
           localStorage.removeItem('ng_user');
           window.dispatchEvent(new CustomEvent('auth:logout'));
         }
+      } else if (localStorage.getItem('ng_access_token')) {
+        // Signed-in state with no way to renew it — end the stale session cleanly
+        // rather than leaving the UI "logged in" with every call failing.
+        localStorage.removeItem('ng_access_token');
+        localStorage.removeItem('ng_user');
+        window.dispatchEvent(new CustomEvent('auth:logout'));
       }
     }
     surfaceUnexpectedError(error);
@@ -105,9 +125,20 @@ export const authApi = {
 };
 
 // ── Products API ──────────────────────────────────────────────────────────────
+// ── Back-in-stock alerts ("notify me when available") ────────────────────────
+export const stockNotifyApi = {
+  subscribe:  (payload)   => api.post('/stock-notifications', payload),
+  demand:     ()          => api.get('/stock-notifications/demand'),   // admin
+  pending:    ()          => api.get('/stock-notifications'),          // admin
+  count:      ()          => api.get('/stock-notifications/count'),    // admin
+  notify:     (slug)      => api.post('/stock-notifications/notify', null, { params: { productSlug: slug } }), // admin
+};
+
 export const productsApi = {
   related: (id, limit = 4) => api.get(`/products/${id}/related`, { params: { limit } }),
   list:       (params) => api.get('/products', { params }),
+  // Admin: every product incl. drafts/deactivated. status: active|inactive|restricted|outofstock|lowstock
+  manage:     (params) => api.get('/products/manage', { params }),
   get:        (slug)   => api.get(`/products/${slug}`),
   featured:   ()       => api.get('/products/featured'),
   categories: ()       => api.get('/products/categories'),
@@ -154,8 +185,12 @@ export const deliveryApi = {
   // Public: is this pincode serviceable, at what charge, by when.
   // `qty` (total units in the order) drives the volume-based delivery tier so the
   // quoted charge matches what the order endpoint will bill.
-  check:      (pincode, orderValue, qty) =>
-                api.get('/delivery/check', { params: { pincode, orderValue, qty } }),
+  // `products` (optional: ids/slugs, array or comma string) — any sold only in a
+  // limited delivery area that excludes this pincode come back in `restrictedItems`.
+  check:      (pincode, orderValue, qty, products) => {
+                const refs = Array.isArray(products) ? products.filter(Boolean).join(',') : (products || '');
+                return api.get('/delivery/check', { params: { pincode, orderValue, qty, ...(refs ? { products: refs } : {}) } });
+              },
   // Admin
   zones:      ()        => api.get('/delivery/zones'),
   createZone: (d)       => api.post('/delivery/zones', d),

@@ -9,18 +9,18 @@
  * Conversion-focused, Blue+Gold theme, full eCommerce experience
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ShoppingCart, Zap, Heart, Star, ChevronRight, ChevronLeft,
   Shield, Truck, RotateCcw, Award, CheckCircle, Share2,
   MessageCircle, Phone, ZoomIn, Package, AlertCircle,
   ThumbsUp, ThumbsDown, Send, User, Clock, Tag,
-  ChevronDown, ChevronUp, ArrowLeft, Copy, Check, FileText } from 'lucide-react';
+  ChevronDown, ChevronUp, ArrowLeft, Copy, Check, FileText, BellRing, Loader2, MapPin } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useRfq } from '@/context/RfqContext';
 import { useAuth } from '@/context/AuthContext';
-import { productsApi } from '@/lib/api';
+import { productsApi, stockNotifyApi } from '@/lib/api';
 import { renderArticleHtml } from '@/lib/richText';
 import { track } from '@/lib/analytics';
 import { getProductBySlug, getRelated } from '@/lib/productData';
@@ -28,6 +28,7 @@ import useSeo from '@/hooks/useSeo';
 import BulkOrderForm from '@/components/BulkOrderForm';
 import { toCartItem } from '@/lib/cartItem';
 import PincodeCheck from '@/components/PincodeCheck';
+import { areaLabel } from '@/lib/pincodeRules';
 
 /* ─── helpers ────────────────────────────────────────────────────────────── */
 const fmt     = (n) => '₹' + Number(n).toLocaleString('en-IN');
@@ -232,7 +233,9 @@ const ReviewForm = ({ productId, productName, onSubmit }) => {
 /* ─── Related product card ──────────────────────────────────────────────── */
 const RelatedCard = ({ product }) => {
   const { addItem, items } = useCart();
+  const { addToRfq, inRfq } = useRfq();
   const inCart = items.some(i => i.id === product.id);
+  const soldOut = product.stockQty != null && Number(product.stockQty) <= 0;
   const d = disc(product);
   return (
     <Link to={`/shop/${product.slug || product.id}`}
@@ -258,13 +261,83 @@ const RelatedCard = ({ product }) => {
             <span className="font-extrabold text-gray-900 text-sm">{fmt(product.price)}</span>
             {product.mrp > product.price && <span className="text-[10px] text-gray-400 line-through ml-1">{fmt(product.mrp)}</span>}
           </div>
+          {soldOut ? (
+            <button onClick={(e) => { e.preventDefault(); addToRfq(product); }} title="Out of stock — request a quote"
+              className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition-all ${inRfq(product.id)?'bg-green-100 text-green-700':'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}>
+              {inRfq(product.id) ? '✓ Quoted' : 'Quote'}
+            </button>
+          ) : (
           <button onClick={(e) => { e.preventDefault(); addItem(toCartItem(product)); }}
             className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition-all ${inCart?'bg-green-100 text-green-700':'bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white'}`}>
             {inCart ? '✓ In Cart' : '+ Add'}
           </button>
+          )}
         </div>
       </div>
     </Link>
+  );
+};
+
+/* ─── Back-in-stock capture — turns an out-of-stock dead end into a lead ──── */
+const BackInStockForm = ({ product }) => {
+  const { user } = useAuth();
+  const [email, setEmail]   = useState(user?.email || '');
+  const [name,  setName]    = useState(user?.fullName || '');
+  const [state, setState]   = useState('idle'); // idle | loading | done | error
+  const [msg,   setMsg]     = useState('');
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const clean = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) { setState('error'); setMsg('Please enter a valid email.'); return; }
+    setState('loading'); setMsg('');
+    try {
+      const { data } = await stockNotifyApi.subscribe({
+        email: clean,
+        name: name.trim() || undefined,
+        productSlug: product.slug || String(product.id),
+        productName: product.name,
+      });
+      setState('done');
+      setMsg(data?.message || "Done! We'll email you the moment it's back.");
+      track('back_in_stock_subscribe', { label: product.slug || String(product.id || '') });
+    } catch (err) {
+      setState('error');
+      setMsg(err?.response?.data?.message || 'Could not sign you up — please try again or WhatsApp us.');
+    }
+  };
+
+  if (state === 'done') {
+    return (
+      <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-4 flex items-start gap-3">
+        <CheckCircle className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
+        <div>
+          <p className="font-bold text-green-800 text-sm">You're on the list</p>
+          <p className="text-green-700 text-sm mt-0.5">{msg}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div id="back-in-stock" className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4 scroll-mt-28">
+      <div className="flex items-center gap-2 mb-1">
+        <BellRing className="h-4 w-4 text-blue-700" />
+        <p className="font-bold text-blue-900 text-sm">Notify me when it's back</p>
+      </div>
+      <p className="text-blue-700/90 text-xs mb-3">Out of stock right now — leave your email and we'll alert you the moment it's available. No spam.</p>
+      <form onSubmit={submit} className="space-y-2">
+        <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
+          placeholder="you@company.com" autoComplete="email"
+          className="w-full px-3.5 py-2.5 rounded-xl border border-blue-200 bg-white text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500" />
+        <button type="submit" disabled={state === 'loading'}
+          className="w-full py-3 rounded-xl font-bold text-sm bg-blue-900 hover:bg-blue-800 text-white flex items-center justify-center gap-2 disabled:opacity-60 transition-colors">
+          {state === 'loading' ? <Loader2 className="h-4 w-4 animate-spin" /> : <BellRing className="h-4 w-4" />}
+          {state === 'loading' ? 'Signing you up…' : 'Notify me'}
+        </button>
+      </form>
+      {state === 'error' && <p className="text-red-600 text-xs mt-2">{msg}</p>}
+    </div>
   );
 };
 
@@ -282,7 +355,12 @@ const ProductDetailPage = () => {
   /* ── product data: try local lib first (fast), then fall back to API ── */
   const staticProduct = getProductBySlug(slug);
   const [apiProduct, setApiProduct] = React.useState(null);
-  const [apiLoading, setApiLoading] = React.useState(false);
+  // True until the live shop has answered for this slug — avoids flashing
+  // "Product Not Found" for admin-created products that aren't in the static list.
+  const [apiLoading, setApiLoading] = React.useState(() => Boolean(slug));
+  // The live shop answered "no such product" (removed / draft) — don't fall back
+  // to the static catalogue copy and offer something that can't be ordered.
+  const [apiNotFound, setApiNotFound] = React.useState(false);
 
   // Always ask the API for this slug — not only when the slug is missing from the
   // static catalogue. The static file is rich editorial content (features, specs,
@@ -292,6 +370,8 @@ const ProductDetailPage = () => {
   React.useEffect(() => {
     if (slug) {
       setApiLoading(true);
+      setApiNotFound(false);
+      setApiProduct(null);   // never show the previous product's data under a new URL
       productsApi.get(slug)
         .then(({ data }) => {
           try { track('product_view', { label: data?.slug || slug }); } catch {}
@@ -329,10 +409,17 @@ const ProductDetailPage = () => {
             benefits: lines(data.benefits),
             applications: lines(data.applications),
             warranty: data.warranty || '',
-            gstRate: data.gstRate || 18,
+            gstRate: data.gstRate ?? 18,
+            sku: data.sku || '',
+            hsnCode: data.hsnCode || '',
+            deliveryCharge: data.deliveryCharge ?? null,
+            // Limited delivery area (admin-set). Server enforces it at checkout.
+            deliveryRestricted: !!data.deliveryRestricted,
+            allowedPincodes: data.allowedPincodes || '',
+            deliveryAreaNote: data.deliveryAreaNote || '',
           });
         })
-        .catch(() => {})
+        .catch((err) => { if (err?.response?.status === 404) setApiNotFound(true); })
         .finally(() => setApiLoading(false));
     }
   }, [slug, staticProduct]);
@@ -350,6 +437,7 @@ const ProductDetailPage = () => {
       if (Number.isFinite(Number(p.stockQty))) return { ...p, inStock: Number(p.stockQty) > 0 };
       return p;
     };
+    if (apiNotFound)    return null;
     if (!staticProduct) return withStock(apiProduct);
     if (!apiProduct)    return withStock(staticProduct);
     const merged = { ...staticProduct };
@@ -365,7 +453,7 @@ const ProductDetailPage = () => {
       merged.inStock  = apiProduct.inStock;
     }
     return withStock(merged);
-  }, [staticProduct, apiProduct]);
+  }, [staticProduct, apiProduct, apiNotFound]);
   const stockKnown = apiProduct != null || Number.isFinite(Number(staticProduct?.stockQty));
   // Live related products from the API (same category); static data is only a
   // fallback so admin-created products get a related section too.
@@ -403,6 +491,9 @@ const ProductDetailPage = () => {
   const [addedAnim,   setAddedAnim] = useState(false);
   const [pinchZoom,   setPinchZoom] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  // Latest delivery answer from the pincode box — tells us if THIS product can
+  // go to the buyer's pincode (limited-delivery-area products).
+  const [pinQuote, setPinQuote] = useState(null);
   const stickyRef = useRef(null);
 
   // Available stock caps how much can be added here. Stock is authoritative only
@@ -423,6 +514,17 @@ const ProductDetailPage = () => {
   useEffect(() => {
     setQty(q => Math.min(Math.max(1, q), maxQty));
   }, [maxQty]);
+
+  // "Notify me" links from the shop land on /shop/<slug>#back-in-stock — bring
+  // the out-of-stock panel into view once the product has rendered.
+  const location = useLocation();
+  useEffect(() => {
+    if (location.hash !== '#back-in-stock' || !product || product.inStock) return undefined;
+    const t = setTimeout(() => {
+      document.getElementById('back-in-stock')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 450);
+    return () => clearTimeout(t);
+  }, [location.hash, product?.id, product?.inStock]);
 
   /* ── SEO ── */
   const productSchema = product ? (() => {
@@ -563,16 +665,31 @@ const ProductDetailPage = () => {
     if (navigator.share) navigator.share({ title: product.name, url });
   }, [product]);
 
+  /* ── loading (live-only products) ── */
+  if (!product && apiLoading) return (
+    <div className="min-h-[70vh] flex items-center justify-center" aria-busy="true">
+      <div className="text-center">
+        <Loader2 className="h-9 w-9 text-blue-600 animate-spin mx-auto mb-3" />
+        <p className="text-sm text-gray-500">Loading product…</p>
+      </div>
+    </div>
+  );
+
   /* ── 404 ── */
   if (!product) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center p-8">
         <div className="text-6xl mb-4">🔍</div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Product Not Found</h2>
-        <p className="text-gray-500 mb-6">This product may have been removed or the link is incorrect.</p>
-        <Link to="/shop" className="btn-gold px-6 py-3 rounded-xl inline-flex items-center gap-2">
-          <ArrowLeft className="h-4 w-4"/> Back to Shop
-        </Link>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">{apiNotFound ? 'Product no longer available' : 'Product Not Found'}</h2>
+        <p className="text-gray-500 mb-6">This product may have been removed or the link is incorrect. Still need it? Our team can source it for you.</p>
+        <div className="flex flex-wrap gap-3 justify-center">
+          <Link to="/shop" className="btn-gold px-6 py-3 rounded-xl inline-flex items-center gap-2">
+            <ArrowLeft className="h-4 w-4"/> Back to Shop
+          </Link>
+          <Link to="/contact" className="px-6 py-3 rounded-xl inline-flex items-center gap-2 border-2 border-blue-200 text-blue-700 font-bold hover:bg-blue-50">
+            <FileText className="h-4 w-4"/> Ask for a quote
+          </Link>
+        </div>
       </div>
     </div>
   );
@@ -584,6 +701,10 @@ const ProductDetailPage = () => {
   const wished    = typeof inWishlist === 'function' ? inWishlist(product.id) : false;
   const d         = disc(product);
   const saved     = savings(product);
+  // Limited delivery area: the buyer's pincode is outside it → offer a quote, not checkout.
+  const blockedHere = Array.isArray(pinQuote?.restrictedItems) && pinQuote.restrictedItems.length > 0;
+  const outOfStock  = !product.inStock;
+  const handleQuote = () => addToRfq(product, qty);
   const totalRevs = reviews.length || product.reviews || 0;
 
   // Rating breakdown for display (mix backend + product data)
@@ -819,7 +940,24 @@ const ProductDetailPage = () => {
 
             {/* Serviceability — answered before the buyer commits, not after */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-5">
-              <PincodeCheck orderValue={(product.price || 0) * qty} compact />
+              {product.deliveryRestricted && (
+                <div className="flex items-start gap-2 mb-3 rounded-xl bg-indigo-50 border border-indigo-100 px-3 py-2 text-xs text-indigo-900">
+                  <MapPin className="h-4 w-4 shrink-0 mt-0.5 text-indigo-600" />
+                  <p><strong>Limited delivery area:</strong> {areaLabel(product)}. Check your pincode below — outside this area we can still quote and arrange delivery.</p>
+                </div>
+              )}
+              <PincodeCheck
+                orderValue={(product.price || 0) * qty}
+                compact
+                productRefs={product.id != null ? String(product.id) : product.slug}
+                onResolved={setPinQuote}
+                restrictedAction={
+                  <button onClick={handleQuote}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-900 text-white hover:bg-blue-800 transition-colors">
+                    <FileText className="h-3.5 w-3.5" /> Request a quote for this pincode
+                  </button>
+                }
+              />
             </div>
 
             {/* Quantity + Add to Cart + Buy Now */}
@@ -875,6 +1013,49 @@ const ProductDetailPage = () => {
                 </div>
               )}
 
+              {/* When sold out: lead with a quote (we source it — backorder), and
+                  offer the back-in-stock alert as the lighter option. */}
+              {outOfStock ? (
+                <div className="space-y-3">
+                  <div className="rounded-2xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-white p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                        <Clock className="h-5 w-5 text-amber-700" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-extrabold text-gray-900">Out of stock — still need it?</p>
+                        <p className="text-sm text-gray-600 mt-0.5">
+                          Request a quote for <strong>{qty} unit{qty === 1 ? '' : 's'}</strong>. We'll source it and send price,
+                          availability and lead time within <strong>1 business day</strong>. No payment now.
+                        </p>
+                      </div>
+                    </div>
+                    <button onClick={handleQuote}
+                      className={`mt-3 w-full py-3.5 rounded-xl font-bold text-base flex items-center justify-center gap-2 transition-all ${
+                        inRfq(product.id) ? 'bg-green-600 text-white hover:bg-green-700' : 'btn-gold'
+                      }`}>
+                      <FileText className="h-5 w-5" />
+                      {inRfq(product.id) ? `In your quote list · add ${qty} more` : `Request Quote — ${qty} unit${qty === 1 ? '' : 's'}`}
+                    </button>
+                  </div>
+                  <BackInStockForm product={product} />
+                </div>
+              ) : blockedHere ? (
+                <div className="rounded-2xl border-2 border-red-100 bg-red-50/60 p-4">
+                  <p className="font-bold text-red-800 text-sm flex items-center gap-1.5">
+                    <MapPin className="h-4 w-4" /> Not deliverable to {pinQuote?.pincode} through online checkout
+                  </p>
+                  <p className="text-sm text-red-700/90 mt-1">
+                    Delivery area for this product: <strong>{pinQuote?.restrictedItems?.[0]?.areaNote || areaLabel(product)}</strong>.
+                    Change the pincode above, or request a quote and our team will arrange delivery to you.
+                  </p>
+                  <button onClick={handleQuote}
+                    className="mt-3 w-full py-3.5 rounded-xl font-bold text-base btn-gold flex items-center justify-center gap-2">
+                    <FileText className="h-5 w-5" /> Request a Quote
+                  </button>
+                </div>
+              ) : (
+              <>
               {/* Add to cart */}
               <motion.button
                 onClick={handleAdd}
@@ -905,8 +1086,11 @@ const ProductDetailPage = () => {
                 <Zap className="h-5 w-5"/>
                 Buy Now — Instant Checkout
               </button>
+              </>
+              )}
 
-              {/* B2B — Request for Quote */}
+              {/* B2B — Request for Quote (the out-of-stock / restricted panels above already lead with it) */}
+              {!outOfStock && !blockedHere && (
               <button onClick={() => addToRfq(product, qty)}
                 className={`w-full py-3.5 rounded-2xl font-bold text-base border-2 transition-colors flex items-center justify-center gap-2.5 ${
                   inRfq(product.id)
@@ -916,9 +1100,10 @@ const ProductDetailPage = () => {
                 <FileText className="h-5 w-5"/>
                 {inRfq(product.id) ? 'Added to Quote List ✓' : 'Request for Quote (Bulk / B2B)'}
               </button>
+              )}
 
               {/* WhatsApp quick enquiry */}
-              <a href={`https://wa.me/918927070972?text=${encodeURIComponent(`Hi Navgrow! I want to order: ${product.name} (SKU: ${product.sku}) — ₹${product.price.toLocaleString('en-IN')} × ${qty}. Please confirm availability.`)}`}
+              <a href={`https://wa.me/918927070972?text=${encodeURIComponent(`Hi Navgrow! I want to order: ${product.name}${product.sku ? ` (SKU: ${product.sku})` : ''} — ₹${Number(product.price || 0).toLocaleString('en-IN')} × ${qty}.${outOfStock ? ' It shows out of stock — please share lead time.' : ' Please confirm availability.'}`)}`}
                 target="_blank" rel="noopener noreferrer"
                 className="w-full py-3.5 rounded-2xl font-bold text-base border-2 border-[#25D366] text-[#1a9c4d] hover:bg-[#f0fff4] transition-colors flex items-center justify-center gap-2.5">
                 <MessageCircle className="h-5 w-5"/>
@@ -1197,13 +1382,32 @@ const ProductDetailPage = () => {
         initial={{ y: 100 }}
         animate={{ y: 0 }}
         transition={{ delay: 1.2, type: 'spring', stiffness: 200, damping: 28 }}
-        className="fixed bottom-0 left-0 right-0 z-[70] bg-white/98 backdrop-blur-md border-t border-gray-200 shadow-2xl px-4 py-3 lg:hidden"
+        className="fixed bottom-0 left-0 right-0 z-[70] bg-white/95 backdrop-blur-md border-t border-gray-200 shadow-2xl px-4 py-3 lg:hidden"
       >
         <div className="flex items-center gap-3 max-w-lg mx-auto">
           <div className="flex-1 min-w-0">
             <p className="font-extrabold text-gray-900 text-base leading-none">{fmt(product.price * qty)}</p>
             {d > 0 && <p className="text-xs text-green-600 font-semibold">{d}% OFF · Save {fmt(saved * qty)}</p>}
           </div>
+          {outOfStock ? (
+            <>
+            <button aria-label="Notify me when back in stock"
+              onClick={() => { const el = document.getElementById('back-in-stock'); el?.scrollIntoView({ behavior: 'smooth' }); el?.querySelector('input')?.focus(); }}
+              className="w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center border-2 border-blue-200 text-blue-800 hover:bg-blue-50 transition-all">
+              <BellRing className="h-5 w-5"/>
+            </button>
+            <button onClick={handleQuote}
+              className="flex-[2] py-3 rounded-2xl font-bold text-sm btn-gold flex items-center justify-center gap-2">
+              <FileText className="h-4 w-4"/>{inRfq(product.id) ? 'In Quote List ✓' : 'Request Quote'}
+            </button>
+            </>
+          ) : blockedHere ? (
+            <button onClick={handleQuote}
+              className="flex-[2] py-3 rounded-2xl font-bold text-sm btn-gold flex items-center justify-center gap-2">
+              <FileText className="h-4 w-4"/>Request a Quote
+            </button>
+          ) : (
+          <>
           <button aria-label="Add to cart" onClick={handleAdd} disabled={!product.inStock}
             className={`flex-1 py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${inCart?'bg-green-600 text-white':'bg-blue-900 text-white hover:bg-blue-800'} disabled:opacity-50`}>
             <ShoppingCart className="h-4 w-4"/>
@@ -1213,6 +1417,8 @@ const ProductDetailPage = () => {
             className="flex-1 py-3 rounded-2xl font-bold text-sm btn-gold flex items-center justify-center gap-2 disabled:opacity-50">
             <Zap className="h-4 w-4"/>Buy Now
           </button>
+          </>
+          )}
         </div>
       </motion.div>
 

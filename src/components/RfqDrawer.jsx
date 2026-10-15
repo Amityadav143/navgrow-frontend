@@ -6,13 +6,16 @@
  * Shows requested items, lets the buyer set quantities + specs, and submits
  * a formal RFQ. Two steps: (1) review items, (2) buyer details → submit.
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, FileText, Trash2, Plus, Minus, Send, CheckCircle2,
-  Building2, ArrowRight, ArrowLeft, Loader2, Package,
+  Building2, ArrowRight, ArrowLeft, Loader2, Package, Clock, ShieldCheck,
 } from 'lucide-react';
 import { useRfq } from '@/context/RfqContext';
+import { useAuth } from '@/context/AuthContext';
+import { INDIAN_STATES, normalizeState } from '@/lib/indianStates';
+import { lookupPincode } from '@/lib/location';
 import useEscapeKey from '@/hooks/useEscapeKey';
 import useBodyScrollLock from '@/hooks/useBodyScrollLock';
 import { rfqApi } from '@/lib/api';
@@ -20,6 +23,24 @@ import { track } from '@/lib/analytics';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const PHONE_RE = /^[6-9]\d{9}$/;
+const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+const PIN_RE   = /^[1-9][0-9]{5}$/;
+
+// The buyer's details are remembered on this device after a successful RFQ, so
+// the next request is two taps instead of nine fields (B2B buyers repeat-order).
+const BUYER_KEY = 'ng_rfq_buyer_v1';
+const BUYER_FIELDS = ['buyerName', 'buyerEmail', 'buyerPhone', 'company', 'gstin', 'deliveryCity', 'deliveryState', 'pincode'];
+const loadBuyer = () => {
+  try { const v = JSON.parse(localStorage.getItem(BUYER_KEY) || 'null'); return v && typeof v === 'object' ? v : {}; }
+  catch { return {}; }
+};
+const saveBuyer = (form) => {
+  try {
+    const keep = {};
+    BUYER_FIELDS.forEach(k => { if (form[k]) keep[k] = form[k]; });
+    localStorage.setItem(BUYER_KEY, JSON.stringify(keep));
+  } catch { /* private mode — fine */ }
+};
 
 const RfqDrawer = () => {
   const { items, totalItems, drawerOpen, setDrawerOpen, updateQty, updateSpec, removeItem, clearRfq } = useRfq();
@@ -27,21 +48,66 @@ const RfqDrawer = () => {
   const [submitting, setSubmitting] = useState(false);
   const [rfqNumber, setRfqNumber] = useState('');
   const [errors, setErrors] = useState({});
+  const { user } = useAuth();
   const [form, setForm] = useState({
     buyerName: '', buyerEmail: '', buyerPhone: '', company: '',
-    gstin: '', deliveryCity: '', deliveryState: 'West Bengal', pincode: '', notes: '',
+    gstin: '', deliveryCity: '', deliveryState: '', pincode: '', notes: '',
   });
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setErrors(e => ({ ...e, [k]: undefined })); };
+
+  // Prefill whatever we already know — the signed-in account first, then what
+  // this device remembered from the last RFQ. Never overwrites typed values.
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const remembered = loadBuyer();
+    const fromUser = user ? {
+      buyerName:  user.fullName || '',
+      buyerEmail: user.email || '',
+      buyerPhone: (user.phone || '').replace(/^\+?91/, '').replace(/\D/g, '').slice(-10),
+      company:    user.company || '',
+      deliveryCity:  user.city || '',
+      deliveryState: normalizeState(user.state),
+    } : {};
+    setForm(f => {
+      const next = { ...f };
+      Object.keys(next).forEach(k => {
+        if (!next[k]) next[k] = fromUser[k] || remembered[k] || '';
+      });
+      return next;
+    });
+  }, [drawerOpen, user]);
+
+  // A complete pincode fills in city + state (only if still empty).
+  useEffect(() => {
+    const pin = (form.pincode || '').trim();
+    if (!PIN_RE.test(pin)) return;
+    let cancelled = false;
+    lookupPincode(pin).then(info => {
+      if (cancelled || !info) return;
+      setForm(f => ({
+        ...f,
+        deliveryCity:  f.deliveryCity  || info.district || '',
+        deliveryState: f.deliveryState || normalizeState(info.state),
+      }));
+    });
+    return () => { cancelled = true; };
+  }, [form.pincode]);
 
   const validate = () => {
     const e = {};
     if (!form.buyerName.trim()) e.buyerName = 'Required';
-    if (!EMAIL_RE.test(form.buyerEmail)) e.buyerEmail = 'Valid email required';
-    if (!PHONE_RE.test(form.buyerPhone.replace(/\s/g, ''))) e.buyerPhone = 'Valid 10-digit mobile';
+    if (!EMAIL_RE.test(form.buyerEmail.trim())) e.buyerEmail = 'Valid email required';
+    if (!PHONE_RE.test(form.buyerPhone.replace(/\s/g, '').replace(/^\+?91/, ''))) e.buyerPhone = 'Valid 10-digit mobile';
+    if (form.gstin.trim() && !GSTIN_RE.test(form.gstin.trim().toUpperCase())) e.gstin = 'Enter a valid 15-character GSTIN (or leave blank)';
+    if (form.pincode.trim() && !PIN_RE.test(form.pincode.trim())) e.pincode = '6-digit pincode';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
+
+  // Lines we'll have to source (out of stock, or more than we hold right now).
+  const backorderCount = items.filter(i =>
+    i.outOfStock || (i.stockQty != null && Number(i.quantity) > Number(i.stockQty))).length;
 
   const submit = async () => {
     if (!validate()) return;
@@ -49,10 +115,14 @@ const RfqDrawer = () => {
     try {
       const payload = {
         ...form,
-        buyerPhone: form.buyerPhone.replace(/\s/g, ''),
+        buyerName:  form.buyerName.trim(),
+        buyerEmail: form.buyerEmail.trim(),
+        buyerPhone: form.buyerPhone.replace(/\s/g, '').replace(/^\+?91/, ''),
+        gstin:      form.gstin.trim().toUpperCase(),
+        pincode:    form.pincode.trim(),
         items: items.map(i => ({
           productId: i.productId, productName: i.productName, sku: i.sku,
-          quantity: i.quantity, specification: i.specification || '', gstRate: i.gstRate || 18,
+          quantity: i.quantity, specification: i.specification || '', gstRate: i.gstRate ?? 18,
         })),
       };
       const { data } = await rfqApi.submit(payload);
@@ -70,6 +140,7 @@ const RfqDrawer = () => {
           }
         } catch { /* ignore storage errors */ }
       }
+      saveBuyer(form);
       setStep(3);
       clearRfq();
     } catch (err) {
@@ -146,6 +217,16 @@ const RfqDrawer = () => {
                     </div>
                   ) : (
                     <div className="space-y-3">
+                      {backorderCount > 0 && (
+                        <div className="flex items-start gap-2.5 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-900">
+                          <Clock className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+                          <p>
+                            <strong>{backorderCount} item{backorderCount === 1 ? ' is' : 's are'} on backorder.</strong>{' '}
+                            No problem — we'll source {backorderCount === 1 ? 'it' : 'them'} and your quotation will confirm price,
+                            availability and lead time within 1 business day.
+                          </p>
+                        </div>
+                      )}
                       {items.map(it => (
                         <div key={it.productId} className="border border-gray-150 rounded-2xl p-3.5 bg-gray-50/50">
                           <div className="flex gap-3">
@@ -157,6 +238,15 @@ const RfqDrawer = () => {
                             <div className="flex-1 min-w-0">
                               <p className="font-bold text-gray-800 text-sm leading-snug line-clamp-2">{it.productName}</p>
                               {it.sku && <p className="text-[11px] text-gray-400 mt-0.5">SKU: {it.sku}</p>}
+                              {it.outOfStock ? (
+                                <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold">
+                                  <Clock className="h-3 w-3" /> Out of stock · we'll source it
+                                </span>
+                              ) : (it.stockQty != null && Number(it.quantity) > Number(it.stockQty)) ? (
+                                <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-bold">
+                                  <Clock className="h-3 w-3" /> {it.stockQty} in stock · rest on backorder
+                                </span>
+                              ) : null}
                               <div className="flex items-center justify-between mt-2">
                                 <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg">
                                   <button aria-label="Decrease" onClick={() => updateQty(it.productId, it.quantity - 1)}
@@ -192,32 +282,43 @@ const RfqDrawer = () => {
                     Add GSTIN to receive a GST-compliant tax invoice for input credit.
                   </div>
                   {[
-                    { k: 'buyerName',  label: 'Full Name *',     ph: 'Contact person' },
-                    { k: 'buyerEmail', label: 'Email *',          ph: 'you@company.com', type: 'email' },
-                    { k: 'buyerPhone', label: 'Mobile *',         ph: '10-digit mobile', type: 'tel' },
-                    { k: 'company',    label: 'Company / PSU',     ph: 'Organisation name' },
-                    { k: 'gstin',      label: 'GSTIN',             ph: '22AAAAA0000A1Z5' },
+                    { k: 'buyerName',  label: 'Full Name *',     ph: 'Contact person', ac: 'name' },
+                    { k: 'buyerEmail', label: 'Email *',          ph: 'you@company.com', type: 'email', ac: 'email' },
+                    { k: 'buyerPhone', label: 'Mobile *',         ph: '10-digit mobile', type: 'tel', ac: 'tel-national', im: 'numeric' },
+                    { k: 'company',    label: 'Company / PSU',     ph: 'Organisation name', ac: 'organization' },
+                    { k: 'gstin',      label: 'GSTIN (optional)',  ph: '22AAAAA0000A1Z5', ac: 'off' },
                   ].map(f => (
                     <div key={f.k}>
                       <label className="block text-xs font-bold text-gray-500 mb-1">{f.label}</label>
                       <input
-                        type={f.type || 'text'} value={form[f.k]}
-                        onChange={e => set(f.k, e.target.value)} placeholder={f.ph}
+                        type={f.type || 'text'} value={form[f.k]} autoComplete={f.ac} inputMode={f.im}
+                        onChange={e => set(f.k, f.k === 'gstin' ? e.target.value.toUpperCase().slice(0, 15) : e.target.value)} placeholder={f.ph}
                         className={`w-full px-3.5 py-2.5 border-2 rounded-xl text-sm focus:outline-none transition-colors ${errors[f.k] ? 'border-red-300 bg-red-50' : 'border-gray-200 focus:border-blue-500'}`} />
                       {errors[f.k] && <p className="text-red-500 text-xs mt-1">{errors[f.k]}</p>}
                     </div>
                   ))}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-bold text-gray-500 mb-1">Delivery City</label>
-                      <input value={form.deliveryCity} onChange={e => set('deliveryCity', e.target.value)} placeholder="City"
-                        className="w-full px-3.5 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500" />
+                      <label className="block text-xs font-bold text-gray-500 mb-1">Delivery Pincode</label>
+                      <input value={form.pincode} inputMode="numeric" autoComplete="postal-code"
+                        onChange={e => set('pincode', e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="734001" maxLength={6}
+                        className={`w-full px-3.5 py-2.5 border-2 rounded-xl text-sm focus:outline-none transition-colors ${errors.pincode ? 'border-red-300 bg-red-50' : 'border-gray-200 focus:border-blue-500'}`} />
+                      {errors.pincode && <p className="text-red-500 text-xs mt-1">{errors.pincode}</p>}
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-gray-500 mb-1">Pincode</label>
-                      <input value={form.pincode} onChange={e => set('pincode', e.target.value)} placeholder="734001" maxLength={6}
+                      <label className="block text-xs font-bold text-gray-500 mb-1">Delivery City</label>
+                      <input value={form.deliveryCity} onChange={e => set('deliveryCity', e.target.value)} placeholder="City"
+                        autoComplete="address-level2"
                         className="w-full px-3.5 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500" />
                     </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">State</label>
+                    <select value={form.deliveryState} onChange={e => set('deliveryState', e.target.value)}
+                      className="w-full px-3.5 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 bg-white">
+                      <option value="">Select state…</option>
+                      {INDIAN_STATES.map(st => <option key={st}>{st}</option>)}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">Requirements / Notes</label>
@@ -226,6 +327,10 @@ const RfqDrawer = () => {
                       className="w-full px-3.5 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 resize-none" />
                   </div>
                   {errors.submit && <p className="text-red-500 text-sm bg-red-50 rounded-lg px-3 py-2">{errors.submit}</p>}
+                  <p className="flex items-center gap-1.5 text-[11px] text-gray-400">
+                    <ShieldCheck className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                    No payment now. Your details are used only to send this quotation.
+                  </p>
                 </div>
               )}
 

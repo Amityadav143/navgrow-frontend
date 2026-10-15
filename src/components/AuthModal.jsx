@@ -16,7 +16,8 @@ import {
   Chrome, Loader2, ArrowLeft, Smartphone, Phone, Shield,
   KeyRound, RefreshCw,
 } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth, userCanAccessAdmin } from '@/context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import useEscapeKey from '@/hooks/useEscapeKey';
 import useBodyScrollLock from '@/hooks/useBodyScrollLock';
 import { authApi, API_BASE } from '@/lib/api';
@@ -299,8 +300,19 @@ const OtpLoginPanel = ({ onSuccess }) => {
 };
 
 /* ─────────────────────────────────────────────────────── Main Modal */
-const AuthModal = ({ open, onClose, defaultTab = 'login', initialForgot = false }) => {
+const AuthModal = ({ open, onClose, defaultTab = 'login', initialForgot = false, staffRedirect = true }) => {
   const { login, register, applySession, loading, error: authError, clearError } = useAuth();
+  const navigate = useNavigate();
+
+  // After signing in, staff (Super Admin / Admin / Manager / Editor or anyone with
+  // granted access) land on their dashboard instead of staying in the storefront.
+  // Disabled where the modal guards a specific page (e.g. checkout) so the user
+  // simply continues there.
+  const afterLogin = (user) => {
+    if (staffRedirect && userCanAccessAdmin(user)) {
+      setTimeout(() => navigate('/admin'), 760);
+    }
+  };
 
   const [tab,          setTab]          = useState(defaultTab);
   const [loginMethod,  setLoginMethod]  = useState('email'); // 'email' | 'mobile' | 'otp'
@@ -407,15 +419,20 @@ const AuthModal = ({ open, onClose, defaultTab = 'login', initialForgot = false 
     }
 
     if (result.success) {
-      setSuccess(tab === 'login' ? 'Welcome back!' : 'Account created successfully!');
+      const staff = tab === 'login' && userCanAccessAdmin(result.user);
+      setSuccess(tab === 'login'
+        ? (staff ? 'Welcome back! Opening your dashboard…' : 'Welcome back!')
+        : 'Account created successfully!');
       setTimeout(onClose, 750);
+      if (tab === 'login') afterLogin(result.user);
     }
   };
 
   const handleOtpSuccess = async (data) => {
-    await applySession(data);
-    setSuccess('Signed in via OTP!');
+    const res = await applySession(data);
+    setSuccess(userCanAccessAdmin(res?.user) ? 'Signed in! Opening your dashboard…' : 'Signed in via OTP!');
     setTimeout(onClose, 750);
+    afterLogin(res?.user);
   };
 
   const handleGoogleLogin = () => {

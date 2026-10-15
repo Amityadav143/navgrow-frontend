@@ -49,7 +49,7 @@ const BulkOrderForm = ({ product, open, onClose }) => {
   const discountedUnit= unitPrice * (1 - discountPct / 100);
   const lineTotal     = discountedUnit * qty;
   const savings       = (unitPrice - discountedUnit) * qty;
-  const gstAmount     = lineTotal * ((product?.gstRate || 18) / 100);
+  const gstAmount     = lineTotal * ((product?.gstRate ?? 18) / 100);
   const grandTotal    = lineTotal + gstAmount;
 
   const validate = () => {
@@ -91,7 +91,7 @@ const BulkOrderForm = ({ product, open, onClose }) => {
         `Quantity   : ${qty} units\n` +
         `Unit Price : ₹${Math.round(discountedUnit).toLocaleString('en-IN')} (${discountPct}% bulk discount)\n` +
         `Subtotal   : ₹${Math.round(lineTotal).toLocaleString('en-IN')}\n` +
-        `GST        : ₹${Math.round(gstAmount).toLocaleString('en-IN')} (${product?.gstRate || 18}%)\n` +
+        `GST        : ₹${Math.round(gstAmount).toLocaleString('en-IN')} (${product?.gstRate ?? 18}%)\n` +
         `Grand Total: ₹${Math.round(grandTotal).toLocaleString('en-IN')}\n` +
         `Savings    : ₹${Math.round(savings).toLocaleString('en-IN')}\n\n` +
         `BUYER DETAILS\n` +
@@ -196,7 +196,7 @@ const BulkOrderForm = ({ product, open, onClose }) => {
                     <div>
                       <p className="text-xs text-blue-600 font-bold uppercase tracking-wide mb-1">Price Estimate</p>
                       <p className="text-2xl font-extrabold text-gray-900">₹{Math.round(grandTotal).toLocaleString('en-IN')}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">Incl. GST {product?.gstRate || 18}%</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Incl. GST {product?.gstRate ?? 18}%</p>
                     </div>
                     <div className="text-right">
                       {discountPct > 0 && (

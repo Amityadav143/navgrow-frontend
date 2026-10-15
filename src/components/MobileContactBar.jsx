@@ -12,13 +12,17 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Phone, MessageCircle, Calculator, X } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useSiteSettings } from '@/hooks/useSiteSettings';
 
 const MobileContactBar = () => {
   const settings   = useSiteSettings();
+  const { pathname } = useLocation();
   const [visible,   setVisible]   = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  // Product pages and checkout have their own bottom action bar (Add to cart /
+  // Request quote / Pay) — this bar used to sit on top of it and hide the CTA.
+  const hasOwnBottomBar = /^\/shop\/[^/]+/.test(pathname) || pathname.startsWith('/checkout');
 
   const delayMs = (settings.mobileContactBar?.showAfterSecs ?? 2) * 1000;
 
@@ -29,7 +33,7 @@ const MobileContactBar = () => {
     return () => clearTimeout(timer);
   }, [settings.mobileContactBar?.enabled, delayMs]);
 
-  if (!settings.mobileContactBar?.enabled || dismissed) return null;
+  if (!settings.mobileContactBar?.enabled || dismissed || hasOwnBottomBar) return null;
 
   return (
     <AnimatePresence>
@@ -48,7 +52,7 @@ const MobileContactBar = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-3 bg-gray-900/98 backdrop-blur-md border-t border-gray-700/50 shadow-2xl">
+          <div className="grid grid-cols-3 bg-gray-900/95 backdrop-blur-md border-t border-gray-700/50 shadow-2xl">
             <a href="tel:+918927070972"
               className="flex flex-col items-center justify-center gap-1 py-3.5 text-white active:bg-white/10 transition-colors border-r border-gray-700/50">
               <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center">

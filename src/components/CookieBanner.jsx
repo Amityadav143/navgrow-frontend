@@ -15,6 +15,8 @@ import { Cookie, X, Settings, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const COOKIE_KEY = 'navgrow_cookie_consent';
+// z-[95]: above page chrome and sticky bars (≤ 80), but BELOW drawers and modals
+// (≥ 100) — it used to sit on top of the cart / quote drawer's Continue button.
 
 const CookieBanner = () => {
   const [visible, setVisible]   = useState(false);
@@ -39,7 +41,7 @@ const CookieBanner = () => {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 120, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-          className="fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:bottom-6 md:max-w-md z-[200]"
+          className="fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:bottom-6 md:max-w-md z-[95]"
         >
           <div className="bg-gray-950 rounded-3xl shadow-2xl border border-gray-800 overflow-hidden">
             {!showDetail ? (

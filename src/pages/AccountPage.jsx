@@ -215,7 +215,7 @@ const LoginGate = () => {
 
 const AccountPage = () => {
   useSeo({ title:'My Account', path:'/account' });
-  const { user, isLoggedIn, logout } = useAuth();
+  const { user, isLoggedIn, logout, canAccessAdmin, isSuperAdmin } = useAuth();
   const { wishlist, toggleWishlist, moveToCart, addItem, setCartOpen } = useCart();
   const navigate = useNavigate();
   const confirm  = useConfirm();
@@ -412,6 +412,18 @@ const AccountPage = () => {
 
       <section className="py-12 bg-gray-50 min-h-screen">
         <div className="container mx-auto px-4 max-w-6xl">
+          {/* Staff accounts: a clear route to the dashboard from the customer area */}
+          {canAccessAdmin && (
+            <div className="mb-6 rounded-2xl bg-gradient-to-r from-blue-900 to-blue-700 text-white p-5 flex flex-col sm:flex-row sm:items-center gap-4 shadow-lg">
+              <div className="flex-1">
+                <p className="font-bold text-lg">{isSuperAdmin ? 'Super Admin access' : 'Staff access'}</p>
+                <p className="text-blue-100 text-sm">You manage this site. Open the dashboard to handle orders, products, content and user access.</p>
+              </div>
+              <Link to="/admin" className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-white text-blue-900 font-bold text-sm hover:bg-blue-50 transition-colors shrink-0">
+                Open Admin Dashboard →
+              </Link>
+            </div>
+          )}
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
             {/* ── Sidebar ── */}

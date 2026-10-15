@@ -50,7 +50,8 @@ const parsePermissions = (perms) => {
 };
 
 // Derive the role booleans + effective permission set from a role list and an
-// explicit permissions list. SUPER_ADMIN and ADMIN implicitly get everything.
+// explicit permissions list. SUPER_ADMIN and ADMIN implicitly get everything;
+// MANAGER / EDITOR get their role baseline plus any custom grants.
 const deriveFlags = (roles, permsList) => {
   const isSuperAdmin = roles.includes('ROLE_SUPER_ADMIN');
   const isAdmin      = roles.includes('ROLE_ADMIN');
@@ -58,6 +59,10 @@ const deriveFlags = (roles, permsList) => {
   const isEditor     = roles.includes('ROLE_EDITOR');
   let permissions = parsePermissions(permsList);
   if (isSuperAdmin || isAdmin) permissions = new Set(ALL_PERMISSIONS);
+  else {
+    if (isManager) ROLE_DEFAULT_PERMISSIONS.MANAGER.forEach(p => permissions.add(p));
+    if (isEditor)  ROLE_DEFAULT_PERMISSIONS.EDITOR.forEach(p => permissions.add(p));
+  }
   return {
     isSuperAdmin, isAdmin, isManager, isEditor,
     permissions: Array.from(permissions),
@@ -72,6 +77,47 @@ export const ALL_PERMISSIONS = [
   'SETTINGS','NOTIFICATIONS','AUDIT',
 ];
 
+// Sections each role gets WITHOUT a custom grant. Mirror of
+// com.navgrow.enums.Permission#defaultsFor — keep the two in sync. A Super Admin
+// can grant extra sections on top of these from Admin → Users → Access.
+export const ROLE_DEFAULT_PERMISSIONS = {
+  MANAGER: ['ORDERS','QUOTES','RFQS','MESSAGES','CATALOGUE_LEADS','TAX_RULES','DELIVERY_ZONES',
+            'CATALOG','AUDIT','NEWS','PROJECTS','GALLERY','JOBS','TENDERS','SETTINGS'],
+  EDITOR:  ['NEWS','PROJECTS','GALLERY','JOBS','TENDERS','SETTINGS'],
+};
+
+/** Can this (plain) user object reach the admin panel? Pure — usable right
+ *  after login, before the context re-renders, to route staff to /admin. */
+export const userCanAccessAdmin = (u) => !!(u && (
+  u.isSuperAdmin || u.isAdmin || u.isManager || u.isEditor ||
+  (Array.isArray(u.permissions) && u.permissions.length > 0)
+));
+
+/**
+ * Build the client user object from the server profile (/users/me). The profile
+ * is AUTHORITATIVE for role + permissions. Single source of truth used by login,
+ * OAuth/OTP sessions, profile refresh and the on-load revalidation — so the role
+ * flags can never drift between code paths again.
+ */
+export const buildUserFromProfile = (base, data) => {
+  const roles = data?.role ? [`ROLE_${data.role}`] : (base?.roles || []);
+  const perms = Array.isArray(data?.effectivePermissions) ? data.effectivePermissions : base?.permissions;
+  return {
+    ...(base || {}),
+    email:     data?.email     || base?.email     || '',
+    fullName:  data?.fullName  || base?.fullName  || '',
+    phone:     data?.phone     || base?.phone     || '',
+    avatarUrl: data?.avatarUrl || base?.avatarUrl || '',
+    company:   data?.company   || base?.company   || '',
+    city:      data?.city      || base?.city      || '',
+    state:     data?.state     || base?.state     || '',
+    bio:       data?.bio       || base?.bio       || '',
+    role:      data?.role      || base?.role      || '',
+    roles,
+    ...deriveFlags(roles, perms),
+  };
+};
+
 export const AuthProvider = ({ children }) => {
   const [user,    setUser]    = useState(() => {
     try { return JSON.parse(localStorage.getItem(USER_KEY)) || null; }
@@ -79,6 +125,12 @@ export const AuthProvider = ({ children }) => {
   });
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState(null);
+  // False while a cached session is being re-checked with the server on load.
+  // Admin screens wait for this instead of bouncing a just-promoted Super Admin
+  // (whose cached role is stale) back to the home page.
+  const [sessionChecked, setSessionChecked] = useState(() => {
+    try { return !localStorage.getItem(TOKEN_KEY); } catch { return true; }
+  });
 
   const isLoggedIn = !!user;
   const isSuperAdmin = user?.isSuperAdmin || false;
@@ -86,12 +138,25 @@ export const AuthProvider = ({ children }) => {
   const isManager = user?.isManager || false;
   const isEditor  = user?.isEditor  || false;
   const permissions = user?.permissions || [];
+  // Can this user reach the admin panel at all? True for SUPER_ADMIN, ADMIN,
+  // MANAGER, EDITOR, or anyone granted at least one custom permission. Use this
+  // for every admin-panel entry point so a Super Admin (whose role is NOT ADMIN)
+  // is never locked out of the dashboard.
+  const canAccessAdmin = !!(user && (
+    user.isSuperAdmin || user.isAdmin || user.isManager || user.isEditor ||
+    (user.permissions || []).length > 0
+  ));
   // can('ORDERS') — does the current user have access to a given admin area?
-  // SUPER_ADMIN/ADMIN implicitly have all; others need the explicit grant.
+  // SUPER_ADMIN/ADMIN implicitly have all; MANAGER/EDITOR have their role
+  // baseline (checked here too, so a session cached before an update still
+  // works on first paint); anything else needs an explicit grant.
   const can = useCallback((perm) => {
     if (!perm) return false;
     if (user?.isSuperAdmin || user?.isAdmin) return true;
-    return (user?.permissions || []).includes(String(perm).toUpperCase());
+    const p = String(perm).toUpperCase();
+    if (user?.isManager && ROLE_DEFAULT_PERMISSIONS.MANAGER.includes(p)) return true;
+    if (user?.isEditor  && ROLE_DEFAULT_PERMISSIONS.EDITOR.includes(p))  return true;
+    return (user?.permissions || []).includes(p);
   }, [user]);
 
   // ── Session management ────────────────────────────────────────────────────
@@ -102,6 +167,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem(USER_KEY);
     clearSession();
     setUser(null);
+    setSessionChecked(true);
   }, []);
 
   const { warning, secondsLeft, extendSession } = useSession({
@@ -117,26 +183,34 @@ export const AuthProvider = ({ children }) => {
   }, [handleSessionExpire]);
 
   // ── Fetch full profile after login ────────────────────────────────────────
+  // The profile is authoritative for role + permissions — without this, admins
+  // signing in via Google/OTP would be stuck as plain users.
   const enrichUser = useCallback(async (base) => {
     try {
       const { data } = await userApi.profile();
-      // The profile is authoritative for the account's role + permissions —
-      // without this, admins signing in via Google/OTP would be stuck as users.
-      const roles = data.role ? [`ROLE_${data.role}`] : (base.roles || []);
-      const flags = deriveFlags(roles, data.effectivePermissions || base.permissions);
-      return {
-        ...base,
-        roles,
-        ...flags,
-        fullName:  data.fullName  || base.fullName  || '',
-        phone:     data.phone     || '',
-        avatarUrl: data.avatarUrl || base.avatarUrl || '',
-        company:   data.company   || '',
-        city:      data.city      || '',
-        state:     data.state     || '',
-        bio:       data.bio       || '',
-      };
+      return buildUserFromProfile(base, data);
     } catch { return base; }
+  }, []);
+
+  // ── Revalidate the cached session against the server on every app load ─────
+  // The user object is restored from localStorage, so without this a role change
+  // (e.g. an account promoted to Super Admin) only took effect after a full
+  // logout/login — the account kept showing "normal" customer access for days.
+  useEffect(() => {
+    if (!localStorage.getItem(TOKEN_KEY)) { setSessionChecked(true); return; }
+    let cancelled = false;
+    userApi.profile()
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        setUser(prev => {
+          const next = buildUserFromProfile(prev, data);
+          try { localStorage.setItem(USER_KEY, JSON.stringify(next)); } catch {}
+          return next;
+        });
+      })
+      .catch(() => { /* offline / expired: the 401 flow in api.js handles logout */ })
+      .finally(() => { if (!cancelled) setSessionChecked(true); });
+    return () => { cancelled = true; };
   }, []);
 
   // ── Login ─────────────────────────────────────────────────────────────────
@@ -158,7 +232,8 @@ export const AuthProvider = ({ children }) => {
     const enriched = await enrichUser(userData);
     localStorage.setItem(USER_KEY, JSON.stringify(enriched));
     setUser(enriched);
-    return { success: true };
+    setSessionChecked(true);
+    return { success: true, user: enriched };
   }, [enrichUser]);
 
   const login = useCallback(async (emailOrPhone, password, rememberMe = false) => {
@@ -186,7 +261,8 @@ export const AuthProvider = ({ children }) => {
       const enriched = await enrichUser(userData);
       localStorage.setItem(USER_KEY, JSON.stringify(enriched));
       setUser(enriched);
-      return { success: true };
+      setSessionChecked(true);
+      return { success: true, user: enriched };
     } catch (err) {
       const msg = err.response?.data?.message || 'Login failed. Please check your credentials.';
       setError(msg);
@@ -223,7 +299,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const { data } = await userApi.profile();
       const current  = JSON.parse(localStorage.getItem(USER_KEY) || '{}');
-      const updated  = { ...current, ...data };
+      const updated  = buildUserFromProfile(current, data);
       localStorage.setItem(USER_KEY, JSON.stringify(updated));
       setUser(updated);
     } catch {}
@@ -231,8 +307,8 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{
-      user, loading, error, isLoggedIn,
-      isSuperAdmin, isAdmin, isManager, isEditor, permissions, can,
+      user, loading, error, isLoggedIn, sessionChecked,
+      isSuperAdmin, isAdmin, isManager, isEditor, permissions, can, canAccessAdmin,
       login, register, logout, refreshUser, applySession,
       clearError: () => setError(null),
     }}>

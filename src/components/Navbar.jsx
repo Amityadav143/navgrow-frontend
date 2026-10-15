@@ -55,7 +55,7 @@ const WishlistBtn = ({ dark }) => {
 };
 
 const UserMenu = ({ dark }) => {
-  const { user, isLoggedIn, isAdmin, logout } = useAuth();
+  const { user, isLoggedIn, isAdmin, isSuperAdmin, canAccessAdmin, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const navigate = useNavigate();
@@ -89,7 +89,7 @@ const UserMenu = ({ dark }) => {
             className="absolute top-full right-0 mt-2 w-52 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-50">
             <div className="px-4 py-2 border-b border-gray-100">
               <p className="text-sm font-semibold text-gray-900 truncate">{user?.email}</p>
-              <p className="text-xs text-gray-400">{isAdmin ? 'Administrator' : 'Customer'}</p>
+              <p className="text-xs text-gray-400">{isSuperAdmin ? 'Super Admin' : user?.isAdmin ? 'Admin' : user?.isManager ? 'Manager' : user?.isEditor ? 'Editor' : (canAccessAdmin ? 'Staff' : 'Customer')}</p>
             </div>
             {[
               { icon: User,    label: 'My Profile',     path: '/account' },
@@ -101,7 +101,7 @@ const UserMenu = ({ dark }) => {
                 <Icon className="h-4 w-4" /> {label}
               </Link>
             ))}
-            {isAdmin && (
+            {canAccessAdmin && (
               <Link to="/admin" onClick={() => setOpen(false)}
                 className="flex items-center gap-3 px-4 py-2.5 text-sm text-blue-600 hover:bg-blue-50 transition-colors border-t border-gray-100 mt-1">
                 <Settings className="h-4 w-4" /> Admin Dashboard
@@ -131,7 +131,7 @@ const Navbar = ({ scrolled, onSearchOpen }) => {
   const [catalogueOpen, setCatalogueOpen] = useState(false);
   const { totalItems, setCartOpen } = useCart();
   const { totalItems: rfqCount, setDrawerOpen: setRfqOpen } = useRfq();
-  const { user, isLoggedIn, isAdmin, logout } = useAuth();
+  const { user, isLoggedIn, isAdmin, isSuperAdmin, canAccessAdmin, logout } = useAuth();
   const navigate = useNavigate();
   const onDark = false;
 
@@ -317,7 +317,7 @@ const Navbar = ({ scrolled, onSearchOpen }) => {
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-bold text-gray-900 truncate">{user?.fullName || user?.email}</p>
-                          <p className="text-[11px] text-gray-500 truncate">{isAdmin ? 'Administrator' : 'Customer'}</p>
+                          <p className="text-[11px] text-gray-500 truncate">{isSuperAdmin ? 'Super Admin' : user?.isAdmin ? 'Admin' : user?.isManager ? 'Manager' : user?.isEditor ? 'Editor' : (canAccessAdmin ? 'Staff' : 'Customer')}</p>
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
@@ -330,7 +330,7 @@ const Navbar = ({ scrolled, onSearchOpen }) => {
                           <Package className="h-4 w-4 text-blue-600" /> My Orders
                         </Link>
                       </div>
-                      {isAdmin && (
+                      {canAccessAdmin && (
                         <Link to="/admin" onClick={() => setMobileOpen(false)}
                           className="flex items-center justify-center gap-2 py-3 text-sm font-bold text-blue-700 border-2 border-blue-200 bg-blue-50 rounded-xl">
                           <Settings className="h-4 w-4" /> Admin Dashboard

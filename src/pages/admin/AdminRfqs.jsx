@@ -55,7 +55,7 @@ const AdminRfqs = () => {
       const unit = parseFloat(prices[it.id]) || 0;
       const line = unit * it.quantity;
       subtotal += line;
-      gst += line * ((it.gstRate || 18) / 100);
+      gst += line * ((it.gstRate ?? 18) / 100);
     });
     const ship = parseFloat(shipping) || 0;
     return { subtotal, gst, total: subtotal + gst + ship };
@@ -64,7 +64,7 @@ const AdminRfqs = () => {
   const sendQuote = async () => {
     const lines = (selected.items || [])
       .filter(it => prices[it.id] !== '' && prices[it.id] != null)
-      .map(it => ({ itemId: it.id, unitPrice: parseFloat(prices[it.id]), gstRate: it.gstRate || 18 }));
+      .map(it => ({ itemId: it.id, unitPrice: parseFloat(prices[it.id]), gstRate: it.gstRate ?? 18 }));
     if (lines.length === 0) { toast({ title: 'Add at least one price', variant: 'destructive' }); return; }
     setSending(true);
     try {
@@ -119,7 +119,14 @@ const AdminRfqs = () => {
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${STATUS_COLORS[r.status]}`}>{r.status}</span>
                     </div>
                     <p className="font-semibold text-white text-sm mt-1">{r.buyerName} {r.company && <span className="text-gray-400">· {r.company}</span>}</p>
-                    <p className="text-gray-400 text-xs mt-0.5">{(r.items || []).length} item(s) · {r.deliveryCity || '—'}</p>
+                    <p className="text-gray-400 text-xs mt-0.5">
+                      {(r.items || []).length} item(s) · {r.deliveryCity || '—'}{r.pincode ? ` ${r.pincode}` : ''}
+                      {(r.items || []).some(it => it.backorder) && (
+                        <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[10px] font-bold align-middle">
+                          {(r.items || []).filter(it => it.backorder).length} backorder
+                        </span>
+                      )}
+                    </p>
                   </div>
                   {r.quotedTotal && <span className="text-green-400 font-bold text-sm shrink-0">{inr(r.quotedTotal)}</span>}
                 </div>
@@ -154,7 +161,16 @@ const AdminRfqs = () => {
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-white text-sm font-medium leading-snug">{it.productName}</p>
-                        <p className="text-gray-500 text-xs">Qty: {it.quantity}{it.sku && ` · ${it.sku}`} · GST {it.gstRate || 18}%</p>
+                        <p className="text-gray-500 text-xs">Qty: {it.quantity}{it.sku && ` · ${it.sku}`} · GST {it.gstRate ?? 18}%</p>
+                        {it.backorder ? (
+                          <p className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 text-[10px] font-bold">
+                            BACKORDER · {it.stockAtRequest == null || it.stockAtRequest <= 0
+                              ? 'out of stock when requested — quote a lead time'
+                              : `${it.stockAtRequest} in stock, ${Math.max(0, it.quantity - it.stockAtRequest)} to source`}
+                          </p>
+                        ) : it.stockAtRequest != null ? (
+                          <p className="text-emerald-400/80 text-[10px] font-semibold mt-1">In stock when requested ({it.stockAtRequest})</p>
+                        ) : null}
                         {it.specification && <p className="text-amber-300/80 text-xs mt-1">Spec: {it.specification}</p>}
                       </div>
                     </div>

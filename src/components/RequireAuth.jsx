@@ -58,7 +58,7 @@ export default function RequireAuth({
           </Link>
         </div>
       </div>
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} staffRedirect={false} />
     </section>
   );
 }

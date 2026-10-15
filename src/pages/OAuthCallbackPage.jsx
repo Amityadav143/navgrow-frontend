@@ -11,13 +11,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth, userCanAccessAdmin } from '@/context/AuthContext';
 
 const OAuthCallbackPage = () => {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const { applySession } = useAuth();
   const [status, setStatus] = useState('loading'); // loading | ok | error
+  const [errorMsg, setErrorMsg] = useState('');
   const ran = useRef(false);
 
   useEffect(() => {
@@ -31,23 +32,32 @@ const OAuthCallbackPage = () => {
     const authError = params.get('auth_error');
 
     if (authError || !token) {
+      setErrorMsg(
+        authError === 'deactivated' ? 'This account has been deactivated. Please contact info@navgrow.org or +91 89270 70972.'
+        : authError === 'no_email' ? 'Your Google account did not share an email address, so we could not sign you in.'
+        : '');
       setStatus('error');
-      setTimeout(() => navigate('/', { replace: true }), 2200);
+      setTimeout(() => navigate('/', { replace: true }), authError === 'deactivated' ? 6000 : 2200);
       return;
     }
 
     (async () => {
       try {
-        await applySession({
+        // Don't assume a role here — the profile fetched inside applySession is
+        // authoritative. (Hardcoding ROLE_USER made Super Admins / Admins who sign
+        // in with Google land in the customer area as "normal access".)
+        const res = await applySession({
           accessToken: token,
           refreshToken: refresh,
           email,
           fullName: name,
-          roles: ['ROLE_USER'],
+          roles: [],
         });
         setStatus('ok');
+        // Staff go straight to their dashboard; customers to their account.
+        const dest = userCanAccessAdmin(res?.user) ? '/admin' : '/account';
         // Clean the tokens out of the URL history, then continue.
-        setTimeout(() => navigate('/account', { replace: true }), 900);
+        setTimeout(() => navigate(dest, { replace: true }), 900);
       } catch {
         setStatus('error');
         setTimeout(() => navigate('/', { replace: true }), 2200);
@@ -81,7 +91,7 @@ const OAuthCallbackPage = () => {
               <XCircle className="h-8 w-8 text-red-500" />
             </div>
             <h1 className="text-xl font-extrabold text-gray-900 mb-1">Sign-in failed</h1>
-            <p className="text-sm text-gray-500">We couldn't complete your sign-in. Redirecting you home…</p>
+            <p className="text-sm text-gray-500">{errorMsg || "We couldn't complete your sign-in."} Redirecting you home…</p>
           </>
         )}
       </div>

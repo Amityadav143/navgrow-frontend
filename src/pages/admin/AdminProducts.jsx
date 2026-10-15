@@ -14,8 +14,10 @@ import {
   Plus, Edit2, Trash2, Package, Search, CheckCircle,
   Download, Upload, FileText, X, AlertCircle, RefreshCw,
   Image, Tag, DollarSign, BarChart2, Eye, EyeOff, AlertTriangle,
+  BellRing, Loader2, Send, ChevronDown, MapPin, RotateCcw,
 } from 'lucide-react';
-import { productsApi, catalogApi } from '@/lib/api';
+import { productsApi, catalogApi, stockNotifyApi, deliveryApi } from '@/lib/api';
+import { parseRules, matchesPincode } from '@/lib/pincodeRules';
 import { usePaginated, useMutation } from '@/hooks/useApi';
 import { useToast } from '@/components/ui/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -36,7 +38,8 @@ const GST_RATES = ['0','5','12','18','28'];
 // (features, benefits, applications, specifications, imageUrls) using a
 // literal "\n" between items, or wrap the whole multi-line cell in quotes.
 const CSV_HEADERS = [
-  'name','category','price','mrp','gstRate','hsnCode','stockQty','minOrderQty','deliveryCharge',
+  'name','sku','category','price','mrp','gstRate','hsnCode','stockQty','minOrderQty','deliveryCharge',
+  'deliveryRestricted','allowedPincodes','deliveryAreaNote',
   'description','imageUrl','badge','featured',
   'tagline','summary','warranty',
   'features','benefits','applications','specifications','imageUrls',
@@ -108,6 +111,13 @@ const HEADER_ALIASES = {
   hsn: 'hsnCode', hsncode: 'hsnCode', sac: 'hsnCode', saccode: 'hsnCode', hsnsac: 'hsnCode',
   stockqty: 'stockQty', stock: 'stockQty', quantity: 'stockQty', qty: 'stockQty', inventory: 'stockQty',
   minorderqty: 'minOrderQty', moq: 'minOrderQty', minimumorderquantity: 'minOrderQty',
+  sku: 'sku', skucode: 'sku', itemcode: 'sku', productcode: 'sku', partnumber: 'sku', partno: 'sku',
+  deliverycharge: 'deliveryCharge', shipping: 'deliveryCharge', shippingcharge: 'deliveryCharge',
+  deliveryfee: 'deliveryCharge', freight: 'deliveryCharge',
+  deliveryrestricted: 'deliveryRestricted', limiteddelivery: 'deliveryRestricted', restricted: 'deliveryRestricted',
+  allowedpincodes: 'allowedPincodes', pincodes: 'allowedPincodes', deliverypincodes: 'allowedPincodes',
+  servicepincodes: 'allowedPincodes',
+  deliveryareanote: 'deliveryAreaNote', deliveryarea: 'deliveryAreaNote', areanote: 'deliveryAreaNote',
   description: 'description', desc: 'description', details: 'description',
   imageurl: 'imageUrl', image: 'imageUrl', photo: 'imageUrl', picture: 'imageUrl', img: 'imageUrl',
   imageurls: 'imageUrls', images: 'imageUrls', gallery: 'imageUrls',
@@ -157,8 +167,16 @@ export function csvToProducts(csvText) {
   const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
   const get = (cells, key) => (idx[key] != null ? (cells[idx[key]] ?? '').trim() : '');
 
+  const truthy = (v) => ['true', '1', 'yes', 'y'].includes(String(v || '').trim().toLowerCase());
   return rows.slice(1).map(cells => ({
     name:           get(cells, 'name'),
+    sku:            get(cells, 'sku') || undefined,
+    deliveryCharge: get(cells, 'deliveryCharge') !== '' ? num(get(cells, 'deliveryCharge')) : null,
+    // Limited delivery area: "yes" + a pincode list ("734001; 7340*; 734101-734105").
+    // A pincode list alone also switches the restriction on.
+    deliveryRestricted: truthy(get(cells, 'deliveryRestricted')) || (!get(cells, 'deliveryRestricted') && !!get(cells, 'allowedPincodes')),
+    allowedPincodes: get(cells, 'allowedPincodes').replace(/\\n/g, '\n'),
+    deliveryAreaNote: get(cells, 'deliveryAreaNote'),
     category:       get(cells, 'category') || 'Safety Equipment',
     price:          num(get(cells, 'price')) ?? 0,
     mrp:            get(cells, 'mrp') ? num(get(cells, 'mrp')) : null,
@@ -169,7 +187,7 @@ export function csvToProducts(csvText) {
     description:    get(cells, 'description'),
     imageUrl:       get(cells, 'imageUrl'),
     badge:          get(cells, 'badge'),
-    featured:       ['true', '1', 'yes', 'y'].includes(get(cells, 'featured').toLowerCase()),
+    featured:       truthy(get(cells, 'featured')),
     tagline:        get(cells, 'tagline'),
     summary:        get(cells, 'summary'),
     warranty:       get(cells, 'warranty'),
@@ -258,14 +276,124 @@ const FormInput = ({ label, fieldKey, type='text', required, placeholder, form, 
   </div>
 );
 
+/* ── Limited delivery area — sell a product only within chosen pincodes ──── */
+// Exact pincodes (734001), prefixes (734* → every pincode starting 734) or
+// ranges (734001-734015). Validated live here; the server re-validates and
+// enforces it at checkout and order creation.
+const DeliveryAreaEditor = ({ form, onChange }) => {
+  const [zones, setZones] = React.useState([]);
+  const [testPin, setTestPin] = React.useState('');
+  const parsed = React.useMemo(() => parseRules(form.allowedPincodes), [form.allowedPincodes]);
+  const on = !!form.deliveryRestricted;
+
+  React.useEffect(() => {
+    if (!on || zones.length) return;
+    deliveryApi.zones()
+      .then(({ data }) => setZones(Array.isArray(data) ? data.filter(z => z.active !== false && z.pincodePrefixes) : []))
+      .catch(() => {});
+  }, [on, zones.length]);
+
+  const addZone = (id) => {
+    const z = zones.find(x => String(x.id) === String(id));
+    if (!z) return;
+    const merged = parseRules(`${form.allowedPincodes || ''}, ${z.pincodePrefixes}`).normalized;
+    onChange('allowedPincodes', merged);
+    if (!form.deliveryAreaNote) onChange('deliveryAreaNote', `${z.name} only`);
+  };
+
+  const testValid = /^[1-9]\d{5}$/.test(testPin);
+  const testOk = testValid && matchesPincode(form.allowedPincodes, testPin);
+
+  return (
+    <div className={`col-span-2 rounded-xl border p-4 transition-colors ${on ? 'border-indigo-500/60 bg-indigo-950/30' : 'border-gray-700 bg-gray-900'}`}>
+      <label className="flex items-start gap-3 cursor-pointer">
+        <input type="checkbox" checked={on} onChange={e => onChange('deliveryRestricted', e.target.checked)}
+          className="w-4 h-4 mt-0.5 rounded accent-indigo-500" />
+        <span>
+          <span className="text-sm text-white font-semibold flex items-center gap-1.5">
+            <MapPin className="h-4 w-4 text-indigo-400" /> Deliver only to selected pincodes
+          </span>
+          <span className="block text-[11px] text-gray-400 mt-0.5">
+            For perishable, oversized, hazardous or locally-installed items. Buyers elsewhere can't check out this
+            product — they're offered a quote instead. Leave off to sell everywhere your delivery zones reach.
+          </span>
+        </span>
+      </label>
+
+      {on && (
+        <div className="mt-4 space-y-3">
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-wide">Allowed pincodes</label>
+              {zones.length > 0 && (
+                <select value="" onChange={e => addZone(e.target.value)}
+                  className="px-2 py-1 bg-gray-800 border border-gray-700 rounded-lg text-[11px] text-gray-200 focus:outline-none">
+                  <option value="">+ Add a delivery zone's pincodes…</option>
+                  {zones.map(z => <option key={z.id} value={z.id}>{z.name} ({z.pincodePrefixes.split(',').length})</option>)}
+                </select>
+              )}
+            </div>
+            <textarea value={form.allowedPincodes || ''} onChange={e => onChange('allowedPincodes', e.target.value)}
+              rows={3} placeholder={'734001, 734003, 7340*\n734101-734105'}
+              className={`w-full px-3 py-2.5 bg-gray-900 border rounded-xl text-sm text-white font-mono focus:outline-none resize-y placeholder-gray-600 ${parsed.invalid.length ? 'border-red-500' : 'border-gray-700 focus:border-indigo-500'}`} />
+            <p className="text-[11px] text-gray-500 mt-1">
+              Exact pincode <code className="text-gray-300">734001</code> · prefix <code className="text-gray-300">734*</code> (all pincodes starting 734) ·
+              range <code className="text-gray-300">734001-734015</code>. Separate with commas or new lines.
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5 mt-1.5 text-[11px]">
+              {parsed.valid.length > 0 ? (
+                <span className="text-emerald-400 font-semibold">
+                  ✓ {parsed.exact} pincode{parsed.exact === 1 ? '' : 's'} · {parsed.prefixes} prefix{parsed.prefixes === 1 ? '' : 'es'} · {parsed.ranges} range{parsed.ranges === 1 ? '' : 's'}
+                </span>
+              ) : (
+                <span className="text-amber-400 font-semibold">Add at least one pincode, prefix or range.</span>
+              )}
+              {parsed.invalid.length > 0 && (
+                <span className="text-red-400 font-semibold">✗ Not valid: {parsed.invalid.slice(0, 6).join(', ')}{parsed.invalid.length > 6 ? '…' : ''}</span>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Shown to customers</label>
+              <input value={form.deliveryAreaNote || ''} maxLength={255}
+                onChange={e => onChange('deliveryAreaNote', e.target.value)}
+                placeholder="e.g. Siliguri & Jalpaiguri only"
+                className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500 placeholder-gray-600" />
+              <p className="text-[11px] text-gray-500 mt-1">Blank → we show a short list of the pincodes.</p>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Test a pincode</label>
+              <div className="flex items-center gap-2">
+                <input value={testPin} inputMode="numeric" placeholder="734001"
+                  onChange={e => setTestPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="w-28 px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white font-mono focus:outline-none focus:border-indigo-500 placeholder-gray-600" />
+                {testValid && (
+                  <span className={`text-xs font-bold ${testOk ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {testOk ? '✓ Can be delivered' : '✗ Outside the area'}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ── Product form — Input defined OUTSIDE to fix cursor jump bug ─────────── */
 const ProductForm = ({ initial, onSave, onCancel, saving, categories = CATEGORIES }) => {
   const DEFAULTS = {
     name:'', category:'Safety Equipment', price:'', mrp:'', gstRate:'18', hsnCode:'',
     stockQty:'0', minOrderQty:'1', deliveryCharge:'', description:'', imageUrl:'', badge:'', featured:false, sku:'', active:true,
     tagline:'', summary:'', warranty:'', imageUrls:'', features:'', benefits:'', applications:'', specifications:'',
+    deliveryRestricted:false, allowedPincodes:'', deliveryAreaNote:'',
   };
-  const [form, setForm] = useState({ ...DEFAULTS, ...(initial || {}) });
+  // API nulls would turn controlled inputs uncontrolled — fall back to defaults.
+  const cleanInitial = Object.fromEntries(Object.entries(initial || {}).filter(([, v]) => v !== null && v !== undefined));
+  const [form, setForm] = useState({ ...DEFAULTS, ...cleanInitial });
 
   // Stable onChange handler — won't recreate on each render
   const handleChange = useCallback((key, value) => {
@@ -292,7 +420,7 @@ const ProductForm = ({ initial, onSave, onCancel, saving, categories = CATEGORIE
       <form onSubmit={e => { e.preventDefault(); onSave(form); }} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormInput label="Product Name" fieldKey="name"     required placeholder="e.g. Safety Helmet ISI" form={form} onChange={handleChange} full />
-          <FormInput label="SKU"          fieldKey="sku"      placeholder="NGP-001"        form={form} onChange={handleChange} />
+          <FormInput label="SKU"          fieldKey="sku"      placeholder="Blank = auto (NGP-…)" form={form} onChange={handleChange} />
           <FormInput label="Price (₹)"    fieldKey="price"    required type="number" placeholder="480" form={form} onChange={handleChange} />
           <FormInput label="MRP (₹)"      fieldKey="mrp"      type="number" placeholder="650" form={form} onChange={handleChange} />
           <FormInput label="Stock Qty"    fieldKey="stockQty" type="number" placeholder="100" form={form} onChange={handleChange} />
@@ -411,6 +539,19 @@ const ProductForm = ({ initial, onSave, onCancel, saving, categories = CATEGORIE
             )}
           </div>
 
+          {/* Limited delivery area */}
+          <DeliveryAreaEditor form={form} onChange={handleChange} />
+
+          {/* Visibility */}
+          <div className="col-span-2 flex items-center gap-3 p-3 bg-gray-900 rounded-xl border border-gray-700">
+            <input type="checkbox" id="active-check" checked={form.active !== false}
+              onChange={e => handleCheckbox('active', e.target.checked)}
+              className="w-4 h-4 rounded accent-green-500"/>
+            <label htmlFor="active-check" className="text-sm text-gray-300 font-medium cursor-pointer">
+              Visible in the shop <span className="text-gray-500 text-xs">(untick to keep it as a hidden draft)</span>
+            </label>
+          </div>
+
           {/* Featured toggle */}
           <div className="col-span-2 flex items-center gap-3 p-3 bg-gray-900 rounded-xl border border-gray-700">
             <input type="checkbox" id="featured-check" checked={form.featured}
@@ -429,7 +570,7 @@ const ProductForm = ({ initial, onSave, onCancel, saving, categories = CATEGORIE
                        hover:opacity-90 disabled:opacity-60 transition-opacity">
             {saving ? <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"/>
                     : <CheckCircle className="h-4 w-4"/>}
-            {saving ? 'Saving…' : initial ? 'Update Product' : 'Publish Product'}
+            {saving ? 'Saving…' : initial ? 'Save Changes' : (form.active !== false ? 'Publish Product' : 'Save Product')}
           </button>
           <button type="button" disabled={saving}
             onClick={() => onSave({ ...form, active: false })}
@@ -467,6 +608,12 @@ const BulkUploadPanel = ({ onClose, onSuccess }) => {
           if (!r.name) errs.push(`Row ${i+2}: name is required`);
           if (!r.category) errs.push(`Row ${i+2}: category is required`);
           if (!r.price || r.price <= 0) errs.push(`Row ${i+2}: a valid price (> 0) is required`);
+          if (r.allowedPincodes) {
+            const pr = parseRules(r.allowedPincodes);
+            if (pr.invalid.length) errs.push(`Row ${i+2}: invalid pincode entr${pr.invalid.length === 1 ? 'y' : 'ies'} ${pr.invalid.slice(0, 5).join(', ')} — use 734001, 734* or 734001-734015`);
+          }
+          if (r.deliveryRestricted && !parseRules(r.allowedPincodes).valid.length)
+            errs.push(`Row ${i+2}: limited delivery is on but no pincodes are listed`);
         });
         setErrors(errs); setPreview(rows.slice(0,5));
       } catch (err) { setErrors([err.message]); setPreview([]); }
@@ -485,12 +632,19 @@ const BulkUploadPanel = ({ onClose, onSuccess }) => {
         // carrying ALL fields (including rich detail/list fields).
         const payload = rows.map(row => ({
           name:           row.name,
+          sku:            row.sku || undefined,
           category:       row.category || 'Safety Equipment',
           price:          Number(row.price),
           mrp:            row.mrp != null ? Number(row.mrp) : null,
-          gstRate:        Number(row.gstRate) || 18,
+          // 0% is a real GST slab — don't let `|| 18` turn exempt goods into 18%.
+          gstRate:        Number.isFinite(Number(row.gstRate)) ? Number(row.gstRate) : 18,
+          hsnCode:        row.hsnCode || undefined,
           stockQty:       Number(row.stockQty) || 0,
           minOrderQty:    Number(row.minOrderQty) || 1,
+          deliveryCharge: row.deliveryCharge != null && Number.isFinite(Number(row.deliveryCharge)) ? Number(row.deliveryCharge) : null,
+          deliveryRestricted: Boolean(row.deliveryRestricted),
+          allowedPincodes:    row.allowedPincodes || '',
+          deliveryAreaNote:   row.deliveryAreaNote || '',
           description:    row.description || '',
           imageUrl:       row.imageUrl || '',
           badge:          row.badge || '',
@@ -595,6 +749,78 @@ const BulkUploadPanel = ({ onClose, onSuccess }) => {
   );
 };
 
+/* ── Back-in-stock demand panel — pent-up demand captured from out-of-stock ── */
+const StockRequestsPanel = () => {
+  const { toast } = useToast();
+  const [rows, setRows]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen]       = useState(false);
+  const [notifying, setNotifying] = useState(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    stockNotifyApi.demand()
+      .then(r => setRows(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, []);
+  React.useEffect(() => { load(); }, [load]);
+
+  const total = rows.reduce((s, r) => s + Number(r.count || 0), 0);
+
+  const notify = async (slug, name) => {
+    setNotifying(slug);
+    try {
+      const { data } = await stockNotifyApi.notify(slug);
+      toast({ title: '✓ Customers notified', description: `${data?.emailsSent ?? 0} email(s) sent for "${name}".` });
+      load();
+    } catch (err) {
+      toast({ title: 'Failed', description: err?.response?.data?.message || 'Could not send notifications.', variant: 'destructive' });
+    } finally { setNotifying(null); }
+  };
+
+  if (!loading && rows.length === 0) return null; // nothing waiting — stay out of the way
+
+  return (
+    <div className="mb-6 rounded-2xl border border-blue-800/40 bg-blue-950/30 overflow-hidden">
+      <button onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-blue-900/20 transition-colors">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center"><BellRing className="h-4 w-4 text-blue-400"/></div>
+          <div>
+            <p className="text-white font-bold text-sm">Back-in-Stock Requests</p>
+            <p className="text-gray-400 text-[11px]">
+              {loading ? 'Loading…' : `${total} customer${total===1?'':'s'} waiting across ${rows.length} product${rows.length===1?'':'s'}`}
+            </p>
+          </div>
+        </div>
+        <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${open?'rotate-180':''}`}/>
+      </button>
+      {open && (
+        <div className="px-4 pb-4">
+          <p className="text-[11px] text-gray-500 mb-2">Pent-up demand — restock a product, then notify everyone waiting with one click.</p>
+          <div className="space-y-1.5">
+            {rows.map(r => (
+              <div key={r.productSlug} className="flex items-center gap-3 bg-gray-900/60 rounded-xl px-3 py-2">
+                <span className="w-7 h-7 rounded-lg bg-blue-600 text-white text-xs font-bold flex items-center justify-center shrink-0">{r.count}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-white text-sm font-semibold truncate">{r.productName || r.productSlug}</p>
+                  <p className="text-gray-500 text-[11px] truncate">/{r.productSlug}</p>
+                </div>
+                <button onClick={() => notify(r.productSlug, r.productName || r.productSlug)} disabled={notifying===r.productSlug}
+                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-green-600 hover:bg-green-700 text-white disabled:opacity-60">
+                  {notifying===r.productSlug ? <Loader2 className="h-3 w-3 animate-spin"/> : <Send className="h-3 w-3"/>}
+                  Notify all
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ── Main AdminProducts ─────────────────────────────────────────────────── */
 const AdminProducts = () => {
   const { toast } = useToast();
@@ -622,35 +848,58 @@ const AdminProducts = () => {
     });
   }, []);
 
-  const { items, loading, setFilter, refetch } = usePaginated(productsApi.list, { size: 50 });
+  // Admin list shows EVERYTHING (drafts + removed products too), unlike the shop.
+  const { items, total, loading, setFilter, refetch } = usePaginated(productsApi.manage, { size: 50 });
+  const [statusFilter, setStatusFilter] = useState('');
   const [create, { loading: creating }] = useMutation(productsApi.create);
   const [update, { loading: updating }] = useMutation(productsApi.update);
   const [remove]                        = useMutation(productsApi.delete);
 
+  // One mapping for every save path (form, draft, restore) so no field is ever
+  // silently dropped again (HSN, visibility and 0% GST used to be lost here).
+  const toPayload = (form) => ({
+    name:        form.name,
+    sku:         (form.sku || '').trim() || undefined,
+    category:    form.category,
+    price:       Number(form.price),
+    mrp:         form.mrp !== '' && form.mrp != null ? Number(form.mrp) : null,
+    gstRate:     form.gstRate !== '' && form.gstRate != null && Number.isFinite(Number(form.gstRate)) ? Number(form.gstRate) : 18,
+    hsnCode:     (form.hsnCode || '').trim() || undefined,
+    stockQty:    Number(form.stockQty)||0,
+    minOrderQty: Number(form.minOrderQty)||1,
+    deliveryCharge: form.deliveryCharge !== '' && form.deliveryCharge != null ? Number(form.deliveryCharge) : null,
+    deliveryRestricted: Boolean(form.deliveryRestricted),
+    allowedPincodes:    form.allowedPincodes || '',
+    deliveryAreaNote:   (form.deliveryAreaNote || '').trim(),
+    description: form.description||'',
+    imageUrl:    form.imageUrl||'',
+    badge:       form.badge||'',
+    featured:    Boolean(form.featured),
+    active:      form.active !== false,
+    tagline:        form.tagline||'',
+    summary:        form.summary||'',
+    warranty:       form.warranty||'',
+    imageUrls:      form.imageUrls||'',
+    features:       form.features||'',
+    benefits:       form.benefits||'',
+    applications:   form.applications||'',
+    specifications: form.specifications||'',
+  });
+
   const handleSave = async (form) => {
-    const payload = {
-      name:        form.name,
-      category:    form.category,
-      price:       Number(form.price),
-      mrp:         form.mrp ? Number(form.mrp) : null,
-      gstRate:     Number(form.gstRate)||18,
-      stockQty:    Number(form.stockQty)||0,
-      minOrderQty: Number(form.minOrderQty)||1,
-      deliveryCharge: form.deliveryCharge !== '' && form.deliveryCharge != null ? Number(form.deliveryCharge) : null,
-      description: form.description||'',
-      imageUrl:    form.imageUrl||'',
-      badge:       form.badge||'',
-      featured:    Boolean(form.featured),
-      sku:         form.sku||'',
-      tagline:        form.tagline||'',
-      summary:        form.summary||'',
-      warranty:       form.warranty||'',
-      imageUrls:      form.imageUrls||'',
-      features:       form.features||'',
-      benefits:       form.benefits||'',
-      applications:   form.applications||'',
-      specifications: form.specifications||'',
-    };
+    const payload = toPayload(form);
+    if (payload.deliveryRestricted) {
+      const pr = parseRules(payload.allowedPincodes);
+      if (pr.invalid.length) {
+        toast({ title: 'Check the pincode list', description: `Not valid: ${pr.invalid.slice(0, 6).join(', ')}. Use 734001, 734* or 734001-734015.`, variant: 'destructive' });
+        return;
+      }
+      if (!pr.valid.length) {
+        toast({ title: 'Add delivery pincodes', description: 'Limited delivery is on — list at least one pincode, prefix or range (or switch it off).', variant: 'destructive' });
+        return;
+      }
+      payload.allowedPincodes = pr.normalized;
+    }
 
     const action = () => editing ? update(editing.id, payload) : create(payload);
 
@@ -658,16 +907,31 @@ const AdminProducts = () => {
     if (res.error) {
       toast({ title:'Failed', description: res.error, variant:'destructive' }); return;
     }
-    toast({ title: editing ? '✓ Product updated' : '✓ Product created' });
+    toast({ title: editing ? '✓ Product updated' : (payload.active ? '✓ Product published' : '✓ Saved as draft (hidden from the shop)') });
+    // Restocked a sold-out product? Nudge the admin to tell the people waiting.
+    if (editing && Number(editing.stockQty ?? 0) <= 0 && payload.stockQty > 0) {
+      setTimeout(() => toast({
+        title: '📦 Back in stock',
+        description: 'If customers asked to be notified, click "Notify all" in the Back-in-Stock Requests panel at the top of this page.',
+      }), 600);
+    }
     setShowForm(false); setEditing(null); refetch();
+  };
+
+  // Bring a draft / deactivated product back into the shop.
+  const handleRestore = async (p) => {
+    const res = await update(p.id, toPayload({ ...p, active: true }));
+    if (res.error) { toast({ title: 'Failed', description: res.error, variant: 'destructive' }); return; }
+    toast({ title: `✓ "${p.name}" is live in the shop again` });
+    refetch();
   };
 
   const handleDelete = (id, name) => {
     setConfirm({
-      msg: `Delete "${name}"? This cannot be undone.`,
+      msg: `Remove "${name}" from the shop? It's kept as an inactive product — you can restore it any time.`,
       onConfirm: async () => {
         await remove(id);
-        toast({ title: '✓ Product deleted' });
+        toast({ title: '✓ Product removed from the shop' });
         setConfirm(null); refetch();
       },
     });
@@ -723,7 +987,7 @@ const AdminProducts = () => {
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-white">Products</h1>
-          <p className="text-gray-400 text-sm mt-0.5">{items.length} products in catalogue</p>
+          <p className="text-gray-400 text-sm mt-0.5">{total || items.length} products in catalogue (incl. drafts)</p>
         </div>
         <div className="flex gap-2">
           <button onClick={handleDownloadTemplate} title="Download blank CSV template"
@@ -745,11 +1009,14 @@ const AdminProducts = () => {
         </div>
       </div>
 
+      {/* Back-in-stock pent-up demand (only appears when customers are waiting) */}
+      <StockRequestsPanel />
+
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         {[
-          { label:'Total Products', value: items.length,   col:'text-blue-400' },
-          { label:'Active',         value: active.length,  col:'text-green-400' },
+          { label:'Products (this page)', value: items.length,   col:'text-blue-400' },
+          { label:'Live in shop',   value: active.length,  col:'text-green-400' },
           { label:'Featured',       value: featured.length,col:'text-amber-400' },
           { label:'Low Stock (<10)',value: lowStock.length, col:'text-red-400' },
         ].map(s => (
@@ -772,10 +1039,19 @@ const AdminProducts = () => {
         <select value={catFilter} onChange={e => { setCatFilter(e.target.value); setFilter('category', e.target.value||undefined); }}
           className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm text-white focus:outline-none">
           <option value="">All Categories</option>
-          {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+          {liveCategories.map(c => <option key={c}>{c}</option>)}
         </select>
-        {(search || catFilter) && (
-          <button onClick={() => { setSearch(''); setCatFilter(''); setFilter('q',undefined); setFilter('category',undefined); }}
+        <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setFilter('status', e.target.value||undefined); }}
+          className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm text-white focus:outline-none">
+          <option value="">All statuses</option>
+          <option value="active">Live in shop</option>
+          <option value="inactive">Drafts / removed</option>
+          <option value="outofstock">Out of stock</option>
+          <option value="lowstock">Low stock (&lt;10)</option>
+          <option value="restricted">Limited delivery area</option>
+        </select>
+        {(search || catFilter || statusFilter) && (
+          <button onClick={() => { setSearch(''); setCatFilter(''); setStatusFilter(''); setFilter('q',undefined); setFilter('category',undefined); setFilter('status',undefined); }}
             className="px-3 py-2 bg-gray-700 text-gray-400 rounded-xl text-sm hover:bg-gray-600 flex items-center gap-1.5">
             <X className="h-3.5 w-3.5"/> Clear
           </button>
@@ -827,9 +1103,15 @@ const AdminProducts = () => {
                                 <Package className="h-5 w-5 text-gray-300"/>
                               </div>
                           }
-                          <div>
+                          <div className="min-w-0">
                             <p className="font-semibold text-gray-900 text-xs">{p.name}</p>
                             <p className="text-[10px] text-gray-400">{p.sku || '—'}</p>
+                            {p.deliveryRestricted && (
+                              <span title={p.allowedPincodes || ''}
+                                className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-bold">
+                                <MapPin className="h-2.5 w-2.5"/> {p.deliveryAreaNote || 'Limited delivery area'}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -840,25 +1122,34 @@ const AdminProducts = () => {
                       </td>
                       <td className="px-4 py-3">
                         <span className={`text-xs font-bold ${(p.stockQty??0)<10?'text-red-600':'text-green-600'}`}>{p.stockQty??0}</span>
+                        {(p.stockQty??0) <= 0 && <span className="block text-[10px] text-red-500 font-semibold">Out · RFQ only</span>}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`text-xs ${p.featured?'text-amber-600 font-bold':'text-gray-400'}`}>{p.featured?'★ Yes':'—'}</span>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${p.active!==false?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500'}`}>
-                          {p.active!==false?'Active':'Inactive'}
+                          {p.active!==false?'Live':'Draft / hidden'}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => { setEditing(p); setShowForm(false); setShowBulk(false); }}
-                            className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" title="Edit">
+                        {/* Always visible on touch screens (there's no hover on a phone). */}
+                        <div className="flex gap-1.5 sm:opacity-60 sm:group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => { setEditing(p); setShowForm(false); setShowBulk(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                            className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" title="Edit" aria-label={`Edit ${p.name}`}>
                             <Edit2 className="h-3.5 w-3.5"/>
                           </button>
-                          <button onClick={() => handleDelete(p.id, p.name)}
-                            className="p-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors" title="Delete">
-                            <Trash2 className="h-3.5 w-3.5"/>
-                          </button>
+                          {p.active === false ? (
+                            <button onClick={() => handleRestore(p)}
+                              className="p-1.5 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 transition-colors" title="Publish / restore to shop" aria-label={`Publish ${p.name}`}>
+                              <RotateCcw className="h-3.5 w-3.5"/>
+                            </button>
+                          ) : (
+                            <button onClick={() => handleDelete(p.id, p.name)}
+                              className="p-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors" title="Remove from shop" aria-label={`Remove ${p.name}`}>
+                              <Trash2 className="h-3.5 w-3.5"/>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

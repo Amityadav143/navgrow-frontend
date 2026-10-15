@@ -14,7 +14,7 @@ import useEscapeKey from '@/hooks/useEscapeKey';
 import useBodyScrollLock from '@/hooks/useBodyScrollLock';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingCart, Minus, Plus, Trash2, Package, ArrowRight, Tag,
-         CheckCircle, AlertTriangle, Mail, Send, FileText, Loader2 } from 'lucide-react';
+         CheckCircle, AlertTriangle, Mail, Send, FileText, Loader2, MapPin } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/context/CartContext';
 import { couponsApi, rfqApi } from '@/lib/api';
@@ -110,7 +110,7 @@ const QuoteChoiceModal = ({ open, onClose, items, subtotal, grandTotal, discount
         ...form, buyerPhone: form.buyerPhone.replace(/\s/g,''),
         items: items.map(i => ({
           productId: String(i.id), productName: i.name, sku: i.sku || '',
-          quantity: i.qty || 1, gstRate: i.gstRate || 18,
+          quantity: i.qty || 1, gstRate: i.gstRate ?? 18,
         })),
         notes: discount ? `Cart subtotal ₹${subtotal}, after discount ₹${grandTotal}.` : '',
       };
@@ -351,6 +351,15 @@ const CartSidebar = () => {
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-gray-900 text-sm leading-snug line-clamp-2">{item.name}</p>
                           <p className="text-blue-600 font-bold text-sm mt-1">₹{(item.price||0).toLocaleString('en-IN')}</p>
+                          {(deliveryQuote?.restrictedItems || []).some(r => String(r.productId) === String(item.id) || (r.slug && r.slug === item.slug)) ? (
+                            <p className="flex items-center gap-1 text-[11px] font-semibold text-red-600 mt-1">
+                              <MapPin className="h-3 w-3 shrink-0"/> Not deliverable to {deliveryQuote.pincode}
+                            </p>
+                          ) : item.deliveryRestricted ? (
+                            <p className="flex items-center gap-1 text-[11px] text-indigo-700 mt-1 truncate">
+                              <MapPin className="h-3 w-3 shrink-0"/> Limited area{item.deliveryAreaNote ? ` · ${item.deliveryAreaNote}` : ''}
+                            </p>
+                          ) : null}
                           <div className="flex items-center justify-between mt-2">
                             {/* 44px touch targets (WCAG AA) */}
                             <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg">
@@ -460,7 +469,8 @@ const CartSidebar = () => {
                       </div>
                     </div>
                     <div className="pt-1">
-                      <PincodeCheck orderValue={payableGoods} compact onResolved={setDeliveryQuote} />
+                      <PincodeCheck orderValue={payableGoods} compact onResolved={setDeliveryQuote}
+                        productRefs={items.map(i => i.id)} />
                     </div>
                     <div className="flex justify-between text-gray-600 pt-1">
                       <span>Delivery

@@ -9,6 +9,7 @@
  * actually procure).
  */
 import React, { createContext, useContext, useReducer, useEffect, useState, useCallback } from 'react';
+import { track } from '@/lib/analytics';
 
 const RfqContext = createContext(null);
 const STORAGE_KEY = 'navgrow_rfq_v1';
@@ -29,7 +30,13 @@ const reducer = (state, action) => {
       if (ex) {
         return state.map(i =>
           i.productId === action.item.productId
-            ? { ...i, quantity: (i.quantity || 1) + (action.item.quantity || 1) }
+            ? {
+                ...i,
+                quantity: (i.quantity || 1) + (action.item.quantity || 1),
+                // Refresh availability with the latest figures we were given.
+                stockQty: action.item.stockQty ?? i.stockQty ?? null,
+                outOfStock: action.item.outOfStock ?? i.outOfStock ?? false,
+              }
             : i);
       }
       return [...state, { ...action.item, quantity: action.item.quantity || 1 }];
@@ -58,19 +65,31 @@ export const RfqProvider = ({ children }) => {
   }, [items]);
 
   const addToRfq = useCallback((product, quantity = 1) => {
+    if (!product) return;
+    // Availability travels with the line so the drawer can say "we'll source it"
+    // for out-of-stock items. The server re-checks live stock on submit and flags
+    // backorders for the team — this is only for the buyer's reassurance.
+    const raw = product.stockQty ?? product.stock_qty;
+    const stockNum = Number(raw);
+    const knownStock = raw !== null && raw !== undefined && raw !== '' && Number.isFinite(stockNum);
+    const qty = Math.max(1, parseInt(quantity, 10) || 1);
     dispatch({
       type: 'ADD',
       item: {
         productId:   product.id,
         productName: product.name,
+        slug:        product.slug || '',
         sku:         product.sku || '',
-        gstRate:     product.gstRate || 18,
-        image:       product.image,
+        gstRate:     product.gstRate ?? 18,
+        image:       product.image || product.imageUrl,
         listPrice:   product.price || null,
-        quantity,
+        stockQty:    knownStock ? stockNum : null,
+        outOfStock:  knownStock ? stockNum <= 0 : product.inStock === false,
+        quantity:    qty,
       },
     });
     setDrawerOpen(true);
+    track('rfq_add', { label: product.slug || String(product.id || ''), value: qty });
   }, []);
 
   const updateQty  = useCallback((productId, quantity) => dispatch({ type: 'UPDATE_QTY', productId, quantity }), []);
