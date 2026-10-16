@@ -14,15 +14,19 @@ import useEscapeKey from '@/hooks/useEscapeKey';
 import useBodyScrollLock from '@/hooks/useBodyScrollLock';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingCart, Minus, Plus, Trash2, Package, ArrowRight, Tag,
-         CheckCircle, AlertTriangle, Mail, Send, FileText, Loader2, MapPin } from 'lucide-react';
+         CheckCircle, AlertTriangle, Mail, Send, FileText, Loader2, MapPin, PackageX } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useCart } from '@/context/CartContext';
+import { useCart, lineIssue } from '@/context/CartContext';
+import { moqOf, stockOf } from '@/lib/stock';
 import { couponsApi, rfqApi } from '@/lib/api';
 import { perProductDelivery } from '@/lib/utils';
 import PincodeCheck from '@/components/PincodeCheck';
 import { evaluateLocalCoupon, isOffline } from '@/lib/offers';
 import { track } from '@/lib/analytics';
 import { useToast } from '@/components/ui/use-toast';
+
+/** Whole rupees with Indian digit grouping (1,85,000). */
+const inr = (n) => Math.round(Number(n) || 0).toLocaleString('en-IN');
 
 /* ── Professional bulk-quote email ──────────────────────────────────────── */
 const buildBulkQuoteEmail = (items, subtotal, grandTotal, discount) => {
@@ -46,7 +50,7 @@ const buildBulkQuoteEmail = (items, subtotal, grandTotal, discount) => {
     `SUMMARY`,
     `  Subtotal  : \u20B9${subtotal.toLocaleString('en-IN')}`,
     discount>0 ? `  Discount  : -\u20B9${Number(discount).toLocaleString('en-IN')}` : null,
-    `  Est. Total: \u20B9${Math.round(grandTotal).toLocaleString('en-IN')} (excl. GST & shipping)`,``,
+    `  Est. Total: \u20B9${Math.round(grandTotal).toLocaleString('en-IN')} (prices incl. GST; delivery extra)`,``,
     `REQUIREMENTS`,`  Please provide:`,
     `  \u2022 Formal quotation with GST breakup`,
     `  \u2022 Volume / bulk discount if applicable`,
@@ -112,7 +116,7 @@ const QuoteChoiceModal = ({ open, onClose, items, subtotal, grandTotal, discount
           productId: String(i.id), productName: i.name, sku: i.sku || '',
           quantity: i.qty || 1, gstRate: i.gstRate ?? 18,
         })),
-        notes: discount ? `Cart subtotal ₹${subtotal}, after discount ₹${grandTotal}.` : '',
+        notes: discount ? `Cart subtotal ₹${inr(subtotal)}, after discount ₹${inr(grandTotal)}.` : '',
       };
       const { data } = await rfqApi.submit(payload);
       try { track('rfq_submit', { label: data?.rfqNumber, value: (payload?.items?.length)||undefined }); } catch {}
@@ -198,7 +202,15 @@ const QuoteChoiceModal = ({ open, onClose, items, subtotal, grandTotal, discount
 };
 
 const CartSidebar = () => {
-  const { items, totalItems, totalAmount, cartOpen, setCartOpen, removeItem, updateQty, clearCart } = useCart();
+  const { items, totalItems, totalAmount: cartAmount, cartOpen, setCartOpen, removeItem, updateQty, clearCart,
+          cartIssues, hasCartIssues, moveToQuote, syncing, payableItems } = useCart();
+  // Totals cover only what can be bought right now; sold-out lines are shown
+  // struck through and left out until they're back in stock or moved to a quote.
+  const payItems    = payableItems || items;
+  const blockedCount = items.length - payItems.length;
+  const payCount    = payItems.reduce((s, i) => s + (i.qty || 1), 0);
+  const totalAmount = payItems.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0);
+  const exceedsOnly = hasCartIssues && blockedCount === 0;
   const navigate = useNavigate();
   const [couponCode,    setCouponCode]    = useState('');
   const [coupon,        setCoupon]        = useState(null);
@@ -219,7 +231,7 @@ const CartSidebar = () => {
   // it would charge more than the price the customer was shown. Each product can
   // sit on its own slab (5/12/18/28%), so this is worked out per line.
   const payableGoods = Math.max(0, totalAmount - discount);
-  const grossGst = items.reduce((sum, i) => {
+  const grossGst = payItems.reduce((sum, i) => {
     const rate = (typeof i.gstRate === 'number' && i.gstRate >= 0) ? i.gstRate : 18;
     const inclusive = (i.price || 0) * (i.qty || 1);
     return sum + (inclusive - inclusive * 100 / (100 + rate));
@@ -231,7 +243,7 @@ const CartSidebar = () => {
   // invoice will. Discount is applied proportionally across slabs.
   const gstBySlab = React.useMemo(() => {
     const bySlab = new Map();
-    for (const i of items) {
+    for (const i of payItems) {
       const rate = (typeof i.gstRate === 'number' && i.gstRate >= 0) ? i.gstRate : 18;
       const inclusive = (i.price || 0) * (i.qty || 1);
       const tax = inclusive - inclusive * 100 / (100 + rate);
@@ -242,7 +254,7 @@ const CartSidebar = () => {
       .map(([rate, tax]) => ({ rate, tax: tax * scale }))
       .filter(s => s.tax > 0.5)
       .sort((a, b) => a.rate - b.rate);
-  }, [items, totalAmount, payableGoods]);
+  }, [payItems, totalAmount, payableGoods]);
   // Delivery is resolved from the shopper's PIN code when they enter it here, so
   // the cart shows the real charge for their location rather than an estimate.
   const [deliveryQuote, setDeliveryQuote] = useState(null);
@@ -250,11 +262,14 @@ const CartSidebar = () => {
   // slab(lineQty), summed. When a PIN code has been resolved we use its zone base
   // (and free-delivery flag); otherwise we fall back to the ₹150 default estimate.
   const deliveryResolved = !!deliveryQuote;
+  // Same per-product formula as checkout (it used to add the zone's single base
+  // charge, so the cart under-stated delivery for multi-unit orders).
+  const zoneBase = deliveryQuote ? Number(deliveryQuote.standardCharge ?? 150) : 150;
   const shipping = payableGoods === 0
     ? 0
-    : (deliveryQuote
-        ? (deliveryQuote.freeDelivery ? 0 : Number(deliveryQuote.standardCharge ?? perProductDelivery(items, 150)))
-        : perProductDelivery(items, 150));
+    : (deliveryQuote && (deliveryQuote.freeDelivery || zoneBase === 0)
+        ? 0
+        : perProductDelivery(payItems, zoneBase));
   // Goods are already tax-inclusive, so only delivery is added.
   const grandTotal  = payableGoods + shipping;
 
@@ -340,17 +355,57 @@ const CartSidebar = () => {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {items.map(item => (
+                    {blockedCount > 0 && (
+                      <div className="flex items-start gap-2 rounded-xl bg-red-50 border border-red-100 px-3 py-2.5 text-xs text-red-700">
+                        <PackageX className="h-4 w-4 shrink-0 mt-0.5" />
+                        <p>
+                          <strong>{blockedCount} item{blockedCount === 1 ? '' : 's'} can't be bought right now.</strong>{' '}
+                          Move {blockedCount === 1 ? 'it' : 'them'} to a quote (we'll source {blockedCount === 1 ? 'it' : 'them'}) or remove {blockedCount === 1 ? 'it' : 'them'} to check out.
+                        </p>
+                      </div>
+                    )}
+                    {exceedsOnly && (
+                      <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5 text-xs text-amber-800">
+                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                        <p>
+                          <strong>Not enough stock for {cartIssues.length === 1 ? 'one item' : `${cartIssues.length} items`}.</strong>{' '}
+                          Lower the quantity to what's available to check out.
+                        </p>
+                      </div>
+                    )}
+                    {items.map(item => {
+                      const issue = lineIssue(item);
+                      const blocked = issue === 'out_of_stock' || issue === 'unavailable';
+                      const moq = moqOf(item);
+                      const stock = stockOf(item);
+                      return (
                       <motion.div key={item.id} layout initial={{opacity:0,x:20}} animate={{opacity:1,x:0}}
-                        className="flex gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                        className={`flex gap-3 p-3 rounded-2xl border ${blocked ? 'bg-red-50/40 border-red-200' : 'bg-gray-50 border-gray-100'}`}>
                         <div className="w-16 h-16 bg-white rounded-xl overflow-hidden border border-gray-100 shrink-0">
                           {item.image
                             ? <img src={item.image} alt={item.name} loading="lazy" className="w-full h-full object-cover"/>
                             : <Package className="h-8 w-8 text-gray-300 m-4"/>}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-gray-900 text-sm leading-snug line-clamp-2">{item.name}</p>
-                          <p className="text-blue-600 font-bold text-sm mt-1">₹{(item.price||0).toLocaleString('en-IN')}</p>
+                          <p className={`font-semibold text-sm leading-snug line-clamp-2 ${blocked ? 'text-gray-500' : 'text-gray-900'}`}>{item.name}</p>
+                          <p className={`font-bold text-sm mt-1 ${blocked ? 'text-gray-400 line-through' : 'text-blue-600'}`}>₹{(item.price||0).toLocaleString('en-IN')}</p>
+                          {issue === 'unavailable' && (
+                            <p className="text-[11px] font-bold text-gray-600 mt-1">No longer available</p>
+                          )}
+                          {issue === 'out_of_stock' && (
+                            <p className="text-[11px] font-bold text-red-600 mt-1">
+                              {stock !== null && stock > 0 && stock < moq ? `Only ${stock} left (min. order ${moq})` : 'Out of stock'}
+                            </p>
+                          )}
+                          {issue === 'exceeds' && (
+                            <p className="text-[11px] font-bold text-amber-700 mt-1">Only {stock} available — lower the quantity</p>
+                          )}
+                          {!blocked && issue !== 'exceeds' && item.qtyNote && (
+                            <p className="text-[11px] font-semibold text-amber-600 mt-1">{item.qtyNote}</p>
+                          )}
+                          {!blocked && moq > 1 && (
+                            <p className="text-[11px] text-gray-500 mt-0.5">Minimum order: {moq}</p>
+                          )}
                           {(deliveryQuote?.restrictedItems || []).some(r => String(r.productId) === String(item.id) || (r.slug && r.slug === item.slug)) ? (
                             <p className="flex items-center gap-1 text-[11px] font-semibold text-red-600 mt-1">
                               <MapPin className="h-3 w-3 shrink-0"/> Not deliverable to {deliveryQuote.pincode}
@@ -361,23 +416,34 @@ const CartSidebar = () => {
                             </p>
                           ) : null}
                           <div className="flex items-center justify-between mt-2">
-                            {/* 44px touch targets (WCAG AA) */}
+                            {blocked ? (
+                              issue === 'out_of_stock' ? (
+                                <button onClick={() => moveToQuote(item.id)}
+                                  className="px-3 py-2 rounded-lg text-[11px] font-bold border-2 border-blue-200 text-blue-700 bg-white hover:bg-blue-50 flex items-center gap-1.5">
+                                  <FileText className="h-3.5 w-3.5"/> Move to quote
+                                </button>
+                              ) : <span />
+                            ) : (
+                            /* 44px touch targets (WCAG AA) */
                             <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg">
                               <button onClick={() => updateQty(item.id, item.qty-1)}
+                                disabled={moq > 1 && item.qty <= moq}
                                 style={{minWidth:44,minHeight:44}}
-                                className="flex items-center justify-center hover:bg-gray-50 rounded-l-lg text-gray-600 transition-colors"
+                                className="flex items-center justify-center hover:bg-gray-50 rounded-l-lg text-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                 aria-label="Decrease quantity">
                                 <Minus className="h-3.5 w-3.5"/>
                               </button>
                               <span className="px-2.5 text-sm font-bold text-gray-900 min-w-[28px] text-center">{item.qty}</span>
                               <button onClick={() => updateQty(item.id, item.qty+1)}
-                                disabled={typeof item.stockQty === 'number' && item.stockQty > 0 && item.qty >= item.stockQty}
+                                disabled={stock !== null && item.qty >= stock}
+                                title={stock !== null && item.qty >= stock ? `Only ${stock} in stock` : undefined}
                                 style={{minWidth:44,minHeight:44}}
                                 className="flex items-center justify-center hover:bg-gray-50 rounded-r-lg text-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                 aria-label="Increase quantity">
                                 <Plus className="h-3.5 w-3.5"/>
                               </button>
                             </div>
+                            )}
                             <button onClick={() => removeItem(item.id)}
                               style={{minWidth:44,minHeight:44}}
                               className="flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
@@ -385,12 +451,13 @@ const CartSidebar = () => {
                               <Trash2 className="h-4 w-4"/>
                             </button>
                           </div>
-                          {typeof item.stockQty === 'number' && item.stockQty > 0 && item.qty >= item.stockQty && (
-                            <p className="text-[11px] text-amber-600 font-semibold mt-1">Max available: {item.stockQty}</p>
+                          {!blocked && issue !== 'exceeds' && stock !== null && stock > 0 && item.qty >= stock && (
+                            <p className="text-[11px] text-amber-600 font-semibold mt-1">Max available: {stock}</p>
                           )}
                         </div>
                       </motion.div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -442,10 +509,12 @@ const CartSidebar = () => {
                       buyer sees exactly what appears on the invoice. */}
                   <div className="space-y-1.5 text-sm">
                     <div className="flex justify-between text-gray-600">
-                      <span>Item total ({totalItems} item{totalItems === 1 ? '' : 's'})
-                        <span className="block text-[11px] text-gray-400">incl. GST</span>
+                      <span>Item total ({payCount} item{payCount === 1 ? '' : 's'})
+                        <span className="block text-[11px] text-gray-400">
+                          incl. GST{blockedCount > 0 ? ` · excludes ${blockedCount} unavailable item${blockedCount === 1 ? '' : 's'}` : ''}
+                        </span>
                       </span>
-                      <span>₹{totalAmount.toLocaleString('en-IN')}</span>
+                      <span>₹{inr(totalAmount)}</span>
                     </div>
                     {discount > 0 && (
                       <div className="flex justify-between text-green-600 font-semibold">
@@ -456,21 +525,23 @@ const CartSidebar = () => {
                     <div className="pl-0 pt-1 mt-1 border-t border-dashed border-gray-100 space-y-1">
                       <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Price breakdown</p>
                       <div className="flex justify-between text-gray-500 text-[13px]">
-                        <span>Taxable value</span><span>₹{taxableAmt.toFixed(0)}</span>
+                        <span>Taxable value</span><span>₹{inr(taxableAmt)}</span>
                       </div>
                       {gstBySlab.map(s => (
                         <div key={s.rate} className="flex justify-between text-gray-500 text-[13px]">
-                          <span>GST @ {s.rate}%</span><span>₹{s.tax.toFixed(0)}</span>
+                          <span>GST @ {s.rate}%</span><span>₹{inr(s.tax)}</span>
                         </div>
                       ))}
                       <div className="flex justify-between text-gray-500 text-[13px]">
                         <span className="font-medium">Total GST included</span>
-                        <span className="font-medium">₹{gst.toFixed(0)}</span>
+                        <span className="font-medium">₹{inr(gst)}</span>
                       </div>
                     </div>
                     <div className="pt-1">
-                      <PincodeCheck orderValue={payableGoods} compact onResolved={setDeliveryQuote}
-                        productRefs={items.map(i => i.id)} />
+                      {/* Free-delivery threshold is judged on goods before any coupon —
+                          the same value checkout and the server use. */}
+                      <PincodeCheck orderValue={totalAmount} compact onResolved={setDeliveryQuote}
+                        productRefs={payItems.map(i => i.id)} />
                     </div>
                     <div className="flex justify-between text-gray-600 pt-1">
                       <span>Delivery
@@ -478,17 +549,19 @@ const CartSidebar = () => {
                           {deliveryResolved ? 'for your PIN code; Siliguri free' : 'estimate — enter PIN for exact charge'}
                         </span>
                       </span>
-                      <span>{shipping===0?'₹0':`₹${shipping}`}</span>
+                      <span>{shipping === 0 ? (payableGoods > 0 ? 'Free' : '₹0') : `₹${inr(shipping)}`}</span>
                     </div>
                     <div className="flex justify-between font-extrabold text-gray-900 text-base pt-2 border-t border-gray-100">
                       <span>Grand Total</span>
-                      <span>₹{grandTotal.toFixed(0)}</span>
+                      <span>₹{inr(grandTotal)}</span>
                     </div>
                   </div>
 
                   <button onClick={() => { setCartOpen(false); navigate('/checkout'); }}
-                    className="w-full py-3.5 btn-gold rounded-xl shadow-lg font-bold">
-                    Proceed to Checkout
+                    disabled={hasCartIssues}
+                    className="w-full py-3.5 btn-gold rounded-xl shadow-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                    {syncing && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {hasCartIssues ? 'Fix the items above to check out' : 'Proceed to Checkout'}
                   </button>
 
                   <div className="grid grid-cols-2 gap-2">
@@ -512,10 +585,10 @@ const CartSidebar = () => {
         open={quoteOpen}
         onClose={() => setQuoteOpen(false)}
         items={items}
-        subtotal={totalAmount}
-        grandTotal={grandTotal}
+        subtotal={cartAmount}
+        grandTotal={Math.max(0, cartAmount - discount)}
         discount={discount}
-        emailHref={buildBulkQuoteEmail(items, totalAmount, grandTotal, discount)}
+        emailHref={buildBulkQuoteEmail(items, cartAmount, Math.max(0, cartAmount - discount), discount)}
         onToast={toast}
       />
     </>

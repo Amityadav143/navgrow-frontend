@@ -74,8 +74,7 @@ const TestimonialsSection = () => (
           >
             <div className="h-44 overflow-hidden relative">
               <img loading="lazy" decoding="async" src={c.image} alt={c.project} onError={(e) => { e.target.onerror=null; e.target.style.display='none'; }}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                loading="lazy" decoding="async" />
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
               <div className="absolute inset-0 bg-gradient-to-t from-blue-950/80 to-transparent" />
             </div>
             <div className="p-6">

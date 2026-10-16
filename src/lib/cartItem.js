@@ -35,6 +35,9 @@ export function toCartItem(product, extra = {}) {
     image:    product.image || product.imageUrl,
     slug:     product.slug,
     stockQty: product.stockQty ?? product.stock_qty,
+    // Minimum order quantity (admin-set) — the cart never goes below it.
+    minOrderQty: product.minOrderQty ?? product.min_order_qty ?? 1,
+    sku:      product.sku || undefined,
     // Per-product delivery base (admin-set); null → zone default at checkout.
     deliveryCharge: product.deliveryCharge ?? product.delivery_charge ?? null,
     // Tax — the two fields that must never be dropped.

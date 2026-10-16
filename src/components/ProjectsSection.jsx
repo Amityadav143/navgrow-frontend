@@ -91,8 +91,6 @@ const ProjectsSection = () => {
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                     src={`/${project.image}`} onError={(e) => { e.target.onerror=null; e.target.src='/placeholder.jpg'; }}
                     alt={`${project.title}`}
-                    loading="lazy"
-                    decoding="async"
                   />
                 </div>
 

@@ -30,16 +30,18 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <MotionConfig reducedMotion="user">
       <BrowserRouter>
         <AuthProvider>
-          <CartProvider>
-            <RfqProvider>
+          {/* RfqProvider sits outside CartProvider so the cart can offer
+              "request a quote" for items that are out of stock. */}
+          <RfqProvider>
+            <CartProvider>
               <CompareProvider>
               <ConfirmProvider>
                 <App />
                 <Toaster />
               </ConfirmProvider>
               </CompareProvider>
-            </RfqProvider>
-          </CartProvider>
+            </CartProvider>
+          </RfqProvider>
         </AuthProvider>
       </BrowserRouter>
       </MotionConfig>

@@ -20,6 +20,7 @@ import { X, Scale, ChevronDown, ChevronUp, Star, ShoppingCart, ArrowRight, FileT
 import { Link } from 'react-router-dom';
 import { useCart } from '@/context/CartContext';
 import { useRfq } from '@/context/RfqContext';
+import { isOutOfStock, isLiveId } from '@/lib/stock';
 import { toCartItem } from '@/lib/cartItem';
 
 const CompareContext = createContext(null);
@@ -71,7 +72,7 @@ const COMPARE_ROWS = [
   { key: 'mrp',      label: 'MRP',            fmt: v => v ? `₹${Number(v).toLocaleString('en-IN')}` : '—' },
   { key: 'rating',   label: 'Rating',         fmt: v => v ? `${v} / 5 ★` : '—' },
   { key: 'reviews',  label: 'Reviews',        fmt: v => v || '—' },
-  { key: 'gstRate',  label: 'GST Rate',       fmt: v => v ? `${v}%` : '18%' },
+  { key: 'gstRate',  label: 'GST Rate',       fmt: v => (v != null && v !== '' ? `${Number(v)}%` : '—') },
   { key: 'inStock',  label: 'Availability',   fmt: v => v !== false ? '✅ In Stock' : '❌ Out of Stock' },
   { key: 'cat',      label: 'Category',       fmt: v => v || '—' },
   { key: 'sku',      label: 'SKU',            fmt: v => v || '—' },
@@ -182,7 +183,7 @@ const CompareDrawer = () => {
                       return (
                         <td key={p.id} className="px-4 py-4">
                           <div className="flex flex-col gap-2">
-                            {p.stockQty != null && Number(p.stockQty) <= 0 ? (
+                            {!isLiveId(p.id) ? null /* sample catalogue: browse only */ : isOutOfStock(p) ? (
                             <button
                               onClick={() => addToRfq(p)}
                               className={`flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all border-2 ${

@@ -9,10 +9,10 @@
  *
  * Licensed for: navgrow.org (Production Deployment Only)
  */
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Package, Search, Filter, ChevronDown, Truck, Eye } from 'lucide-react';
-import { ordersApi } from '@/lib/api';
+import { Package, Search, Filter, ChevronDown, Truck, Eye, AlertTriangle, MapPin, Phone, Mail, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ordersApi, debounce } from '@/lib/api';
 import { usePaginated, useMutation } from '@/hooks/useApi';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -27,14 +27,31 @@ const AdminOrders = () => {
   const { toast } = useToast();
   const [selected, setSelected] = useState(null);
   const [trackingForm, setTrackingForm] = useState({ trackingNumber: '', courierName: '' });
-  const { items: orders, loading, params, setFilter, refetch } = usePaginated(ordersApi.list);
+  const { items: orders, total, loading, params, setFilter, goToPage, refetch } = usePaginated(ordersApi.list);
+  // Debounced so typing doesn't fire a request per keystroke.
+  const searchOrders = useMemo(() => debounce((v) => setFilter('q', v.trim() || undefined), 350), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageSize = params?.size || 20;
+  const pageNo = params?.page || 0;
+  const pages = Math.max(1, Math.ceil((total || 0) / pageSize));
+  const inr = (v) => `₹${Number(v || 0).toLocaleString('en-IN')}`;
   const [updateStatus, { loading: updating }] = useMutation(ordersApi.updateStatus);
 
   const handleStatusChange = async (orderId, newStatus) => {
     const res = await updateStatus(orderId, newStatus,
       selected?.id === orderId ? trackingForm : undefined);
     if (res.error) { toast({ title: 'Failed', description: res.error, variant: 'destructive' }); return; }
-    toast({ title: 'Order updated', description: `Status changed to ${newStatus}` });
+    // Re-opening / confirming an order takes its stock again; if some of it has
+    // gone in the meantime the server flags the order instead of blocking.
+    const flagCount = (n) => (String(n || '').match(/\[STOCK SHORTFALL\]/g) || []).length;
+    const before = (Array.isArray(orders) ? orders : []).find(o => o.id === orderId)?.notes
+      ?? (selected?.id === orderId ? selected.notes : '');
+    if (flagCount(res.data?.notes) > flagCount(before)) {
+      toast({ title: `Status changed to ${newStatus} — stock is short`,
+              description: 'Some items were not in stock to allocate to this order. Source them (backorder) or refund.',
+              variant: 'destructive' });
+    } else {
+      toast({ title: 'Order updated', description: `Status changed to ${newStatus}` });
+    }
     refetch();
     setSelected(null);
   };
@@ -46,7 +63,7 @@ const AdminOrders = () => {
         <div className="flex gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            <input placeholder="Search email…" onChange={e => setFilter('q', e.target.value)}
+            <input placeholder="Order no., name, email, phone…" onChange={e => searchOrders(e.target.value)}
               className="pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 w-56" />
           </div>
           <select onChange={e => setFilter('status', e.target.value || undefined)}
@@ -78,7 +95,14 @@ const AdminOrders = () => {
               ))
             ) : orders.map((order) => (
               <tr key={order.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-3 font-mono text-xs font-bold text-blue-600">#{order.orderNumber}</td>
+                <td className="px-4 py-3 font-mono text-xs font-bold text-blue-600">
+                  #{order.orderNumber}
+                  {order.notes && order.notes.includes('[STOCK SHORTFALL]') && (
+                    <span className="ml-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[9px] font-bold align-middle" title="Paid, but stock ran out — source or refund">
+                      <AlertTriangle className="h-2.5 w-2.5" /> STOCK
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <p className="font-semibold text-gray-900 text-xs">{order.customerName}</p>
                   <p className="text-gray-400 text-[11px]">{order.customerEmail}</p>
@@ -108,6 +132,18 @@ const AdminOrders = () => {
         {orders.length === 0 && !loading && (
           <div className="text-center py-12 text-gray-400"><Package className="h-10 w-10 mx-auto mb-2 opacity-30" />No orders found</div>
         )}
+        {/* Pagination — older orders used to be unreachable (only the latest 20 showed). */}
+        {pages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 text-xs text-gray-500">
+            <span>Page {pageNo + 1} of {pages} · {total} orders</span>
+            <div className="flex gap-2">
+              <button onClick={() => goToPage(Math.max(0, pageNo - 1))} disabled={pageNo === 0}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 font-semibold disabled:opacity-40"><ChevronLeft className="h-3.5 w-3.5" /> Prev</button>
+              <button onClick={() => goToPage(Math.min(pages - 1, pageNo + 1))} disabled={pageNo >= pages - 1}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 font-semibold disabled:opacity-40">Next <ChevronRight className="h-3.5 w-3.5" /></button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Order management panel */}
@@ -115,6 +151,58 @@ const AdminOrders = () => {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
           className="mt-5 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <h3 className="font-bold text-gray-900 mb-4">Manage #{selected.orderNumber}</h3>
+
+          {/* What was ordered and where it goes — the panel used to show only the
+              status buttons, so fulfilment needed the database to see the items. */}
+          {selected.notes && selected.notes.includes('[STOCK SHORTFALL]') && (
+            <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <p><strong>Stock ran out for this order.</strong> The lines marked “short” below were not taken from inventory — source them (backorder) or refund the customer.</p>
+            </div>
+          )}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+            <div className="lg:col-span-2 rounded-xl border border-gray-100 overflow-hidden">
+              <table className="w-full text-xs">
+                <thead><tr className="bg-gray-50 text-gray-500">
+                  <th className="text-left px-3 py-2 font-bold">Item</th><th className="px-3 py-2 font-bold">Qty</th>
+                  <th className="text-right px-3 py-2 font-bold">Unit (incl. GST)</th><th className="text-right px-3 py-2 font-bold">Line</th>
+                </tr></thead>
+                <tbody>
+                  {(selected.items || []).map((it) => (
+                    <tr key={it.id} className="border-t border-gray-50">
+                      <td className="px-3 py-2 text-gray-800">
+                        {it.productName}{it.hsnCode ? <span className="text-gray-400"> · HSN {it.hsnCode}</span> : null}
+                        {it.stockCommitted === false && (
+                          <span className="ml-1.5 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold" title="Not taken from inventory — not enough stock">short</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-center font-bold">{it.quantity}</td>
+                      <td className="px-3 py-2 text-right">{inr(it.unitPrice)}</td>
+                      <td className="px-3 py-2 text-right font-semibold">{inr(Number(it.unitPrice || 0) * Number(it.quantity || 0))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-gray-50 text-gray-600">
+                  {Number(selected.shippingCharge) > 0 && <tr><td colSpan={3} className="px-3 py-1.5 text-right">Delivery</td><td className="px-3 py-1.5 text-right">{inr(selected.shippingCharge)}</td></tr>}
+                  {Number(selected.codCharge) > 0 && <tr><td colSpan={3} className="px-3 py-1.5 text-right">COD charge</td><td className="px-3 py-1.5 text-right">{inr(selected.codCharge)}</td></tr>}
+                  {Number(selected.discountAmount) > 0 && <tr><td colSpan={3} className="px-3 py-1.5 text-right">Discount{selected.couponCode ? ` (${selected.couponCode})` : ''}</td><td className="px-3 py-1.5 text-right">−{inr(selected.discountAmount)}</td></tr>}
+                  <tr className="font-bold text-gray-900"><td colSpan={3} className="px-3 py-2 text-right">Grand total</td><td className="px-3 py-2 text-right">{inr(selected.grandTotal)}</td></tr>
+                </tfoot>
+              </table>
+            </div>
+            <div className="rounded-xl border border-gray-100 p-3 text-xs text-gray-700 space-y-1.5">
+              <p className="font-bold text-gray-900 text-sm">{selected.customerName}{selected.companyName ? ` · ${selected.companyName}` : ''}</p>
+              <p className="flex items-start gap-1.5"><MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0 text-gray-400" />
+                {[selected.addressLine1, selected.addressLine2, selected.city, selected.state, selected.pincode].filter(Boolean).join(', ')}</p>
+              <p className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-gray-400" /><a href={`tel:${selected.customerPhone}`} className="hover:underline">{selected.customerPhone}</a></p>
+              <p className="flex items-center gap-1.5 break-all"><Mail className="h-3.5 w-3.5 text-gray-400 shrink-0" /><a href={`mailto:${selected.customerEmail}`} className="hover:underline">{selected.customerEmail}</a></p>
+              {selected.gstin && <p>GSTIN: <span className="font-mono">{selected.gstin}</span></p>}
+              <p>{selected.paymentMethod === 'COD' ? 'Cash on delivery' : 'Paid online'} · {selected.deliverySpeed || 'standard'}{selected.deliveryZone ? ` · ${selected.deliveryZone}` : ''}</p>
+              {selected.invoiceNumber && <p className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5 text-gray-400" />Invoice {selected.invoiceNumber}</p>}
+              {selected.notes && <p className="whitespace-pre-line rounded-lg bg-gray-50 px-2 py-1.5 text-gray-600">{selected.notes}</p>}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <p className="text-sm font-semibold text-gray-700 mb-2">Update Status</p>

@@ -29,6 +29,7 @@ import BulkOrderForm from '@/components/BulkOrderForm';
 import { toCartItem } from '@/lib/cartItem';
 import PincodeCheck from '@/components/PincodeCheck';
 import { areaLabel } from '@/lib/pincodeRules';
+import { isOutOfStock, moqOf, isLiveId, liveStock as liveStockQty } from '@/lib/stock';
 
 /* ─── helpers ────────────────────────────────────────────────────────────── */
 const fmt     = (n) => '₹' + Number(n).toLocaleString('en-IN');
@@ -235,7 +236,9 @@ const RelatedCard = ({ product }) => {
   const { addItem, items } = useCart();
   const { addToRfq, inRfq } = useRfq();
   const inCart = items.some(i => i.id === product.id);
-  const soldOut = product.stockQty != null && Number(product.stockQty) <= 0;
+  const soldOut = isOutOfStock(product);
+  // Sample-catalogue products (live shop unreachable) are browse-only.
+  const sample = !isLiveId(product.id);
   const d = disc(product);
   return (
     <Link to={`/shop/${product.slug || product.id}`}
@@ -261,7 +264,11 @@ const RelatedCard = ({ product }) => {
             <span className="font-extrabold text-gray-900 text-sm">{fmt(product.price)}</span>
             {product.mrp > product.price && <span className="text-[10px] text-gray-400 line-through ml-1">{fmt(product.mrp)}</span>}
           </div>
-          {soldOut ? (
+          {sample ? (
+            <span className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-600 group-hover:bg-blue-50 group-hover:text-blue-700 transition-colors">
+              View
+            </span>
+          ) : soldOut ? (
             <button onClick={(e) => { e.preventDefault(); addToRfq(product); }} title="Out of stock — request a quote"
               className={`text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition-all ${inRfq(product.id)?'bg-green-100 text-green-700':'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}>
               {inRfq(product.id) ? '✓ Quoted' : 'Quote'}
@@ -361,6 +368,7 @@ const ProductDetailPage = () => {
   // The live shop answered "no such product" (removed / draft) — don't fall back
   // to the static catalogue copy and offer something that can't be ordered.
   const [apiNotFound, setApiNotFound] = React.useState(false);
+  const [reloadKey, setReloadKey] = React.useState(0);   // "Retry" after a failed live check
 
   // Always ask the API for this slug — not only when the slug is missing from the
   // static catalogue. The static file is rich editorial content (features, specs,
@@ -404,6 +412,8 @@ const ProductDetailPage = () => {
             description: data.description || data.summary || '',
             inStock: (data.stockQty || 0) > 0,
             stockQty: data.stockQty || 0,
+            minOrderQty: data.minOrderQty || 1,
+            active: data.active !== false,     // staff can preview drafts; they can't be bought
             features: lines(data.features),
             specs: parseSpecs(data.specifications),
             benefits: lines(data.benefits),
@@ -422,7 +432,7 @@ const ProductDetailPage = () => {
         .catch((err) => { if (err?.response?.status === 404) setApiNotFound(true); })
         .finally(() => setApiLoading(false));
     }
-  }, [slug, staticProduct]);
+  }, [slug, staticProduct, reloadKey]);
 
   // Merge: static supplies the editorial depth, the API supplies the truth about
   // price and availability. Live values overwrite the static ones; static fields
@@ -434,12 +444,15 @@ const ProductDetailPage = () => {
     // so the Add/Buy buttons and the quantity stepper always agree.
     const withStock = (p) => {
       if (!p) return p;
-      if (Number.isFinite(Number(p.stockQty))) return { ...p, inStock: Number(p.stockQty) > 0 };
+      // In stock = at least the minimum order quantity is available.
+      if (Number.isFinite(Number(p.stockQty))) return { ...p, inStock: p.active !== false && Number(p.stockQty) >= moqOf(p) };
       return p;
     };
     if (apiNotFound)    return null;
     if (!staticProduct) return withStock(apiProduct);
-    if (!apiProduct)    return withStock(staticProduct);
+    // The built-in catalogue's stock figures are fixtures, not live stock — until
+    // the live shop answers, availability is UNKNOWN (never "120 in stock").
+    if (!apiProduct)    return { ...staticProduct, stockQty: undefined, inStock: undefined };
     const merged = { ...staticProduct };
     Object.entries(apiProduct).forEach(([k, v]) => {
       const empty = v === null || v === undefined || v === ''
@@ -454,7 +467,7 @@ const ProductDetailPage = () => {
     }
     return withStock(merged);
   }, [staticProduct, apiProduct, apiNotFound]);
-  const stockKnown = apiProduct != null || Number.isFinite(Number(staticProduct?.stockQty));
+  const stockKnown = apiProduct != null;   // only the live shop knows real stock
   // Live related products from the API (same category); static data is only a
   // fallback so admin-created products get a related section too.
   const [liveRelated, setLiveRelated] = React.useState(null);
@@ -468,7 +481,7 @@ const ProductDetailPage = () => {
           id: p.id, slug: p.slug, name: p.name,
           image: p.imageUrl, cat: p.category,
           price: Number(p.price), mrp: p.mrp != null ? Number(p.mrp) : null,
-          badge: p.badge, stockQty: p.stockQty, gstRate: p.gstRate,
+          badge: p.badge, stockQty: liveStockQty(p.stockQty), minOrderQty: p.minOrderQty || 1, gstRate: p.gstRate,
         })));
       })
       .catch(() => {});
@@ -500,20 +513,30 @@ const ProductDetailPage = () => {
   // when the API answered (see the merge above); if the shop API is unreachable
   // we fall back to a sane ceiling and let the cart/server do the final clamp
   // rather than silently promising unlimited units.
+  const moq        = moqOf(product);           // minimum order quantity (admin-set)
   const stockNum   = Number(product?.stockQty);
   const liveStock  = stockKnown && Number.isFinite(stockNum);
-  const soldOut    = liveStock && stockNum <= 0;
-  const knownStock = liveStock && stockNum > 0;
+  const soldOut    = liveStock && stockNum < moq;
+  const knownStock = liveStock && stockNum >= moq;
   const maxQty     = knownStock ? stockNum : 99;
   const atMax      = knownStock && qty >= maxQty;
   // Low-stock nudge: honest scarcity, shown only when it's actually true.
   const lowStock   = knownStock && stockNum <= 5;
 
-  // Never let the selected quantity sit above what's actually available — e.g.
-  // if the product data loads after mount, or stock was reduced.
+  // Keep the selected quantity within [minimum order, available stock] — e.g.
+  // when the product data loads after mount, or stock was reduced. Opening a
+  // different product (e.g. from "Related") starts again at its minimum order
+  // instead of carrying the previous product's quantity over.
+  const productKey = product?.id ?? slug;
+  const qtyFor = useRef(null);
   useEffect(() => {
-    setQty(q => Math.min(Math.max(1, q), maxQty));
-  }, [maxQty]);
+    if (qtyFor.current !== productKey) {
+      qtyFor.current = productKey;
+      setQty(moq);
+      return;
+    }
+    setQty(q => Math.min(Math.max(moq, q), Math.max(moq, maxQty)));
+  }, [productKey, maxQty, moq]);
 
   // "Notify me" links from the shop land on /shop/<slug>#back-in-stock — bring
   // the out-of-stock panel into view once the product has rendered.
@@ -551,7 +574,7 @@ const ProductDetailPage = () => {
         "priceCurrency": "INR",
         "price": priceNum.toFixed(2),
         "priceValidUntil": validUntil.toISOString().slice(0, 10),
-        "availability": product.inStock !== false ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+        ...(apiProduct ? { "availability": product.inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock" } : {}),
         "itemCondition": "https://schema.org/NewCondition",
         "seller": { "@type": "Organization", "name": "Navgrow Engineering Service Pvt. Ltd." },
         "shippingDetails": {
@@ -608,23 +631,32 @@ const ProductDetailPage = () => {
     schema: productSchema,
   });
 
-  /* ── scroll to top on mount + track view ── */
+  /* ── scroll to top (and back to the first photo) when the product changes ── */
+  // Without the image reset, opening a product with fewer photos than the
+  // index being viewed showed an empty gallery.
+  useEffect(() => { window.scrollTo(0, 0); setImgIdx(0); setPinchZoom(false); }, [slug]);
+
+  /* ── track recently viewed (same shape as ShopPage) ── */
+  // Re-saved once live stock is known, so the Recently Viewed rail never offers
+  // a sold-out product from an old snapshot.
   useEffect(() => {
-    window.scrollTo(0,0);
-    // Track recently viewed — same function used in ShopPage
-    if (product) {
-      try {
-        const key = 'ng_recently_viewed';
-        const prev = JSON.parse(localStorage.getItem(key) || '[]');
-        const updated = [
-          { id: product.id, name: product.name, price: product.price,
-            image: product.image, slug: product.slug || product.id, cat: product.cat },
-          ...prev.filter(p => p.id !== product.id)
-        ].slice(0, 6);
-        localStorage.setItem(key, JSON.stringify(updated));
-      } catch {}
-    }
-  }, [slug, product?.id]);
+    if (!product) return;
+    try {
+      const key = 'ng_recently_viewed';
+      const prev = JSON.parse(localStorage.getItem(key) || '[]');
+      const updated = [
+        { id: product.id, name: product.name, price: product.price,
+          image: product.image, slug: product.slug || product.id, cat: product.cat,
+          stockQty: stockKnown ? Number(product.stockQty) : null, minOrderQty: moqOf(product),
+          sku: product.sku || '', gstRate: product.gstRate },
+        // Drop older copies — by id AND slug (the static and live copies of a
+        // product have different ids but the same slug).
+        ...(Array.isArray(prev) ? prev : []).filter(p => p.id !== product.id && p.slug !== (product.slug || product.id))
+      ].slice(0, 6);
+      localStorage.setItem(key, JSON.stringify(updated));
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.id, stockKnown, product?.stockQty, product?.price]);
 
   /* ── load reviews from backend ── */
   useEffect(() => {
@@ -647,16 +679,19 @@ const ProductDetailPage = () => {
   }, [product]);
 
   /* ── handlers ── */
-  const handleAdd = useCallback(() => {
-    addItem(toCartItem(product, { qty }));
+  // Both go through the cart's stock gate — nothing is added (and checkout
+  // isn't opened) if the item turns out to be unavailable.
+  const handleAdd = useCallback(async () => {
+    const r = await addItem(toCartItem(product, { qty }));
+    if (!r?.ok) return;
     setAddedAnim(true);
     setTimeout(() => setAddedAnim(false), 1800);
   }, [product, qty, addItem]);
 
-  const handleBuyNow = useCallback(() => {
-    // Add item once with qty property rather than looping (loop causes multiple cart entries)
-    addItem(toCartItem(product, { qty }));
-    navigate('/checkout');
+  const handleBuyNow = useCallback(async () => {
+    // 'set': the cart line becomes exactly the quantity chosen here.
+    const r = await addItem(toCartItem(product, { qty }), { mode: 'set' });
+    if (r?.ok) navigate('/checkout');
   }, [product, qty, addItem, navigate]);
 
   const handleShare = useCallback(async () => {
@@ -697,13 +732,16 @@ const ProductDetailPage = () => {
   const PLACEHOLDER = '/placeholder.jpg';
   const imageList = (product.images && product.images.length) ? product.images : (product.image ? [product.image] : []);
   const images    = imageList.length ? imageList : [PLACEHOLDER];
+  const shownImage = images[Math.min(imgIdx, images.length - 1)] || PLACEHOLDER;
   const inCart    = items.some(i => i.id === product.id);
   const wished    = typeof inWishlist === 'function' ? inWishlist(product.id) : false;
   const d         = disc(product);
   const saved     = savings(product);
   // Limited delivery area: the buyer's pincode is outside it → offer a quote, not checkout.
   const blockedHere = Array.isArray(pinQuote?.restrictedItems) && pinQuote.restrictedItems.length > 0;
-  const outOfStock  = !product.inStock;
+  // Three states: known in stock, known sold out, or not yet confirmed by the live shop.
+  const stockUnknown = !apiProduct;
+  const outOfStock  = !stockUnknown && !product.inStock;
   const handleQuote = () => addToRfq(product, qty);
   const totalRevs = reviews.length || product.reviews || 0;
 
@@ -744,16 +782,22 @@ const ProductDetailPage = () => {
               onClick={() => setPinchZoom(v => !v)}>
               <AnimatePresence mode="wait">
                 <motion.img
-                  key={imgIdx}
-                  src={images[imgIdx]}
+                  key={`${imgIdx}-${shownImage}`}
+                  src={shownImage}
                   alt={`${product.name} — view ${imgIdx+1}`}
-                  onError={(e) => { if (e.target.src !== window.location.origin + '/placeholder.jpg') { e.target.onerror = null; e.target.src = '/placeholder.jpg'; } }}
                   initial={{ opacity:0, scale:1.02 }}
                   animate={{ opacity:1, scale: pinchZoom ? 1.35 : 1 }}
                   exit={{ opacity:0 }}
                   transition={{ duration:.3 }}
                   className="w-full h-full object-cover transition-transform duration-300"
-                  onError={(e) => { e.target.onerror=null; e.target.src=`data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600'%3E%3Crect width='600' height='600' fill='%23eff6ff'/%3E%3Ctext x='300' y='290' font-family='sans-serif' font-size='18' fill='%232563eb' text-anchor='middle'%3E${encodeURIComponent(product.name.substring(0,30))}%3C/text%3E%3Ctext x='300' y='320' font-family='sans-serif' font-size='13' fill='%2393c5fd' text-anchor='middle'%3ENavgrow Engineering%3C/text%3E%3C/svg%3E`; }}
+                  onError={(e) => {
+                    // One fallback only: React's onError keeps firing, so a fallback that
+                    // also fails would otherwise retry forever.
+                    const el = e.currentTarget;
+                    if (el.dataset.fallback) return;
+                    el.dataset.fallback = '1';
+                    el.src = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600'%3E%3Crect width='600' height='600' fill='%23eff6ff'/%3E%3Ctext x='300' y='290' font-family='sans-serif' font-size='18' fill='%232563eb' text-anchor='middle'%3E${encodeURIComponent(product.name.substring(0,30))}%3C/text%3E%3Ctext x='300' y='320' font-family='sans-serif' font-size='13' fill='%2393c5fd' text-anchor='middle'%3ENavgrow Engineering%3C/text%3E%3C/svg%3E`;
+                  }}
                 />
               </AnimatePresence>
 
@@ -761,7 +805,7 @@ const ProductDetailPage = () => {
               <div className="absolute top-3 left-3 flex flex-col gap-2 z-10">
                 {product.badge && <span className="badge-gold">{product.badge}</span>}
                 {d > 0 && <span className="badge-blue">{d}% OFF — Save {fmt(saved)}</span>}
-                {!product.inStock && <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-500 text-white">Out of Stock</span>}
+                {outOfStock && <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-500 text-white">Out of Stock</span>}
               </div>
 
               {/* Wishlist */}
@@ -797,10 +841,17 @@ const ProductDetailPage = () => {
             {images.length > 1 && (
               <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
                 {images.map((img, i) => (
-                  <button key={i} onClick={() => setImgIdx(i)}
+                  <button key={`${i}-${img}`} onClick={() => setImgIdx(i)}
                     className={`shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${i===imgIdx?'border-amber-400 shadow-md shadow-amber-200':'border-gray-200 hover:border-blue-300'}`}>
                     <img loading="lazy" decoding="async" src={img} alt="" className="w-full h-full object-cover"
-                      onError={e=>{e.target.onerror=null;e.target.src=product.image;}}/>
+                      onError={e => {
+                        // Was: fall back to product.image — when that URL is the one
+                        // failing, the thumbnail re-requested it in an endless loop.
+                        const el = e.currentTarget;
+                        if (el.dataset.fallback) return;
+                        el.dataset.fallback = '1';
+                        el.src = PLACEHOLDER;
+                      }}/>
                   </button>
                 ))}
               </div>
@@ -863,7 +914,9 @@ const ProductDetailPage = () => {
                 className="text-sm text-blue-600 hover:text-amber-600 font-semibold underline decoration-dotted transition-colors">
                 {totalRevs} {totalRevs === 1 ? 'review' : 'reviews'}
               </button>
-              {product.inStock
+              {stockUnknown
+                ? <span className="flex items-center gap-1 text-gray-400 text-sm font-semibold">{apiLoading ? <><Loader2 className="h-4 w-4 animate-spin"/>Checking stock…</> : 'Stock not confirmed'}</span>
+                : product.inStock
                 ? <span className="flex items-center gap-1 text-green-600 text-sm font-bold"><CheckCircle className="h-4 w-4"/>In Stock</span>
                 : <span className="flex items-center gap-1 text-red-500 text-sm font-bold"><AlertCircle className="h-4 w-4"/>Out of Stock</span>
               }
@@ -966,7 +1019,7 @@ const ProductDetailPage = () => {
               <div className="flex items-center gap-3 flex-wrap">
                 <label className="text-sm font-semibold text-gray-600">Qty:</label>
                 <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden">
-                  <button onClick={() => setQty(q => Math.max(1,q-1))} disabled={qty <= 1}
+                  <button onClick={() => setQty(q => Math.max(moq, q-1))} disabled={qty <= moq}
                     aria-label="Decrease quantity"
                     className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 text-gray-600 font-bold text-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed">−</button>
                   <span className="w-12 text-center font-bold text-gray-900">{qty}</span>
@@ -982,10 +1035,15 @@ const ProductDetailPage = () => {
                   </span>
                 )}
                 {soldOut && (
-                  <span className="text-sm font-semibold text-red-600">Out of stock</span>
+                  <span className="text-sm font-semibold text-red-600">
+                    {stockNum > 0 ? `Only ${stockNum} left — minimum order ${moq}` : 'Out of stock'}
+                  </span>
+                )}
+                {moq > 1 && !soldOut && (
+                  <span className="text-xs font-semibold text-gray-500 bg-gray-100 rounded-full px-2.5 py-1">Minimum order: {moq} units</span>
                 )}
                 {!liveStock && (
-                  <span className="text-sm text-gray-400">Live stock unavailable — we'll confirm on order</span>
+                  <span className="text-sm text-gray-400">{apiLoading ? 'Checking live stock…' : "Live stock couldn't be checked"}</span>
                 )}
                 <span className="text-sm text-gray-400 ml-auto">Total: <strong className="text-gray-900">{fmt(product.price * qty)}</strong></span>
               </div>
@@ -1053,6 +1111,23 @@ const ProductDetailPage = () => {
                     className="mt-3 w-full py-3.5 rounded-xl font-bold text-base btn-gold flex items-center justify-center gap-2">
                     <FileText className="h-5 w-5" /> Request a Quote
                   </button>
+                </div>
+              ) : stockUnknown ? (
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                  {apiLoading ? (
+                    <p className="flex items-center gap-2 text-sm font-semibold text-gray-600">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Checking live stock and price…
+                    </p>
+                  ) : (
+                    <>
+                      <p className="font-bold text-gray-800 text-sm">We couldn't confirm live stock right now</p>
+                      <p className="text-sm text-gray-500 mt-0.5">Online ordering opens as soon as the shop answers. Try again, or order on WhatsApp / phone.</p>
+                      <button onClick={() => setReloadKey(k => k + 1)}
+                        className="mt-3 w-full py-3 rounded-xl font-bold text-sm bg-blue-900 text-white hover:bg-blue-800 transition-colors">
+                        Try again
+                      </button>
+                    </>
+                  )}
                 </div>
               ) : (
               <>
@@ -1405,6 +1480,11 @@ const ProductDetailPage = () => {
             <button onClick={handleQuote}
               className="flex-[2] py-3 rounded-2xl font-bold text-sm btn-gold flex items-center justify-center gap-2">
               <FileText className="h-4 w-4"/>Request a Quote
+            </button>
+          ) : stockUnknown ? (
+            <button onClick={() => !apiLoading && setReloadKey(k => k + 1)} disabled={apiLoading}
+              className="flex-[2] py-3 rounded-2xl font-bold text-sm bg-gray-200 text-gray-700 flex items-center justify-center gap-2 disabled:opacity-70">
+              {apiLoading ? <><Loader2 className="h-4 w-4 animate-spin"/>Checking stock…</> : 'Stock not confirmed · Retry'}
             </button>
           ) : (
           <>

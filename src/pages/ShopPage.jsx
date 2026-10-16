@@ -22,6 +22,7 @@ import useSeo from '@/hooks/useSeo';
 import { useSiteSettings } from '@/hooks/useSiteSettings';
 import { toCartItem } from '@/lib/cartItem';
 import { areaLabel } from '@/lib/pincodeRules';
+import { isOutOfStock, liveStock, moqOf, stockOf } from '@/lib/stock';
 
 const CATS    = ['All', ...Array.from(new Set(PRODUCTS.map(p => p.cat)))];
 const SORTS   = ['Featured', 'Price: Low to High', 'Price: High to Low', 'Top Rated', 'Most Reviewed'];
@@ -37,8 +38,9 @@ const trackView = (product) => {
     const updated = [
       { id: product.id, name: product.name, price: product.price,
         image: product.image, slug: product.slug || product.id, cat: product.cat,
-        stockQty: product.stockQty ?? null, sku: product.sku || '', gstRate: product.gstRate },
-      ...prev.filter(p => p.id !== product.id)
+        stockQty: product.stockQty ?? null, minOrderQty: product.minOrderQty ?? 1,
+        sku: product.sku || '', gstRate: product.gstRate },
+      ...(Array.isArray(prev) ? prev : []).filter(p => p.id !== product.id && p.slug !== (product.slug || product.id))
     ].slice(0, 6);
     localStorage.setItem(key, JSON.stringify(updated));
   } catch {}
@@ -74,7 +76,7 @@ const ProductCard = ({ product, onBuyNow }) => {
         <div className="absolute top-2.5 left-2.5 flex flex-col gap-1.5">
           {product.badge && <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-600 text-white shadow">{product.badge}</span>}
           {d > 0 && <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-500 text-white shadow">{d}% OFF</span>}
-          {showStock && product.stockQty > 0 && product.stockQty <= 10 && (
+          {showStock && !isOutOfStock(product) && product.stockQty > 0 && product.stockQty <= 10 && (
             <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500 text-white shadow animate-pulse">
               Only {product.stockQty} left!
             </span>
@@ -130,10 +132,12 @@ const ProductCard = ({ product, onBuyNow }) => {
 
         {/* Stock status — honest availability at a glance. Out-of-stock is always
             shown (it affects buying); positive counts follow the admin toggle. */}
-        {product.stockQty != null && (product.stockQty <= 0 || showStock) && (
+        {product.stockQty != null && (isOutOfStock(product) || showStock) && (
           <div className="mb-2 text-[11px] font-semibold">
-            {product.stockQty <= 0 ? (
-              <span className="text-red-500">● Out of stock — quote & backorder available</span>
+            {isOutOfStock(product) ? (
+              <span className="text-red-500">
+                ● {product.stockQty > 0 ? `Only ${product.stockQty} left (min. order ${moqOf(product)})` : 'Out of stock'} — quote & backorder available
+              </span>
             ) : product.stockQty <= 10 ? (
               <span className="text-amber-600">● Only {product.stockQty} left in stock</span>
             ) : (
@@ -154,7 +158,17 @@ const ProductCard = ({ product, onBuyNow }) => {
         </button>
 
         {/* Actions */}
-        {product.stockQty != null && product.stockQty <= 0 ? (
+        {product.sample ? (
+          <Link to={`/shop/${product.slug || product.id}`}
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold border-2 border-blue-200 text-blue-700 hover:bg-blue-50">
+            View details
+          </Link>
+        ) : (
+        <>
+        {moqOf(product) > 1 && !isOutOfStock(product) && (
+          <p className="mb-2 text-[11px] font-semibold text-gray-500">Minimum order: {moqOf(product)} units</p>
+        )}
+        {isOutOfStock(product) ? (
           <div className="space-y-1.5">
             {/* Out of stock is not a dead end: the buyer can still get a quote —
                 the team sources it and confirms lead time. */}
@@ -197,7 +211,7 @@ const ProductCard = ({ product, onBuyNow }) => {
         )}
 
         {/* B2B — Request for Quote (out-of-stock cards already lead with it) */}
-        {!(product.stockQty != null && product.stockQty <= 0) && (
+        {!isOutOfStock(product) && (
         <button
           onClick={() => addToRfq(product)}
           className={`w-full mt-2 py-2 rounded-xl text-xs font-bold border-2 transition-all flex items-center justify-center gap-1.5 ${
@@ -210,22 +224,36 @@ const ProductCard = ({ product, onBuyNow }) => {
           {inRfq(product.id) ? 'In Quote List ✓' : 'Request Quote (B2B)'}
         </button>
         )}
+        </>
+        )}
       </div>
     </motion.div>
   );
 };
 
 /* ── Recently Viewed ──────────────────────────────────────────────────────── */
-const RecentlyViewed = () => {
+// Saved "recently viewed" entries are a snapshot taken when the page was seen —
+// their stock/price can be days old. They are refreshed from the live catalogue
+// before anything is offered for sale, and products since removed are hidden.
+const RecentlyViewed = ({ liveProducts }) => {
   const { addItem, items: cartItems } = useCart();
   const { addToRfq, inRfq } = useRfq();
-  const [viewed, setViewed] = React.useState([]);
+  const [saved, setSaved] = React.useState([]);
   React.useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem('ng_recently_viewed') || '[]');
-      setViewed(saved);
+      const list = JSON.parse(localStorage.getItem('ng_recently_viewed') || '[]');
+      setSaved(Array.isArray(list) ? list : []);
     } catch {}
   }, []);
+  const viewed = React.useMemo(() => {
+    if (!Array.isArray(liveProducts)) return saved;       // live shop unreachable — show the saved copy
+    return saved
+      .map(v => {
+        const live = liveProducts.find(p => String(p.id) === String(v.id) || (v.slug && p.slug === v.slug));
+        return live ? { ...v, ...live, image: live.image || v.image } : null;
+      })
+      .filter(Boolean);
+  }, [saved, liveProducts]);
   if (viewed.length === 0) return null;
   return (
     <section className="py-10 bg-white border-t border-gray-100">
@@ -238,16 +266,23 @@ const RecentlyViewed = () => {
             const inCart = cartItems.some(c => c.id === p.id);
             return (
               <div key={p.id} className="flex-shrink-0 w-48 bg-white border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-                <Link to={`/shop/${p.slug}`} className="block aspect-square overflow-hidden bg-gray-50">
+                <Link to={`/shop/${p.slug || p.id}`} className="block aspect-square overflow-hidden bg-gray-50">
                   <img src={p.image} alt={p.name} loading="lazy"
                     className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                     onError={e => { e.target.onerror=null; e.target.style.display='none'; }}/>
                 </Link>
                 <div className="p-3">
                   <p className="text-xs text-blue-600 font-bold uppercase tracking-wide mb-0.5">{p.cat}</p>
-                  <Link to={`/shop/${p.slug}`} className="text-xs font-bold text-gray-900 line-clamp-2 hover:text-blue-600 block mb-2">{p.name}</Link>
+                  <Link to={`/shop/${p.slug || p.id}`} className="text-xs font-bold text-gray-900 line-clamp-2 hover:text-blue-600 block mb-2">{p.name}</Link>
                   <p className="text-sm font-extrabold text-gray-900 mb-2">₹{p.price?.toLocaleString('en-IN')}</p>
-                  {p.stockQty != null && Number(p.stockQty) <= 0 ? (
+                  {!Array.isArray(liveProducts) ? (
+                    // Live shop not confirmed (still loading / unreachable): an old
+                    // snapshot is never offered for sale — open the product instead.
+                    <Link to={`/shop/${p.slug || p.id}`}
+                      className="block w-full py-1.5 rounded-lg text-xs font-bold text-center border-2 border-gray-200 text-gray-700 hover:border-blue-300 hover:text-blue-700 transition-colors">
+                      View
+                    </Link>
+                  ) : isOutOfStock(p) ? (
                     <button onClick={() => addToRfq(p)}
                       className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all ${
                         inRfq(p.id) ? 'bg-green-100 text-green-700 border border-green-200' : 'border-2 border-blue-200 text-blue-700 hover:bg-blue-50'
@@ -286,12 +321,16 @@ const ShopPage = () => {
     useApi(() => productsApi.list({ size: 300 }), [], { immediate: true });
   const liveProducts = React.useMemo(() => {
     const list = apiData?.content || (Array.isArray(apiData) ? apiData : null);
-    if (list && list.length > 0) return list.map(p => ({
+    // An empty answer is a real (empty) shop — never resurrect the built-in
+    // sample products (that used to bring removed products back for sale).
+    if (list) return list.map(p => ({
       id: p.id, slug: p.slug || String(p.id), cat: p.category,
       name: p.name, price: p.price, mrp: p.mrp || p.price,
       rating: (p.rating && Number(p.rating) > 0) ? Number(p.rating) : 4.5, reviews: p.reviewCount || 0,
       badge: p.badge || '', image: p.imageUrl || '', desc: p.description || '',
-      inStock: (p.stockQty || 0) > 0, stockQty: p.stockQty ?? null,
+      // Live stock never "unknown": a product whose stock was never set is 0.
+      stockQty: liveStock(p.stockQty), minOrderQty: p.minOrderQty || 1,
+      inStock: liveStock(p.stockQty) >= (p.minOrderQty || 1),
       featured: p.featured || false, sku: p.sku || '', gstRate: p.gstRate ?? 18,
       tagline: p.tagline || '', deliveryCharge: p.deliveryCharge ?? null,
       deliveryRestricted: !!p.deliveryRestricted, allowedPincodes: p.allowedPincodes || '',
@@ -302,8 +341,12 @@ const ShopPage = () => {
   // True only when we're falling back to the built-in catalogue because the API
   // failed — used to be transparent that these aren't the live shop products.
   const usingSampleData = !liveProducts && !apiLoading && Boolean(apiErr);
-  // Memoize to give useMemo dep a stable reference
-  const ACTIVE_PRODUCTS = React.useMemo(() => liveProducts || PRODUCTS, [liveProducts]);
+  // Sample products only when the live shop can't be reached — and they're shown
+  // for browsing only (their stock/prices aren't live and can't be ordered).
+  const ACTIVE_PRODUCTS = React.useMemo(
+    () => liveProducts || PRODUCTS.map(p => ({ ...p, sample: true, stockQty: undefined, inStock: undefined })),
+    [liveProducts]);
+  const showSkeleton = apiLoading && !liveProducts;
   const ACTIVE_CATS     = React.useMemo(() => ['All', ...Array.from(new Set(ACTIVE_PRODUCTS.map(p => p.cat)))], [ACTIVE_PRODUCTS]);
 
   const [search, setSearch]       = useState('');
@@ -328,9 +371,9 @@ const ShopPage = () => {
   }, [cat, debouncedSearch, sort, priceMin, priceMax, inStockOnly]);
 
 
-  const handleBuyNow = (product) => {
-    addItem(toCartItem(product));
-    navigate('/checkout');
+  const handleBuyNow = async (product) => {
+    const r = await addItem(toCartItem(product), { mode: 'set' });
+    if (r?.ok) navigate('/checkout');
   };
 
   const filtered = useMemo(() => {
@@ -346,7 +389,7 @@ const ShopPage = () => {
         (p.desc || '').toLowerCase().includes(q)
       );
     }
-    if (inStockOnly) list = list.filter(p => !(p.stockQty != null && p.stockQty <= 0));
+    if (inStockOnly) list = list.filter(p => !isOutOfStock(p));
     // Price range filter
     if (priceMin !== '') list = list.filter(p => p.price >= Number(priceMin));
     if (priceMax !== '') list = list.filter(p => p.price <= Number(priceMax));
@@ -357,7 +400,7 @@ const ShopPage = () => {
     if (sort === 'Most Reviewed')       list.sort((a, b) => (b.reviews||0) - (a.reviews||0));
     // Featured: available products first (out-of-stock ones stay listed — they can
     // still be quoted — but shouldn't crowd the top of the shop), then featured, rating.
-    const oos = (p) => (p.stockQty != null && p.stockQty <= 0) ? 1 : 0;
+    const oos = (p) => (isOutOfStock(p) ? 1 : 0);
     if (sort === 'Featured')             list.sort((a, b) => oos(a) - oos(b) || (b.featured?1:0) - (a.featured?1:0) || (b.rating||0) - (a.rating||0));
     return list;
   }, [cat, debouncedSearch, sort, priceMin, priceMax, inStockOnly, ACTIVE_PRODUCTS]);
@@ -465,8 +508,19 @@ const ShopPage = () => {
             </div>
           </div>
 
+          {usingSampleData && (
+            <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <strong>Live prices and stock couldn't be loaded right now.</strong> You can browse the range below — refresh in a
+              moment to buy online, or call <a href="tel:+918927070972" className="underline font-semibold">+91 89270 70972</a> /
+              WhatsApp us to order.
+            </div>
+          )}
           {/* Product grid */}
-          {filtered.length === 0 ? (
+          {showSkeleton ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" aria-busy="true">
+              {[...Array(8)].map((_, i) => <ProductCardSkeleton key={i} />)}
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="text-center py-20 max-w-md mx-auto">
               <Package className="h-16 w-16 text-gray-200 mx-auto mb-4" />
               <p className="text-gray-700 font-bold text-lg">No products match your search</p>
@@ -524,7 +578,7 @@ const ShopPage = () => {
       </section>
 
       {/* Recently Viewed */}
-      <RecentlyViewed />
+      <RecentlyViewed liveProducts={liveProducts} />
 
       <CtaSection />
 

@@ -14,7 +14,11 @@ import {
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
-import { ordersApi, userApi, addressApi, companyApi } from '@/lib/api';
+import { useRfq } from '@/context/RfqContext';
+import useLiveAvailability, { withLive } from '@/hooks/useLiveAvailability';
+import { isOutOfStock, isLiveId, moqOf, stockOf } from '@/lib/stock';
+import { toast } from '@/components/ui/use-toast';
+import { ordersApi, userApi, addressApi, companyApi, productsApi } from '@/lib/api';
 import PageHero from '@/components/PageHero';
 import OrderTrackWidget from '@/components/OrderTrackWidget';
 import { useApi } from '@/hooks/useApi';
@@ -217,6 +221,9 @@ const AccountPage = () => {
   useSeo({ title:'My Account', path:'/account' });
   const { user, isLoggedIn, logout, canAccessAdmin, isSuperAdmin } = useAuth();
   const { wishlist, toggleWishlist, moveToCart, addItem, setCartOpen } = useCart();
+  const { addToRfq, inRfq } = useRfq();
+  // Wishlist entries are saved copies — show live stock/price before offering "Add to Cart".
+  const { live: wishLive } = useLiveAvailability(wishlist);
   const navigate = useNavigate();
   const confirm  = useConfirm();
   const fileRef  = useRef();
@@ -376,24 +383,52 @@ const AccountPage = () => {
   };
 
 
-  const handleReorder = (order) => {
-    if (!order.orderItems?.length) return;
-    let added = 0;
-    order.orderItems.forEach(item => {
-      // Reorder must carry the line's own tax data. Without gstRate/hsn the cart
-      // falls back to 18%, so reordering a 12% item showed the wrong tax.
-      addItem({
-        id:       item.productId || item.id,
-        name:     item.productName || 'Product',
-        price:    Number(item.unitPrice || item.price || 0),
-        image:    item.imageUrl || '',
-        qty:      item.quantity || 1,
-        gstRate:  item.gstRate != null ? Number(item.gstRate) : undefined,
-        hsn:      item.hsnCode || item.hsn || undefined,
+  // Reorder: every line is checked against LIVE stock and price first. Lines
+  // that can be bought go to the cart (capped at what's in stock); sold-out
+  // ones go to the quote list so the team can source them; removed products
+  // are skipped. (It used to copy the old order straight into the cart — and
+  // never worked at all, because it read a field the API doesn't send.)
+  const handleReorder = async (order) => {
+    const lines = order.items || order.orderItems || [];
+    if (!lines.length) return;
+    const ids = lines.map(it => String(it.productId || '')).filter(isLiveId);
+    let live = {};
+    try {
+      const { data } = await productsApi.availability(ids);
+      (Array.isArray(data) ? data : []).forEach(a => { if (a?.id) live[String(a.id)] = a; if (a?.ref) live[a.ref] = a; });
+    } catch { /* offline: fall back to the cart's own stock gate */ }
+    let added = 0; const quoted = []; const gone = [];
+    for (const it of lines) {
+      const pid = String(it.productId || '');
+      if (!isLiveId(pid)) { gone.push(it.productName); continue; }
+      const base = {
+        id: pid,
+        name: it.productName || 'Product',
+        slug: it.productSlug || undefined,
+        price: Number(it.unitPrice || 0),
+        qty: it.quantity || 1,
+        // Reorder must carry the line's own tax data. Without gstRate/hsn the cart
+        // falls back to 18%, so reordering a 12% item showed the wrong tax.
+        gstRate: it.gstRate != null ? Number(it.gstRate) : undefined,
+        hsn: it.hsnCode || it.hsn || undefined,
+      };
+      const a = live[pid];
+      const merged = a ? withLive(base, a) : base;
+      if (a && (a.found === false || a.active === false)) { gone.push(base.name); continue; }
+      if (a && isOutOfStock(merged)) { addToRfq(merged, base.qty); quoted.push(base.name); continue; }
+      const r = await addItem(merged);
+      if (r?.ok) added++;
+    }
+    if (added > 0) setCartOpen(true);
+    if (quoted.length || gone.length) {
+      toast({
+        title: added ? `${added} item${added === 1 ? '' : 's'} added to your cart` : 'Nothing could be added to the cart',
+        description: [
+          quoted.length ? `Out of stock, added to your quote list instead: ${quoted.join(', ')}.` : '',
+          gone.length ? `No longer sold: ${gone.join(', ')}.` : '',
+        ].filter(Boolean).join(' '),
       });
-      added++;
-    });
-    if (added > 0) { setCartOpen(true); }
+    }
   };
 
   const orderList  = orders?.content || (Array.isArray(orders) ? orders : []);
@@ -532,13 +567,20 @@ const AccountPage = () => {
                                     <span className="font-extrabold text-gray-900 text-sm">₹{(order.grandTotal||0).toLocaleString('en-IN')}</span>
                                   </div>
                                 </div>
-                                {order.orderItems?.length > 0 && (
+                                {(order.items || order.orderItems || []).length > 0 && (
                                   <div className="flex gap-2 overflow-x-auto pb-1">
-                                    {order.orderItems.map((item,i)=>(
+                                    {(order.items || order.orderItems).map((item,i)=>(
+                                      item.productSlug ? (
+                                        <Link key={i} to={`/shop/${item.productSlug}`} className="flex items-center gap-2 bg-gray-50 hover:bg-blue-50 rounded-xl px-3 py-2 shrink-0">
+                                          <p className="text-xs text-gray-700 font-medium">{item.productName}</p>
+                                          <span className="text-[10px] text-gray-400">×{item.quantity}</span>
+                                        </Link>
+                                      ) : (
                                       <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2 shrink-0">
                                         <p className="text-xs text-gray-700 font-medium">{item.productName}</p>
                                         <span className="text-[10px] text-gray-400">×{item.quantity}</span>
                                       </div>
+                                      )
                                     ))}
                                   </div>
                                 )}
@@ -551,7 +593,7 @@ const AccountPage = () => {
                                       <Download className="h-3.5 w-3.5"/> GST Invoice
                                     </a>
                                   )}
-                                  {order.orderItems?.length > 0 && (
+                                  {(order.items || order.orderItems || []).length > 0 && (
                                     <button onClick={() => handleReorder(order)}
                                       className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">
                                       <RefreshCw className="h-3.5 w-3.5"/> Reorder
@@ -600,9 +642,9 @@ const AccountPage = () => {
                             <ProfileInputField k="fullName" label="Full Name"    ph="Your full name"         icon={User} profile={profile} onChange={handleProfileChange}/>
                             <ProfileInputField k="phone"    label="Phone"        ph="+91 XXXXX XXXXX"        icon={Phone} type="tel" profile={profile} onChange={handleProfileChange}/>
                             <ProfileInputField k="company"  label="Company"      ph="Company name (optional)" icon={Building} profile={profile} onChange={handleProfileChange}/>
-                            <ProfileInputField k="locality" label="Locality / Area" ph="Colony, Ward, Area"  icon={MapPin} profile={profile} onChange={handleProfileChange} profile={profile} onChange={handleProfileChange}/>
-                            <ProfileInputField k="city"     label="City"         ph="e.g. Siliguri"          icon={MapPin} profile={profile} onChange={handleProfileChange} profile={profile} onChange={handleProfileChange}/>
-                            <ProfileInputField k="pincode"  label="Pincode"      ph="734001"                 icon={MapPin} profile={profile} onChange={handleProfileChange} profile={profile} onChange={handleProfileChange}/>
+                            <ProfileInputField k="locality" label="Locality / Area" ph="Colony, Ward, Area"  icon={MapPin} profile={profile} onChange={handleProfileChange}/>
+                            <ProfileInputField k="city"     label="City"         ph="e.g. Siliguri"          icon={MapPin} profile={profile} onChange={handleProfileChange}/>
+                            <ProfileInputField k="pincode"  label="Pincode"      ph="734001"                 icon={MapPin} profile={profile} onChange={handleProfileChange}/>
                             <div>
                               <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">State</label>
                               <select value={profile.state} onChange={e=>setProfile(p=>({...p,state:e.target.value}))}
@@ -773,26 +815,46 @@ const AccountPage = () => {
                             <Link to="/shop" className="inline-flex items-center gap-2 mt-4 px-5 py-2.5 brand-gradient text-white font-bold rounded-xl text-sm">Browse Shop</Link>
                           </div>
                         : <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {wishlist.map(item => (
+                            {wishlist.map(saved => {
+                              const item = withLive(saved, wishLive[String(saved.id)]);
+                              const gone = item.unavailable || item.active === false;
+                              const soldOut = !gone && isOutOfStock(item);
+                              const stock = stockOf(item);
+                              return (
                               <div key={item.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow">
                                 <div className="flex gap-3">
                                   {item.image && <img loading="lazy" decoding="async" src={item.image} alt={item.name} className="w-16 h-16 rounded-xl object-cover bg-gray-100 shrink-0" onError={e=>{e.target.style.display='none'}}/>}
                                   <div className="flex-1 min-w-0">
                                     <p className="font-semibold text-gray-900 text-sm leading-snug line-clamp-2">{item.name}</p>
                                     <p className="text-blue-700 font-bold text-sm mt-1">₹{(item.price||0).toLocaleString('en-IN')}</p>
+                                    {(gone || soldOut) && (
+                                      <p className={`text-[11px] font-semibold mt-0.5 ${gone ? 'text-gray-500' : 'text-red-600'}`}>
+                                        {gone ? 'No longer available' : stock > 0 ? `Only ${stock} left (min. order ${moqOf(item)})` : 'Out of stock'}
+                                      </p>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="flex gap-2 mt-3">
+                                  {gone ? (
+                                    <span className="flex-1 py-2 rounded-xl text-xs font-semibold text-gray-400 border border-gray-200 text-center">Unavailable</span>
+                                  ) : soldOut ? (
+                                    <button onClick={() => addToRfq(item, moqOf(item))}
+                                      className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 ${inRfq(item.id) ? 'bg-green-100 text-green-700' : 'border-2 border-blue-200 text-blue-700 hover:bg-blue-50'}`}>
+                                      {inRfq(item.id) ? 'Quoted ✓' : 'Request Quote'}
+                                    </button>
+                                  ) : (
                                   <button onClick={() => moveToCart(item)} className="flex-1 py-2 brand-gradient text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5">
                                     <ShoppingBag className="h-3.5 w-3.5"/> Add to Cart
                                   </button>
-                                  <button onClick={() => toggleWishlist(item)} title="Remove from wishlist"
+                                  )}
+                                  <button onClick={() => toggleWishlist(saved)} title="Remove from wishlist"
                                     className="p-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors">
                                     <Heart className="h-4 w-4 fill-red-400"/>
                                   </button>
                                 </div>
                               </div>
-                            ))}
+                              );
+                            })}
                           </div>
                       }
                     </div>

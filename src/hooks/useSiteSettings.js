@@ -35,6 +35,21 @@ const loadSettings = () => {
   }
 };
 
+/*
+ * One request shared by every component on the page. Five widgets use this
+ * hook (banner, announcement bar, social proof, contact bar, exit popup) and
+ * each used to fetch /site-settings on its own — five identical calls per page.
+ */
+const SHARE_MS = 60_000;
+let shared = null;               // { at, promise }
+const fetchSettingsShared = () => {
+  const now = Date.now();
+  if (shared && now - shared.at < SHARE_MS) return shared.promise;
+  const promise = siteSettingsApi.get().catch((err) => { shared = null; throw err; });
+  shared = { at: now, promise };
+  return promise;
+};
+
 /**
  * useSiteSettings — reads site settings from localStorage and re-fires when:
  * 1. Admin saves settings (CustomEvent: ng:settings-updated)
@@ -47,6 +62,7 @@ export const useSiteSettings = () => {
 
   useEffect(() => {
     const handleCustom = (e) => {
+      shared = null;             // the admin just saved — next read goes to the server
       if (e.detail) setSettings({ ...defaultSettings, ...e.detail });
       else setSettings(loadSettings());
     };
@@ -58,7 +74,7 @@ export const useSiteSettings = () => {
 
     // Sync from backend so settings apply globally (not just the admin's browser)
     let cancelled = false;
-    siteSettingsApi.get()
+    fetchSettingsShared()
       .then(({ data }) => {
         if (cancelled || !data?.settings) return;
         let parsed = {};

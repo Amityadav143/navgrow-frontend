@@ -24,8 +24,8 @@ import {
   ShieldCheck, Truck, RotateCcw, Lock, Package, ChevronRight, Loader2, AlertCircle,
   FileText, ArrowLeft, Zap, Banknote, Tag,
 } from 'lucide-react';
-import { useCart } from '@/context/CartContext';
-import { useRfq } from '@/context/RfqContext';
+import { useCart, lineIssue, isBlockedLine } from '@/context/CartContext';
+import { moqOf, stockOf } from '@/lib/stock';
 import { ordersApi, deliveryApi, couponsApi } from '@/lib/api';
 import { perProductDelivery } from '@/lib/utils';
 import { LOCAL_OFFERS, evaluateLocalCoupon, isOffline } from '@/lib/offers';
@@ -101,8 +101,11 @@ const Field = ({ id, label, type = 'text', required, placeholder, value, onChang
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
-  const { items, updateQty, removeItem, clearCart } = useCart();
-  const { addToRfq } = useRfq();
+  const { items, updateQty, removeItem, clearCart,
+          syncAvailability, cartIssues, hasCartIssues, moveToQuote } = useCart();
+
+  // Live stock + price check as soon as checkout opens (the cart may be old).
+  useEffect(() => { syncAvailability({ force: true, announce: true }); }, [syncAvailability]);
   const { user } = useAuth();
   // Stable key of the cart's products — re-checks delivery when the cart changes.
   const itemIdsKey = items.map(i => i.id).filter(Boolean).join(',');
@@ -236,41 +239,47 @@ const CheckoutPage = () => {
       const rate = (typeof i.gstRate === 'number' && i.gstRate >= 0) ? i.gstRate : 18;
       const inclusive = (i.price || 0) * qty;
       const taxable = inclusive * 100 / (100 + rate);
-      return { ...i, qty, rate, inclusive, taxable, tax: inclusive - taxable };
+      return { ...i, qty, rate, inclusive, taxable, tax: inclusive - taxable, blocked: isBlockedLine(i) };
     });
+    // Every line is listed, but only what can be bought right now is totalled —
+    // a sold-out line must never inflate the amount (checkout stays blocked
+    // until it is moved to a quote or removed).
+    const payLines = lines.filter(l => !l.blocked);
 
     // What the customer pays for goods is the inclusive figure they were shown.
-    const goods    = lines.reduce((s, l) => s + l.inclusive, 0);
-    const subtotal = lines.reduce((s, l) => s + l.taxable, 0);
-    const gst      = lines.reduce((s, l) => s + l.tax, 0);
-    const mrpTotal = items.reduce((s, i) => s + ((i.mrp || i.price || 0) * (i.qty || 1)), 0);
-    const count = items.reduce((s, i) => s + (i.qty || 1), 0);
+    const goods    = payLines.reduce((s, l) => s + l.inclusive, 0);
+    const subtotal = payLines.reduce((s, l) => s + l.taxable, 0);
+    const gst      = payLines.reduce((s, l) => s + l.tax, 0);
+    const mrpTotal = payLines.reduce((s, i) => s + ((i.mrp || i.price || 0) * (i.qty || 1)), 0);
+    const count = payLines.reduce((s, i) => s + (i.qty || 1), 0);
     // Delivery is charged PER PRODUCT LINE and scales with each line's quantity
     // (base × lineQty × slab(lineQty), summed). The zone quote returns the per-unit
     // base charge for the pincode; we apply the per-product formula to it here so
     // cart and checkout always agree. Until a pincode resolves we use the national
     // default base as the estimate.
-    const cartLines = items.map(i => ({ qty: i.qty || 1, deliveryCharge: i.deliveryCharge }));
+    const cartLines = payLines.map(i => ({ qty: i.qty || 1, deliveryCharge: i.deliveryCharge }));
     // Delivery is only known once the buyer's pincode resolves to a zone. Until
     // then we do NOT show an estimated figure — the user is asked to enter a PIN
     // code first. `deliveryKnown` drives that in the UI.
     const deliveryKnown = Boolean(delivery && delivery.serviceable);
     let shipping = 0;
+    let shippingStd = 0;
+    let shippingExp = 0;
     if (deliveryKnown) {
       // Free zones (Siliguri) return a 0 base → stays free. Otherwise the returned
       // charge IS the per-unit base for this zone; apply the per-product formula.
+      // Both options are worked out so each button shows what it will really cost
+      // for this cart (not the per-unit base).
       const baseStd = Number(delivery.standardCharge || 0);
       const baseExp = Number(delivery.expressCharge || 0);
-      if (deliverySpeed === 'express' && delivery.expressAvailable) {
-        shipping = baseExp === 0 ? 0 : perProductDelivery(cartLines, baseExp);
-      } else {
-        shipping = baseStd === 0 ? 0 : perProductDelivery(cartLines, baseStd);
-      }
+      shippingStd = baseStd === 0 ? 0 : perProductDelivery(cartLines, baseStd);
+      shippingExp = baseExp === 0 ? 0 : perProductDelivery(cartLines, baseExp);
+      shipping = (deliverySpeed === 'express' && delivery.expressAvailable) ? shippingExp : shippingStd;
     }
 
     // Group taxable value and tax by slab for the breakdown.
     const bySlab = {};
-    lines.forEach(l => {
+    payLines.forEach(l => {
       const k = String(l.rate);
       if (!bySlab[k]) bySlab[k] = { rate: l.rate, taxable: 0, tax: 0 };
       bySlab[k].taxable += l.taxable;
@@ -278,7 +287,7 @@ const CheckoutPage = () => {
     });
 
     return {
-      lines, subtotal, gst, shipping, deliveryKnown,
+      lines, blockedCount: lines.length - payLines.length, subtotal, gst, shipping, shippingStd, shippingExp, deliveryKnown,
       slabs: Object.values(bySlab).sort((a, b) => a.rate - b.rate),
       savings: Math.max(0, mrpTotal - subtotal),
       codCharge: 0,   // filled in below once the zone and method are known
@@ -289,7 +298,7 @@ const CheckoutPage = () => {
   }, [items, delivery, deliverySpeed]);
 
   // Cash-handling fee, only when COD is both chosen and offered here.
-  const codFee = (payMethod === 'COD' && delivery?.codAvailable)
+  const codFee = (payMethod === 'COD' && delivery?.codAvailable && totals.goods > 0)
     ? Number(delivery.codCharge || 0) : 0;
   // Coupon discount is a single deduction off the (tax-inclusive) goods total —
   // exactly what the server applies and what the invoice shows. Clamp so it can
@@ -381,12 +390,7 @@ const CheckoutPage = () => {
   const restrictedIds = new Set(restrictedItems.map(r => String(r.productId)));
   const blockedLines = items.filter(i => restrictedIds.has(String(i.id)) || restrictedItems.some(r => r.slug && r.slug === i.slug));
 
-  // Move a line we can't ship here into the quote list — the team can arrange it.
-  const moveToQuote = (item) => {
-    addToRfq({ id: item.id, name: item.name, slug: item.slug, image: item.image, price: item.price,
-               gstRate: item.gstRate, stockQty: item.stockQty }, item.qty || 1);
-    removeItem(item.id);
-  };
+  // (Lines we can't ship here move to the quote list via the cart's moveToQuote.)
 
   const validateDelivery = () => {
     const e = {};
@@ -414,29 +418,46 @@ const CheckoutPage = () => {
   const goToStep = useCallback((n) => {
     setStep(n);
     setMaxStep(m => Math.max(m, n));
+    setError('');        // a message from a failed payment attempt belongs to that attempt
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
+
+  // Send the buyer back to the step that needs fixing, with the reason shown there.
+  const backTo = (n, message) => {
+    setStep(n); setMaxStep(m => Math.max(m, n));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setError(message);
+  };
 
   const handlePay = async () => {
     setError('');
     if (!items.length) { setError('Your cart is empty.'); return; }
     // Don't let a buyer pay before we know the delivery details — otherwise the
     // server rejects the order with a raw error. Validate the address/pincode and
-    // send them back to step 1 to fix it, with the field errors shown.
+    // send them back to the delivery step to fix it, with the field errors shown.
     if (!validateDelivery()) {
-      setStep(1); setMaxStep(m => Math.max(m, 1));
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      setError('Please complete your delivery details before paying.');
+      backTo(2, 'Please complete your delivery details before paying.');
       return;
     }
     if (!totals.deliveryKnown) {
-      setStep(1);
-      setError('Enter your PIN code so we can calculate delivery before payment.');
+      backTo(2, 'Enter your PIN code so we can calculate delivery before payment.');
       return;
     }
     if (blockedLines.length) {
-      setStep(1);
-      setError(`${blockedLines.length} item${blockedLines.length === 1 ? '' : 's'} can't be delivered to ${form.pincode}. Remove ${blockedLines.length === 1 ? 'it' : 'them'} or move to a quote.`);
+      backTo(2, `${blockedLines.length} item${blockedLines.length === 1 ? '' : 's'} can't be delivered to ${form.pincode}. Remove ${blockedLines.length === 1 ? 'it' : 'them'} or move to a quote.`);
+      return;
+    }
+    // Final live stock check right before the order is created.
+    const check = await syncAvailability({ force: true, announce: false });
+    if (hasCartIssues || (check?.issues || []).length) {
+      backTo(1, 'Some items in your cart just went out of stock. Move them to a quote or remove them to continue.');
+      return;
+    }
+    // Stock or price moved since this page was rendered: the cart has just been
+    // updated, so show it again rather than charge an amount the buyer never saw.
+    if ((check?.changed || []).length) {
+      const names = check.changed.slice(0, 3).map(c => c.item?.name).filter(Boolean).join(', ');
+      backTo(1, `We've just updated ${names || 'your cart'} to the latest stock and price. Please check the total and continue.`);
       return;
     }
     if (payMethod !== 'COD' && !window.Razorpay) {
@@ -512,7 +533,13 @@ const CheckoutPage = () => {
       rzp.open();
     } catch (err) {
       setPaying(false);
-      setError(err.response?.data?.message || 'We could not start the payment. Please try again.');
+      const message = err.response?.data?.message || 'We could not start the payment. Please try again.';
+      setError(message);
+      // A stock/price problem found by the server shows up on the cart lines too —
+      // take the buyer to them so they can move/remove the item and carry on.
+      syncAvailability({ force: true, announce: false }).then(r => {
+        if ((r?.issues || []).length || (r?.changed || []).length) backTo(1, message);
+      });
     }
   };
 
@@ -621,17 +648,44 @@ const CheckoutPage = () => {
             {/* Step 1 — Cart */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
               <StepHeader index={1} title="Review your items" active={step === 1} done={step > 1}
-                summary={`${totals.count} item${totals.count === 1 ? '' : 's'} · ${inr(totals.subtotal)}`}
+                summary={`${totals.count} item${totals.count === 1 ? '' : 's'} · ${inr(totals.goods)}`}
                 onChange={() => goToStep(1)} />
               <AnimatePresence initial={false}>
                 {step === 1 && (
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                     className="overflow-hidden">
                     <div className="mt-4 space-y-3">
+                      {error && (
+                        <div role="alert" className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">
+                          <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" /><span>{error}</span>
+                        </div>
+                      )}
+                      {totals.blockedCount > 0 && (
+                        <div className="flex items-start gap-2 rounded-xl bg-red-50 border border-red-100 px-3 py-2.5 text-sm text-red-700">
+                          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                          <p>
+                            <strong>{totals.blockedCount} item{totals.blockedCount === 1 ? '' : 's'} can't be bought right now.</strong>{' '}
+                            Move {totals.blockedCount === 1 ? 'it' : 'them'} to a quote — we'll source {totals.blockedCount === 1 ? 'it' : 'them'} and confirm the lead time — or remove {totals.blockedCount === 1 ? 'it' : 'them'} to continue.
+                          </p>
+                        </div>
+                      )}
+                      {hasCartIssues && totals.blockedCount === 0 && (
+                        <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5 text-sm text-amber-800">
+                          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                          <p>
+                            <strong>Not enough stock for {cartIssues.length === 1 ? 'one item' : `${cartIssues.length} items`}.</strong>{' '}
+                            Lower the quantity to what's available to continue.
+                          </p>
+                        </div>
+                      )}
                       {totals.lines.map(i => {
                         const rate = i.rate;
+                        const issue = lineIssue(i);
+                        const blocked = issue === 'out_of_stock' || issue === 'unavailable';
+                        const moq = moqOf(i);
+                        const stock = stockOf(i);
                         return (
-                          <div key={i.id} className="flex gap-3 p-3 rounded-xl border border-gray-100">
+                          <div key={i.id} className={`flex gap-3 p-3 rounded-xl border ${blocked ? 'border-red-200 bg-red-50/40' : 'border-gray-100'}`}>
                             <img src={i.image} alt={i.name} width={64} height={64} loading="lazy"
                               onError={(e) => { e.target.onerror = null; e.target.src = '/placeholder.jpg'; }}
                               className="w-16 h-16 rounded-lg object-cover bg-gray-50 shrink-0" />
@@ -640,18 +694,38 @@ const CheckoutPage = () => {
                               <p className="text-[11px] text-gray-400 mt-0.5">
                                 {i.hsn ? `HSN ${i.hsn} · ` : ''}incl. {rate}% GST ({inr(i.tax)})
                               </p>
+                              {issue === 'out_of_stock' && (
+                                <p className="text-xs font-bold text-red-600 mt-1">
+                                  {stock !== null && stock > 0 && stock < moq ? `Only ${stock} left (minimum order ${moq})` : 'Out of stock'}
+                                </p>
+                              )}
+                              {issue === 'unavailable' && <p className="text-xs font-bold text-gray-600 mt-1">No longer available</p>}
+                              {issue === 'exceeds' && <p className="text-xs font-bold text-amber-700 mt-1">Only {stock} available — lower the quantity</p>}
+                              {!blocked && issue !== 'exceeds' && i.qtyNote && <p className="text-xs font-semibold text-amber-600 mt-1">{i.qtyNote}</p>}
+                              {!blocked && moq > 1 && <p className="text-[11px] text-gray-500 mt-0.5">Minimum order: {moq}</p>}
                               <div className="flex items-center justify-between mt-2 gap-2 flex-wrap">
+                                {blocked ? (
+                                  issue === 'out_of_stock' ? (
+                                    <button onClick={() => moveToQuote(i.id)}
+                                      className="px-3 py-1.5 rounded-lg text-xs font-bold border-2 border-blue-200 text-blue-700 bg-white hover:bg-blue-50 flex items-center gap-1.5">
+                                      <FileText className="h-3.5 w-3.5" /> Move to quote
+                                    </button>
+                                  ) : <span />
+                                ) : (
                                 <div className="flex items-center gap-1 border border-gray-200 rounded-lg">
-                                  <button onClick={() => updateQty(i.id, Math.max(1, (i.qty || 1) - 1))}
+                                  <button onClick={() => updateQty(i.id, Math.max(moq, (i.qty || 1) - 1))}
+                                    disabled={(i.qty || 1) <= moq}
                                     aria-label={`Decrease quantity of ${i.name}`}
-                                    className="p-1.5 hover:bg-gray-50 rounded-l-lg"><Minus className="h-3.5 w-3.5" /></button>
+                                    className="p-1.5 hover:bg-gray-50 rounded-l-lg disabled:opacity-40 disabled:cursor-not-allowed"><Minus className="h-3.5 w-3.5" /></button>
                                   <span className="px-2 text-sm font-bold min-w-[28px] text-center">{i.qty || 1}</span>
                                   <button onClick={() => updateQty(i.id, (i.qty || 1) + 1)}
+                                    disabled={stock !== null && (i.qty || 1) >= stock}
                                     aria-label={`Increase quantity of ${i.name}`}
-                                    className="p-1.5 hover:bg-gray-50 rounded-r-lg"><Plus className="h-3.5 w-3.5" /></button>
+                                    className="p-1.5 hover:bg-gray-50 rounded-r-lg disabled:opacity-40 disabled:cursor-not-allowed"><Plus className="h-3.5 w-3.5" /></button>
                                 </div>
+                                )}
                                 <div className="flex items-center gap-3">
-                                  <span className="font-extrabold text-gray-900 text-sm">{inr((i.price || 0) * (i.qty || 1))}</span>
+                                  <span className={`text-sm ${blocked ? 'font-semibold text-gray-400 line-through' : 'font-extrabold text-gray-900'}`}>{inr((i.price || 0) * (i.qty || 1))}</span>
                                   <button onClick={() => removeItem(i.id)} aria-label={`Remove ${i.name}`}
                                     className="text-gray-300 hover:text-red-500 transition-colors">
                                     <Trash2 className="h-4 w-4" />
@@ -781,9 +855,9 @@ const CheckoutPage = () => {
                       )}
                     </div>
 
-                    <button onClick={() => goToStep(2)}
-                      className="w-full mt-4 py-3 btn-gold rounded-xl text-sm">
-                      Continue to delivery →
+                    <button onClick={() => goToStep(2)} disabled={hasCartIssues}
+                      className="w-full mt-4 py-3 btn-gold rounded-xl text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                      {hasCartIssues ? 'Fix the items above to continue' : 'Continue to delivery →'}
                     </button>
                   </motion.div>
                 )}
@@ -798,6 +872,11 @@ const CheckoutPage = () => {
                 {step === 2 && (
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                     className="overflow-hidden">
+                    {error && (
+                      <div role="alert" className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3 mt-4">
+                        <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" /><span>{error}</span>
+                      </div>
+                    )}
                     {/* Help the buyer fill their address: one tap to use their live
                         location, and area/city/state auto-filled from the pincode. */}
                     <button type="button" onClick={useMyLocation} disabled={locating}
@@ -849,7 +928,7 @@ const CheckoutPage = () => {
                                   <p className="text-sm font-semibold text-gray-900 truncate">{it.name}</p>
                                   <p className="text-[11px] text-gray-500 truncate">Delivery area: {info?.areaNote || 'selected pincodes only'}</p>
                                 </div>
-                                <button onClick={() => moveToQuote(it)}
+                                <button onClick={() => moveToQuote(it.id)}
                                   className="shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border-2 border-blue-200 text-blue-700 hover:bg-blue-50">
                                   Move to quote
                                 </button>
@@ -890,9 +969,9 @@ const CheckoutPage = () => {
                                   </span>
                                 </span>
                                 <span className="text-sm font-bold shrink-0">
-                                  {Number(delivery.standardCharge) === 0
+                                  {totals.shippingStd === 0
                                     ? <span className="text-green-600">FREE</span>
-                                    : inr(delivery.standardCharge)}
+                                    : inr(totals.shippingStd)}
                                 </span>
                               </button>
 
@@ -907,7 +986,9 @@ const CheckoutPage = () => {
                                       <span className="block text-xs text-gray-500">Arrives {delivery.expressBy}</span>
                                     </span>
                                   </span>
-                                  <span className="text-sm font-bold shrink-0">{inr(delivery.expressCharge)}</span>
+                                  <span className="text-sm font-bold shrink-0">
+                                    {totals.shippingExp === 0 ? <span className="text-green-600">FREE</span> : inr(totals.shippingExp)}
+                                  </span>
                                 </button>
                               )}
                             </div>

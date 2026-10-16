@@ -15,6 +15,7 @@ import { Link } from 'react-router-dom';
 import { ShoppingCart, ArrowRight, ShieldCheck, Package, Wrench, HardHat, FileText } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useRfq } from '@/context/RfqContext';
+import { isOutOfStock, liveStock } from '@/lib/stock';
 import { toCartItem } from '@/lib/cartItem';
 import { productsApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
@@ -45,7 +46,9 @@ const CATALOGUE_FALLBACK = (() => {
     mrp: p.mrp != null ? Number(p.mrp) : undefined,
     cat: p.cat,
     image: p.image,
-    stockQty: p.stockQty,
+    // Placeholder catalogue: browse-only. Its stock figures are fixtures, not
+    // live stock, and its ids aren't orderable — so no "Add" button for these.
+    sample: true,
     gstRate: p.gstRate,
     hsn: p.hsn,
     sku: p.sku,
@@ -61,9 +64,15 @@ const mapProduct = (p) => ({
   mrp: p.mrp != null ? Number(p.mrp) : undefined,
   cat: p.category || 'Shop',
   image: p.imageUrl || '',
-  stockQty: p.stockQty,
+  stockQty: liveStock(p.stockQty),        // never "unknown" for a live product
+  minOrderQty: p.minOrderQty || 1,
   gstRate: p.gstRate,
   hsn: p.hsnCode,
+  sku: p.sku,
+  deliveryCharge: p.deliveryCharge ?? null,
+  deliveryRestricted: !!p.deliveryRestricted,
+  allowedPincodes: p.allowedPincodes || undefined,
+  deliveryAreaNote: p.deliveryAreaNote || undefined,
 });
 
 /**
@@ -203,7 +212,12 @@ const ShopPreview = () => {
                   <p className="font-bold text-gray-900 text-sm mt-1 mb-3 line-clamp-2 leading-snug">{p.name}</p>
                   <div className="flex items-center justify-between">
                     <span className="font-extrabold text-gray-900">₹{p.price.toLocaleString('en-IN')}</span>
-                    {p.stockQty != null && Number(p.stockQty) <= 0 ? (
+                    {p.sample ? (
+                      <Link to={`/shop/${p.slug || p.id}`}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border-2 border-blue-200 text-blue-700 hover:bg-blue-50">
+                        View <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    ) : isOutOfStock(p) ? (
                       <button onClick={() => addToRfq(p)} title="Out of stock — request a quote (backorder)"
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${inRfq(p.id) ? 'bg-green-100 text-green-700' : 'border-2 border-blue-200 text-blue-700 hover:bg-blue-50'}`}>
                         <FileText className="h-3.5 w-3.5" />

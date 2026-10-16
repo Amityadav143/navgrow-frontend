@@ -17,16 +17,16 @@ export default function Root() {
       <MotionConfig reducedMotion="user">
         <BrowserRouter>
           <AuthProvider>
-            <CartProvider>
-              <RfqProvider>
+            <RfqProvider>
+              <CartProvider>
                 <CompareProvider>
                   <ConfirmProvider>
                     <App />
                     <Toaster />
                   </ConfirmProvider>
                 </CompareProvider>
-              </RfqProvider>
-            </CartProvider>
+              </CartProvider>
+            </RfqProvider>
           </AuthProvider>
         </BrowserRouter>
       </MotionConfig>

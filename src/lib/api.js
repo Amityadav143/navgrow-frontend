@@ -136,11 +136,19 @@ export const stockNotifyApi = {
 
 export const productsApi = {
   related: (id, limit = 4) => api.get(`/products/${id}/related`, { params: { limit } }),
-  list:       (params) => api.get('/products', { params }),
+  // Public catalogue reads: every caller falls back to the built-in catalogue and
+  // says so on the page, so a failure here doesn't need a global error toast too.
+  list:       (params) => api.get('/products', { params, skipErrorToast: true }),
   // Admin: every product incl. drafts/deactivated. status: active|inactive|restricted|outofstock|lowstock
   manage:     (params) => api.get('/products/manage', { params }),
-  get:        (slug)   => api.get(`/products/${slug}`),
-  featured:   ()       => api.get('/products/featured'),
+  // Public: live stock/price for saved copies (cart, wishlist, recently viewed, re-order).
+  availability: (refs) => api.get('/products/availability', {
+    params: { refs: (Array.isArray(refs) ? refs : [refs]).filter(Boolean).join(',') },
+    skipErrorToast: true,
+  }),
+  // The product page shows its own "stock not confirmed · retry" state, so no global error toast.
+  get:        (slug)   => api.get(`/products/${slug}`, { skipErrorToast: true }),
+  featured:   ()       => api.get('/products/featured', { skipErrorToast: true }),
   categories: ()       => api.get('/products/categories'),
   reviews:    (id)     => api.get(`/products/${id}/reviews`),
   addReview:  (id, d)  => api.post(`/products/${id}/reviews`, d),
