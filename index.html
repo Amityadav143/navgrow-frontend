@@ -88,6 +88,11 @@
   </noscript>
 
   <!-- ── Structured Data: Organization ────────────────────────────────── -->
+  <!-- Never list a "Product" in this block: Google requires offers, review or
+       aggregateRating on EVERY Product it finds, and a priceless Product here
+       made every page of the site fail the Product snippets report. Products
+       get their own complete markup on their own pages. No self-awarded
+       ratings either (Google ignores them and may treat them as spam). -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -104,7 +109,6 @@
     },
     "description": "DPIIT-recognised, MSME-registered engineering company in Siliguri, West Bengal delivering railway infrastructure, industrial and civil works, and sustainability solutions (solar, water treatment) for Indian Railways, government and private industry across India.",
     "foundingDate": "2022",
-    "founders": [{ "@type": "Person", "name": "Navgrow Engineering Founders" }],
     "address": {
       "@type": "PostalAddress",
       "streetAddress": "Ward No-47, Old Matigara Road, Pati Colony",
@@ -144,7 +148,7 @@
         { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Civil & Construction Works" } },
         { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Government Contract Management" } },
         { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Safety & Compliance Consulting" } },
-        { "@type": "Offer", "itemOffered": { "@type": "Product", "name": "B2B Safety Equipment & Railway Tools" } }
+        { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "B2B Supply of Safety Equipment, Railway Tools & Construction Materials" } }
       ]
     }
   }
@@ -177,7 +181,6 @@
     "openingHoursSpecification": [
       { "@type": "OpeningHoursSpecification", "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday"], "opens": "09:00", "closes": "18:00" }
     ],
-    "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.9", "reviewCount": "12", "bestRating": "5" },
     "hasMap": "https://www.openstreetmap.org/?mlat=26.723923&mlon=88.402903",
     "knowsAbout": ["Indian Railways","Locomotive Modification","Railway Shed Construction","RDSO Compliance","GeM Portal","Government Tenders","DPIIT","MSME","Industrial Engineering","Civil Construction","Safety Equipment"],
     "serviceArea": {

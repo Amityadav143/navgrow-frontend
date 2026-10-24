@@ -14,6 +14,8 @@
  * from this config gives every route its own indexable HTML.
  */
 
+import { buildProductSchema } from './productSchema.js';
+
 export const SITE = {
   name: 'Navgrow Engineering Service Pvt. Ltd.',
   shortName: 'Navgrow Engineering',
@@ -153,86 +155,12 @@ export function organizationSchema() {
 }
 
 /**
- * Complete, valid Product JSON-LD for a catalogue product. GUARANTEES both an
- * `offers` block (with a real INR price and availability) and an
- * `aggregateRating`, so Google's "Either offers, review or aggregateRating
- * should be specified" requirement is always satisfied for every product page.
+ * Product JSON-LD for a built-in catalogue product. Delegates to the shared
+ * builder (src/lib/productSchema.js). The built-in catalogue's ratings are
+ * placeholders, so they never become aggregateRating.
  */
 export function productSchema(p) {
-  const slug = p.slug || p.id;
-  const price = Number(p.price);
-  const hasPrice = Number.isFinite(price) && price > 0;
-  const rating = Number(p.rating);
-  // Real review count only — do NOT invent one. aggregateRating is added below
-  // ONLY when genuine reviews exist, per Google's structured-data policy.
-  const reviewCount = Number(p.reviews) || Number(p.reviewCount) || Number(p.numReviews) || 0;
-  const hasRealReviews = reviewCount > 0 && Number.isFinite(rating) && rating > 0;
-
-  const validUntil = new Date();
-  validUntil.setFullYear(validUntil.getFullYear() + 1);
-
-  const schema = {
-    '@context': 'https://schema.org',
-    '@type': 'Product',
-    name: p.name,
-    description: p.summary || p.description || p.desc || p.name,
-    sku: String(p.sku || p.id || slug),
-    mpn: String(p.sku || p.id || slug),
-    brand: { '@type': 'Brand', name: 'Navgrow Engineering' },
-    category: p.category || 'Industrial & Engineering Supplies',
-    url: `${SITE.url}/shop/${slug}`,
-    // offers is ALWAYS present — this is the block Google requires.
-    offers: {
-      '@type': 'Offer',
-      url: `${SITE.url}/shop/${slug}`,
-      priceCurrency: 'INR',
-      price: (hasPrice ? price : 0).toFixed(2),
-      priceValidUntil: validUntil.toISOString().slice(0, 10),
-      availability: (p.inStock === false || p.stockQty === 0)
-        ? 'https://schema.org/OutOfStock'
-        : 'https://schema.org/InStock',
-      itemCondition: 'https://schema.org/NewCondition',
-      seller: { '@type': 'Organization', name: SITE.name },
-      shippingDetails: {
-        '@type': 'OfferShippingDetails',
-        shippingRate: { '@type': 'MonetaryAmount', currency: 'INR', value: '150' },
-        shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'IN' },
-      },
-      hasMerchantReturnPolicy: {
-        '@type': 'MerchantReturnPolicy',
-        applicableCountry: 'IN',
-        returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
-        merchantReturnDays: 7,
-        returnMethod: 'https://schema.org/ReturnByMail',
-        returnFees: 'https://schema.org/FreeReturn',
-      },
-    },
-    // NOTE: aggregateRating is added below ONLY when real reviews exist. `offers`
-    // (above) already satisfies Google's "offers/review/aggregateRating" rule,
-    // so the Product rich result stays valid for products with no reviews yet —
-    // without fabricating ratings (which risks a structured-data penalty).
-  };
-  // Genuine ratings only.
-  if (hasRealReviews) {
-    schema.aggregateRating = {
-      '@type': 'AggregateRating',
-      ratingValue: rating.toFixed(1),
-      reviewCount: reviewCount,
-      bestRating: '5',
-      worstRating: '1',
-    };
-  }
-  if (p.image || p.imageUrl) {
-    schema.image = /^https?:\/\//.test(p.image || p.imageUrl)
-      ? (p.image || p.imageUrl)
-      : `${SITE.url}${p.image || p.imageUrl}`;
-  }
-  if (p.gstRate || p.hsnCode) {
-    schema.additionalProperty = [];
-    if (p.hsnCode) schema.additionalProperty.push({ '@type': 'PropertyValue', name: 'HSN Code', value: String(p.hsnCode) });
-    if (p.gstRate) schema.additionalProperty.push({ '@type': 'PropertyValue', name: 'GST Rate', value: `${p.gstRate}%` });
-  }
-  return schema;
+  return buildProductSchema(p, { siteUrl: SITE.url, genuineRatings: false });
 }
 
 /** Breadcrumb JSON-LD for a product page (Home › Shop › Product). */

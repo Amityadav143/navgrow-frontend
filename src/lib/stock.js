@@ -40,9 +40,21 @@ export const liveStock = (raw) => {
   return raw === null || raw === undefined || raw === '' || !Number.isFinite(n) ? 0 : Math.max(0, Math.floor(n));
 };
 
-/** Known to be NOT buyable online (sold out, or fewer units than the minimum order). */
+/**
+ * Known to be NOT buyable online (sold out, or fewer units than the minimum order).
+ * A product sold in options (brand / grade / size…) is out of stock only when
+ * none of its options can be bought.
+ */
 export function isOutOfStock(p) {
   if (p?.active === false) return true;
+  const options = Array.isArray(p?.variants) ? p.variants.filter(v => v && v.active !== false) : null;
+  if (options && (options.length || p?.hasVariants)) {
+    return !options.some(v => {
+      const s = stockOf(v);
+      const moq = moqOf({ minOrderQty: v.minOrderQty ?? p.minOrderQty });
+      return s === null || s >= moq;
+    });
+  }
   const s = stockOf(p);
   return s !== null && s < moqOf(p);
 }

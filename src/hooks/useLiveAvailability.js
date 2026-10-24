@@ -61,5 +61,11 @@ export function withLive(item, a) {
     minOrderQty: Number(a.minOrderQty ?? 1),
     active: a.active !== false,
     unavailable: a.active === false,
+    // Sold in options (brand / grade / size…): the buyer picks one on the product page.
+    hasVariants: !!a.hasVariants,
+    variants: Array.isArray(a.variants) ? a.variants : undefined,
+    optionNames: a.optionNames || undefined,
+    unitLabel: a.unitLabel || item.unitLabel,
+    priceMax: a.priceMax != null ? Number(a.priceMax) : undefined,
   };
 }

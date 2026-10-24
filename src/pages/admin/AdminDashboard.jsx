@@ -16,7 +16,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, MessageSquare, FileText,
   Users, Newspaper, Image, Briefcase, Tag, ChevronRight, Bell, Settings,
   TrendingUp, AlertCircle, CheckCircle, Clock, BarChart2, ClipboardList, Layers, FileDown, Percent, Truck, Menu, X,
-  Crown, ShieldCheck, LogIn, Lock, Loader2, KeyRound,
+  Crown, ShieldCheck, LogIn, Lock, Loader2, KeyRound, Star,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useApi } from '@/hooks/useApi';
@@ -32,6 +32,7 @@ const NAV_ITEMS = [
   // Commerce
   { path: '/admin/orders',    label: 'Orders',         icon: ShoppingCart,                group: 'Commerce', perm: 'ORDERS' },
   { path: '/admin/products',  label: 'Products',       icon: Package,                     group: 'Commerce', perm: 'PRODUCTS' },
+  { path: '/admin/reviews',   label: 'Reviews',        icon: Star,                        group: 'Commerce', perm: 'PRODUCTS', hint: 'Approve customer reviews before they go live' },
   { path: '/admin/quotes',    label: 'Quote Requests', icon: FileText,                    group: 'Commerce', perm: 'QUOTES' },
   { path: '/admin/catalogue-leads', label: 'Catalogue Leads', icon: FileDown,             group: 'Commerce', perm: 'CATALOGUE_LEADS' },
   { path: '/admin/tax-rules', label: 'Tax Rules',       icon: Percent,              group: 'Commerce', perm: 'TAX_RULES' },
@@ -490,7 +491,7 @@ const AdminHome = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {sections.map(({ path, label, icon: Icon, perm }) => (
+              {sections.map(({ path, label, icon: Icon, perm, hint }) => (
                 <Link key={path} to={path}
                   className="group flex items-start gap-3 p-4 rounded-2xl bg-gray-900 border border-gray-800 hover:border-blue-500/60 transition-colors">
                   <div className="w-9 h-9 rounded-xl bg-blue-600/15 flex items-center justify-center shrink-0">
@@ -499,7 +500,7 @@ const AdminHome = () => {
                   <div className="min-w-0 flex-1">
                     <p className="text-white text-sm font-bold flex items-center gap-1">{label}
                       <ChevronRight className="h-3.5 w-3.5 text-gray-600 group-hover:text-blue-400 transition-colors" /></p>
-                    <p className="text-gray-500 text-xs mt-0.5">{SECTION_HINTS[perm] || ''}</p>
+                    <p className="text-gray-500 text-xs mt-0.5">{hint || SECTION_HINTS[perm] || ''}</p>
                   </div>
                 </Link>
               ))}

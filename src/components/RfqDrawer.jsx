@@ -12,7 +12,7 @@ import {
   X, FileText, Trash2, Plus, Minus, Send, CheckCircle2,
   Building2, ArrowRight, ArrowLeft, Loader2, Package, Clock, ShieldCheck,
 } from 'lucide-react';
-import { useRfq } from '@/context/RfqContext';
+import { useRfq, rfqKeyOf } from '@/context/RfqContext';
 import { useAuth } from '@/context/AuthContext';
 import { INDIAN_STATES, normalizeState } from '@/lib/indianStates';
 import { lookupPincode } from '@/lib/location';
@@ -121,7 +121,7 @@ const RfqDrawer = () => {
         gstin:      form.gstin.trim().toUpperCase(),
         pincode:    form.pincode.trim(),
         items: items.map(i => ({
-          productId: i.productId, productName: i.productName, sku: i.sku,
+          productId: i.productId, variantId: i.variantId || undefined, productName: i.productName, sku: i.sku,
           quantity: i.quantity, specification: i.specification || '', gstRate: i.gstRate ?? 18,
         })),
       };
@@ -228,7 +228,7 @@ const RfqDrawer = () => {
                         </div>
                       )}
                       {items.map(it => (
-                        <div key={it.productId} className="border border-gray-150 rounded-2xl p-3.5 bg-gray-50/50">
+                        <div key={rfqKeyOf(it)} className="border border-gray-150 rounded-2xl p-3.5 bg-gray-50/50">
                           <div className="flex gap-3">
                             {it.image && (
                               <img loading="lazy" decoding="async" src={it.image} alt={it.productName}
@@ -249,22 +249,22 @@ const RfqDrawer = () => {
                               ) : null}
                               <div className="flex items-center justify-between mt-2">
                                 <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg">
-                                  <button aria-label="Decrease" onClick={() => updateQty(it.productId, it.quantity - 1)}
+                                  <button aria-label="Decrease" onClick={() => updateQty(rfqKeyOf(it), it.quantity - 1)}
                                     className="p-1.5 hover:bg-gray-50 rounded-l-lg"><Minus className="h-3.5 w-3.5 text-gray-500" /></button>
                                   <input type="number" value={it.quantity} min={1}
-                                    onChange={e => updateQty(it.productId, parseInt(e.target.value) || 1)}
+                                    onChange={e => updateQty(rfqKeyOf(it), parseInt(e.target.value) || 1)}
                                     className="w-12 text-center text-sm font-bold border-0 focus:outline-none bg-transparent" />
-                                  <button aria-label="Increase" onClick={() => updateQty(it.productId, it.quantity + 1)}
+                                  <button aria-label="Increase" onClick={() => updateQty(rfqKeyOf(it), it.quantity + 1)}
                                     className="p-1.5 hover:bg-gray-50 rounded-r-lg"><Plus className="h-3.5 w-3.5 text-gray-500" /></button>
                                 </div>
-                                <button aria-label="Remove" onClick={() => removeItem(it.productId)}
+                                <button aria-label="Remove" onClick={() => removeItem(rfqKeyOf(it))}
                                   className="p-1.5 text-gray-300 hover:text-red-500 transition-colors"><Trash2 className="h-4 w-4" /></button>
                               </div>
                             </div>
                           </div>
                           <input
                             type="text" value={it.specification || ''}
-                            onChange={e => updateSpec(it.productId, e.target.value)}
+                            onChange={e => updateSpec(rfqKeyOf(it), e.target.value)}
                             placeholder="Add spec / grade / note (optional)"
                             className="w-full mt-2.5 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-blue-400 bg-white" />
                         </div>

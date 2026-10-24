@@ -15,6 +15,7 @@ import { Package, Search, Filter, ChevronDown, Truck, Eye, AlertTriangle, MapPin
 import { ordersApi, debounce } from '@/lib/api';
 import { usePaginated, useMutation } from '@/hooks/useApi';
 import { useToast } from '@/components/ui/use-toast';
+import { unitPlural } from '@/lib/variants';
 
 const STATUS_COLORS = {
   PENDING: 'bg-yellow-100 text-yellow-700', CONFIRMED: 'bg-blue-100 text-blue-700',
@@ -176,7 +177,7 @@ const AdminOrders = () => {
                           <span className="ml-1.5 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold" title="Not taken from inventory — not enough stock">short</span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-center font-bold">{it.quantity}</td>
+                      <td className="px-3 py-2 text-center font-bold">{it.quantity}{it.unitLabel ? <span className="font-normal text-gray-400"> {unitPlural(it.unitLabel, it.quantity)}</span> : null}</td>
                       <td className="px-3 py-2 text-right">{inr(it.unitPrice)}</td>
                       <td className="px-3 py-2 text-right font-semibold">{inr(Number(it.unitPrice || 0) * Number(it.quantity || 0))}</td>
                     </tr>

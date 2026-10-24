@@ -15,6 +15,8 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { useRfq } from '@/context/RfqContext';
+import { toVariantCartItem } from '@/lib/cartItem';
+import { lineKeyOf, unitPlural } from '@/lib/variants';
 import useLiveAvailability, { withLive } from '@/hooks/useLiveAvailability';
 import { isOutOfStock, isLiveId, moqOf, stockOf } from '@/lib/stock';
 import { toast } from '@/components/ui/use-toast';
@@ -218,7 +220,7 @@ const LoginGate = () => {
 };
 
 const AccountPage = () => {
-  useSeo({ title:'My Account', path:'/account' });
+  useSeo({ title:'My Account', path:'/account', noindex: true });
   const { user, isLoggedIn, logout, canAccessAdmin, isSuperAdmin } = useAuth();
   const { wishlist, toggleWishlist, moveToCart, addItem, setCartOpen } = useCart();
   const { addToRfq, inRfq } = useRfq();
@@ -413,6 +415,25 @@ const AccountPage = () => {
         hsn: it.hsnCode || it.hsn || undefined,
       };
       const a = live[pid];
+      // A line for one option of a product (e.g. Cement — UltraTech · OPC 53):
+      // re-order exactly that option, at its current price and stock.
+      if (it.variantId) {
+        const opt = a && Array.isArray(a.variants) ? a.variants.find(x => String(x.id) === String(it.variantId)) : null;
+        if (a && (a.found === false || a.active === false || !opt || opt.active === false)) { gone.push(base.name); continue; }
+        const productLike = {
+          id: pid, name: a?.name || String(base.name).split(' — ')[0], slug: a?.slug || base.slug,
+          gstRate: a?.gstRate ?? base.gstRate, hsnCode: a?.hsnCode || base.hsn, unitLabel: a?.unitLabel,
+          priceTiers: a?.priceTiers, deliveryCharge: a?.deliveryCharge, deliveryRestricted: a?.deliveryRestricted,
+          allowedPincodes: a?.allowedPincodes, deliveryAreaNote: a?.deliveryAreaNote, minOrderQty: a?.minOrderQty,
+        };
+        const optLine = opt
+          ? toVariantCartItem(productLike, opt, { qty: base.qty })
+          : { ...base, id: lineKeyOf(pid, it.variantId), productId: pid, variantId: it.variantId, variantLabel: it.variantLabel };
+        if (opt && isOutOfStock(optLine)) { addToRfq(productLike, base.qty, opt); quoted.push(base.name); continue; }
+        const r = await addItem(optLine);
+        if (r?.ok) added++;
+        continue;
+      }
       const merged = a ? withLive(base, a) : base;
       if (a && (a.found === false || a.active === false)) { gone.push(base.name); continue; }
       if (a && isOutOfStock(merged)) { addToRfq(merged, base.qty); quoted.push(base.name); continue; }
@@ -573,12 +594,12 @@ const AccountPage = () => {
                                       item.productSlug ? (
                                         <Link key={i} to={`/shop/${item.productSlug}`} className="flex items-center gap-2 bg-gray-50 hover:bg-blue-50 rounded-xl px-3 py-2 shrink-0">
                                           <p className="text-xs text-gray-700 font-medium">{item.productName}</p>
-                                          <span className="text-[10px] text-gray-400">×{item.quantity}</span>
+                                          <span className="text-[10px] text-gray-400">×{item.quantity}{item.unitLabel ? ` ${unitPlural(item.unitLabel, item.quantity)}` : ''}</span>
                                         </Link>
                                       ) : (
                                       <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2 shrink-0">
                                         <p className="text-xs text-gray-700 font-medium">{item.productName}</p>
-                                        <span className="text-[10px] text-gray-400">×{item.quantity}</span>
+                                        <span className="text-[10px] text-gray-400">×{item.quantity}{item.unitLabel ? ` ${unitPlural(item.unitLabel, item.quantity)}` : ''}</span>
                                       </div>
                                       )
                                     ))}

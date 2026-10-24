@@ -19,9 +19,11 @@ import {
   Percent, Plus, Save, Trash2, RefreshCw, Loader2, AlertCircle, CheckCircle, Info,
 } from 'lucide-react';
 import { taxRulesApi } from '@/lib/api';
+import { GST_RATES, gstLabel } from '@/lib/gst';
 import { useToast } from '@/components/ui/use-toast';
 
-const GST_SLABS = ['0', '5', '12', '18', '28'];
+// GST 2.0 slabs (Nil / 5 / 18 / 40, plus 3 and 0.25); 12 and 28 kept for older rules.
+const GST_SLABS = GST_RATES;
 const BLANK = { category: '', hsnCode: '', gstRate: '18', description: '', active: true };
 
 const AdminTaxRules = () => {
@@ -191,7 +193,7 @@ const AdminTaxRules = () => {
                     <label className="block text-[11px] font-bold text-gray-400 uppercase mb-1">GST Rate</label>
                     <select value={String(Number(r.gstRate))} onChange={e => editField(r.id, 'gstRate', e.target.value)}
                       className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500">
-                      {GST_SLABS.map(s => <option key={s} value={s}>{s}%</option>)}
+                      {GST_SLABS.map(s => <option key={s} value={s}>{gstLabel(s)}</option>)}
                     </select>
                   </div>
                   <div className="md:col-span-3">
@@ -249,7 +251,7 @@ const AdminTaxRules = () => {
             <label className="block text-[11px] font-bold text-gray-400 uppercase mb-1">GST Rate</label>
             <select value={draft.gstRate} onChange={e => setDraft(d => ({ ...d, gstRate: e.target.value }))}
               className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500">
-              {GST_SLABS.map(s => <option key={s} value={s}>{s}%</option>)}
+              {GST_SLABS.map(s => <option key={s} value={s}>{gstLabel(s)}</option>)}
             </select>
           </div>
           <div className="md:col-span-3">

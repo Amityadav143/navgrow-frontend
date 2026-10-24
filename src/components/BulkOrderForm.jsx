@@ -1,5 +1,5 @@
 /**
- * © 2024–2025 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
+ * © 2024–2026 Navgrow Engineering Service Pvt. Ltd. All rights reserved.
  * CIN: U74999WB2022PTC256012 | navgrow.org | info@navgrow.org
  *
  * PROPRIETARY & CONFIDENTIAL
@@ -10,259 +10,213 @@
  * Licensed for: navgrow.org (Production Deployment Only)
  */
 /**
- * BulkOrderForm — B2B bulk pricing enquiry modal
- * Features: quantity tiers, volume discount calculator, GST invoice
+ * BulkOrderForm — bulk price calculator that turns into a formal quote request.
+ *
+ * Shows the REAL bulk prices of the product, or of the option chosen on the
+ * product page (e.g. Cement: UltraTech · OPC 53) — the same prices the cart and
+ * checkout charge — then puts the requirement in the quote basket, where the
+ * buyer's details are collected and a tracked RFQ is raised.
+ *
+ * It used to invent discounts (5–25%) that checkout never honoured, add GST on
+ * top of prices that already include it, and post the enquiry to the ORDER
+ * endpoint — which rejected it — before opening the visitor's mail app and
+ * showing "Enquiry Sent!" although nothing had reached the team.
  */
-import React, { useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import useBodyScrollLock from '@/hooks/useBodyScrollLock';
+import useEscapeKey from '@/hooks/useEscapeKey';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Package, Calculator, Send, CheckCircle, Building, Phone, Mail, MapPin } from 'lucide-react';
-import { ordersApi } from '@/lib/api';
+import { X, Calculator, FileText, MessageCircle, Tag, Info, TrendingDown } from 'lucide-react';
+import { useRfq } from '@/context/RfqContext';
+import { tierTable, unitPriceFor, nextTier, rupees } from '@/lib/pricing';
+import { effectiveTiers, hasOptions, variantLabel, variantMoq, unitPlural, lineKeyOf } from '@/lib/variants';
+import { moqOf, stockOf } from '@/lib/stock';
 
-const VOLUME_TIERS = [
-  { min: 1,   max: 9,   label: '1–9 units',     disc: 0 },
-  { min: 10,  max: 24,  label: '10–24 units',   disc: 5 },
-  { min: 25,  max: 49,  label: '25–49 units',   disc: 8 },
-  { min: 50,  max: 99,  label: '50–99 units',   disc: 12 },
-  { min: 100, max: 499, label: '100–499 units',  disc: 18 },
-  { min: 500, max: 999, label: '500+ units',     disc: 25 },
-];
+const inr = rupees;
+const WHATSAPP = '918927070972';
 
-const getDiscount = (qty) => {
-  const tier = VOLUME_TIERS.find(t => qty >= t.min && qty <= t.max) || VOLUME_TIERS[VOLUME_TIERS.length - 1];
-  return tier.disc;
-};
-
-const BulkOrderForm = ({ product, open, onClose }) => {
+const BulkOrderForm = ({ product, variant = null, initialQty, open, onClose }) => {
   // Lock the page while this overlay is open (iOS-safe).
   useBodyScrollLock(open);
-  const [qty,      setQty]      = useState(10);
-  const [form,     setForm]     = useState({ name:'', phone:'', email:'', company:'', gstin:'', city:'', notes:'' });
-  const [sending,  setSending]  = useState(false);
-  const [sent,     setSent]     = useState(false);
-  const [errors,   setErrors]   = useState({});
+  useEscapeKey(open, onClose);
+  const { addToRfq, updateQty } = useRfq();
 
-  const ch = useCallback((k, v) => setForm(p => ({ ...p, [k]: v })), []);
+  const options = hasOptions(product);
+  const src = (options && variant) || product || {};
+  const base = Number(src.price) || 0;
+  const tiersText = product ? effectiveTiers(product, options ? variant : null) : null;
+  const moq = options && variant ? variantMoq(variant, product) : moqOf(product || {});
+  const unit = product?.unitLabel || '';
+  const rate = Number(product?.gstRate ?? 18);
+  const stock = stockOf(src);            // null when not known
+  const label = options && variant ? variantLabel(variant) : '';
 
-  const unitPrice     = product?.price || 0;
-  const discountPct   = getDiscount(qty);
-  const discountedUnit= unitPrice * (1 - discountPct / 100);
-  const lineTotal     = discountedUnit * qty;
-  const savings       = (unitPrice - discountedUnit) * qty;
-  const gstAmount     = lineTotal * ((product?.gstRate ?? 18) / 100);
-  const grandTotal    = lineTotal + gstAmount;
+  const table = useMemo(() => tierTable(base, tiersText, moq), [base, tiersText, moq]);
+  const [qty, setQty] = useState(moq);
+  const [draft, setDraft] = useState(null);
 
-  const validate = () => {
-    const e = {};
-    if (!form.name.trim())  e.name  = 'Required';
-    if (!form.phone.trim()) e.phone = 'Required';
-    if (!form.email.trim()) e.email = 'Required';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email)) e.email = 'Invalid email';
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const handleSend = async () => {
-    if (!validate()) return;
-    setSending(true);
-    try {
-      // Try API first
-      await ordersApi.create({
-        customerName:  form.name,
-        customerEmail: form.email,
-        customerPhone: form.phone,
-        companyName:   form.company,
-        gstin:         form.gstin,
-        city:          form.city,
-        notes:         `BULK ORDER REQUEST\nProduct: ${product.name}\nQty: ${qty} units\nUnit Price: ₹${Math.round(discountedUnit).toLocaleString('en-IN')}\nTotal: ₹${Math.round(grandTotal).toLocaleString('en-IN')}\nDiscount: ${discountPct}%\n\nNotes: ${form.notes}`,
-        items: [{ productId: product.id, quantity: qty }],
-        orderType: 'BULK_ENQUIRY',
-      });
-      setSent(true);
-    } catch {
-      // Fallback: pre-fill mailto
-      const subject = encodeURIComponent(`Bulk Order Enquiry — ${product.name} × ${qty} units`);
-      const body = encodeURIComponent(
-        `Dear Navgrow Engineering Team,\n\n` +
-        `I would like to place a bulk order for the following product:\n\n` +
-        `PRODUCT DETAILS\n` +
-        `Product    : ${product.name}\n` +
-        `SKU        : ${product.sku || 'N/A'}\n` +
-        `Quantity   : ${qty} units\n` +
-        `Unit Price : ₹${Math.round(discountedUnit).toLocaleString('en-IN')} (${discountPct}% bulk discount)\n` +
-        `Subtotal   : ₹${Math.round(lineTotal).toLocaleString('en-IN')}\n` +
-        `GST        : ₹${Math.round(gstAmount).toLocaleString('en-IN')} (${product?.gstRate ?? 18}%)\n` +
-        `Grand Total: ₹${Math.round(grandTotal).toLocaleString('en-IN')}\n` +
-        `Savings    : ₹${Math.round(savings).toLocaleString('en-IN')}\n\n` +
-        `BUYER DETAILS\n` +
-        `Name    : ${form.name}\n` +
-        `Phone   : ${form.phone}\n` +
-        `Email   : ${form.email}\n` +
-        (form.company ? `Company : ${form.company}\n` : '') +
-        (form.gstin   ? `GSTIN   : ${form.gstin}\n` : '') +
-        (form.city    ? `City    : ${form.city}\n` : '') +
-        `\nAdditional Notes: ${form.notes || 'None'}\n\n` +
-        `Please confirm availability, delivery timeline, and payment terms.\n\nThank you,\n${form.name}`
-      );
-      window.open(`mailto:info@navgrow.org?subject=${subject}&body=${body}`, '_blank');
-      setSent(true);
-    } finally { setSending(false); }
-  };
+  // Open at the quantity already chosen on the page — or at the first bulk price.
+  useEffect(() => {
+    if (!open) return;
+    setQty(Math.max(moq, Number(initialQty) || 0, table[1]?.minQty || 0));
+    setDraft(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   if (!product) return null;
+
+  const unitNow = unitPriceFor(base, tiersText, qty);
+  const total = Math.round(unitNow * qty * 100) / 100;
+  const gstIncluded = Math.round((total - (total * 100) / (100 + rate)) * 100) / 100;
+  const savings = Math.max(0, Math.round((base - unitNow) * qty * 100) / 100);
+  const upsell = nextTier(base, tiersText, qty);
+  const beyondStock = stock != null && qty > stock;
+  const units = (n) => `${n} ${unitPlural(unit, n)}`;
+  const per = unit ? `/${unit}` : ' each';
+
+  const commit = (value) => {
+    const n = parseInt(value, 10);
+    setQty(Math.max(moq, Number.isFinite(n) ? n : moq));
+    setDraft(null);
+  };
+
+  const requestQuote = () => {
+    addToRfq(product, qty, options ? variant : null);   // opens the quote basket
+    // Exactly this many — not added on top of an earlier line for the same item.
+    updateQty(lineKeyOf(product.productId ?? product.id, options ? variant?.id : null), qty);
+    onClose?.();
+  };
+
+  const whatsappText = `Hi Navgrow! Bulk requirement: ${product.name}${label ? ` — ${label}` : ''}`
+    + `${(src.sku || product.sku) ? ` (SKU: ${src.sku || product.sku})` : ''} × ${units(qty)}.`
+    + ` Listed bulk price ${inr(unitNow)}${per}. Please share your best price and delivery time.`;
 
   return (
     <AnimatePresence>
       {open && (
         <motion.div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center p-0 sm:p-4"
-          initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}>
-          <motion.div className="absolute inset-0 bg-gray-900/75 backdrop-blur-sm" onClick={onClose}/>
-          <motion.div
-            className="relative bg-white w-full sm:max-w-xl sm:rounded-3xl shadow-2xl max-h-[95dvh] overflow-y-auto rounded-t-3xl"
-            initial={{ y:60, scale:.97 }} animate={{ y:0, scale:1 }} exit={{ y:60, scale:.97 }}
-            transition={{ type:'spring', stiffness:300, damping:30 }}>
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.div className="absolute inset-0 bg-gray-900/75 backdrop-blur-sm" onClick={onClose} />
+          <motion.div role="dialog" aria-modal="true" aria-labelledby="bulk-title"
+            className="relative bg-white w-full sm:max-w-lg sm:rounded-3xl shadow-2xl max-h-[95dvh] overflow-y-auto rounded-t-3xl"
+            initial={{ y: 60, scale: .97 }} animate={{ y: 0, scale: 1 }} exit={{ y: 60, scale: .97 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}>
 
             {/* Header */}
             <div className="sticky top-0 bg-white px-6 py-4 border-b border-gray-100 rounded-t-3xl flex items-center justify-between z-10">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 brand-gradient rounded-2xl flex items-center justify-center">
-                  <Package className="h-5 w-5 text-white"/>
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 brand-gradient rounded-2xl flex items-center justify-center shrink-0">
+                  <Calculator className="h-5 w-5 text-white" />
                 </div>
-                <div>
-                  <h2 className="font-bold text-gray-900 text-base">Bulk Order Enquiry</h2>
-                  <p className="text-xs text-gray-500">{product.name}</p>
+                <div className="min-w-0">
+                  <h2 id="bulk-title" className="font-bold text-gray-900 text-base">Bulk price calculator</h2>
+                  <p className="text-xs text-gray-500 truncate">{product.name}{label ? ` — ${label}` : ''}</p>
                 </div>
               </div>
-              <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 text-gray-500">
-                <X className="h-5 w-5"/>
+              <button onClick={onClose} aria-label="Close" className="p-2 rounded-xl hover:bg-gray-100 text-gray-500">
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            {sent ? (
-              <div className="p-10 text-center">
-                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle className="h-10 w-10 text-green-600"/>
+            <div className="p-6 space-y-5">
+              {/* Quantity */}
+              <div>
+                <label htmlFor="bulk-qty" className="block text-sm font-bold text-gray-700 mb-2">
+                  How many {unitPlural(unit, 2)} do you need?
+                </label>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center border-2 border-gray-200 rounded-2xl overflow-hidden">
+                    <button type="button" aria-label="Decrease quantity" onClick={() => { setDraft(null); setQty(q => Math.max(moq, q - 1)); }}
+                      className="w-11 h-11 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-xl">−</button>
+                    <input id="bulk-qty" type="number" inputMode="numeric" min={moq} value={draft ?? qty}
+                      onChange={e => setDraft(e.target.value)}
+                      onBlur={() => draft != null && commit(draft)}
+                      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                      className="w-24 h-11 text-center font-bold text-gray-900 text-lg border-0 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                    <button type="button" aria-label="Increase quantity" onClick={() => { setDraft(null); setQty(q => q + 1); }}
+                      className="w-11 h-11 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-xl">+</button>
+                  </div>
+                  {moq > 1 && <span className="text-xs font-semibold text-gray-500">Minimum order: {units(moq)}</span>}
                 </div>
-                <h3 className="text-xl font-extrabold text-gray-900 mb-2">Enquiry Sent!</h3>
-                <p className="text-gray-500 text-sm mb-5">
-                  Our team will contact you within 2 business hours with a formal bulk quotation.
-                </p>
-                <button onClick={onClose} className="px-6 py-3 btn-gold rounded-xl font-bold">
-                  Continue Shopping
-                </button>
               </div>
-            ) : (
-              <div className="p-6 space-y-5">
-                {/* Quantity + Volume tier */}
+
+              {/* Real bulk prices */}
+              {table.length > 0 ? (
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2.5">
-                    Quantity <span className="text-xs text-gray-400 font-normal">(min. 1)</span>
-                  </label>
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="flex items-center border-2 border-gray-200 rounded-2xl overflow-hidden">
-                      <button onClick={() => setQty(q => Math.max(1, q-1))}
-                        className="w-12 h-12 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-xl">−</button>
-                      <input type="number" value={qty} min={1}
-                        onChange={e => setQty(Math.max(1, parseInt(e.target.value)||1))}
-                        className="w-20 h-12 text-center font-bold text-gray-900 text-lg border-0 focus:outline-none"/>
-                      <button onClick={() => setQty(q => q+1)}
-                        className="w-12 h-12 flex items-center justify-center text-gray-600 hover:bg-gray-50 font-bold text-xl">+</button>
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      <span className="font-bold text-gray-900">units</span>
-                    </div>
-                  </div>
-
-                  {/* Volume discount tiers */}
-                  <div className="flex gap-2 overflow-x-auto pb-1">
-                    {VOLUME_TIERS.map(tier => (
-                      <button key={tier.min}
-                        onClick={() => setQty(tier.min)}
-                        className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold border-2 transition-all ${
-                          qty >= tier.min && (tier.max >= 499 || qty <= tier.max)
-                            ? 'border-blue-500 bg-blue-50 text-blue-700'
-                            : 'border-gray-200 text-gray-400 hover:border-blue-200'
-                        }`}>
-                        {tier.label}
-                        {tier.disc > 0 && <span className="block text-[10px] text-green-600 font-black">{tier.disc}% off</span>}
-                      </button>
-                    ))}
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                    <Tag className="h-3.5 w-3.5 text-emerald-600" /> Bulk prices{label ? ` — ${label}` : ''}
+                  </p>
+                  <div className="grid gap-1.5">
+                    {table.map(t => {
+                      const active = qty >= t.minQty && (t.maxQty == null || qty <= t.maxQty);
+                      return (
+                        <button key={t.minQty} type="button" onClick={() => { setDraft(null); setQty(Math.max(moq, t.minQty)); }}
+                          className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm text-left transition-colors ${
+                            active ? 'bg-emerald-50 border-2 border-emerald-400' : 'border border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/40'}`}>
+                          <span className="font-semibold text-gray-700">
+                            {t.maxQty == null ? `${t.minQty}+` : `${t.minQty}–${t.maxQty}`} {unitPlural(unit, 2)}
+                          </span>
+                          <span className="flex items-center gap-2">
+                            <span className="font-extrabold text-gray-900">{inr(t.unitPrice)}<span className="text-xs font-semibold text-gray-400">{per}</span></span>
+                            {t.savePct > 0 && <span className="text-[11px] font-bold text-emerald-700">−{t.savePct}%</span>}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
+              ) : (
+                <div className="flex items-start gap-2.5 rounded-2xl bg-blue-50 border border-blue-100 px-4 py-3 text-sm text-blue-900">
+                  <Info className="h-4 w-4 mt-0.5 shrink-0 text-blue-600" />
+                  <p>No published volume prices for this item yet. Request a quote — for large quantities our team regularly beats the listed price.</p>
+                </div>
+              )}
 
-                {/* Price summary */}
-                <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div>
-                      <p className="text-xs text-blue-600 font-bold uppercase tracking-wide mb-1">Price Estimate</p>
-                      <p className="text-2xl font-extrabold text-gray-900">₹{Math.round(grandTotal).toLocaleString('en-IN')}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">Incl. GST {product?.gstRate ?? 18}%</p>
-                    </div>
-                    <div className="text-right">
-                      {discountPct > 0 && (
-                        <span className="inline-block bg-green-600 text-white text-sm font-black px-3 py-1 rounded-full mb-1">
-                          {discountPct}% bulk discount
-                        </span>
-                      )}
-                      <p className="text-sm text-gray-600">₹{Math.round(discountedUnit).toLocaleString('en-IN')} / unit</p>
-                      {discountPct > 0 && (
-                        <p className="text-xs text-green-600 font-bold">
-                          You save ₹{Math.round(savings).toLocaleString('en-IN')}
-                        </p>
-                      )}
-                    </div>
+              {/* Estimate */}
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                <div className="flex items-end justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-xs text-gray-500 font-semibold">Estimated total for {units(qty)}</p>
+                    <p className="text-2xl font-extrabold text-gray-900 leading-tight">{inr(total)}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">Includes GST {inr(gstIncluded)} ({rate}%) · delivery by pincode</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-gray-900">{inr(unitNow)}<span className="text-xs font-semibold text-gray-400">{per}</span></p>
+                    {savings > 0 && (
+                      <p className="text-xs font-bold text-emerald-700 flex items-center gap-1 justify-end">
+                        <TrendingDown className="h-3.5 w-3.5" /> You save {inr(savings)}
+                      </p>
+                    )}
                   </div>
                 </div>
-
-                {/* Contact form */}
-                <div className="space-y-3">
-                  <p className="text-sm font-bold text-gray-700">Your Details</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { k:'name',    label:'Full Name *',    ph:'Your name',          full:true },
-                      { k:'phone',   label:'Phone *',        ph:'+91 XXXXX XXXXX',    type:'tel' },
-                      { k:'email',   label:'Email *',        ph:'you@company.com',    type:'email' },
-                      { k:'company', label:'Company',        ph:'Organisation name' },
-                      { k:'gstin',   label:'GSTIN',          ph:'22AAAAA0000A1Z5',   full:false },
-                      { k:'city',    label:'Delivery City',  ph:'e.g. Siliguri' },
-                    ].map(f => (
-                      <div key={f.k} className={f.full ? 'col-span-2' : ''}>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">{f.label}</label>
-                        <input
-                          type={f.type || 'text'} value={form[f.k]}
-                          onChange={e => ch(f.k, e.target.value)} placeholder={f.ph}
-                          className={`w-full px-3 py-2.5 border-2 rounded-xl text-sm focus:outline-none transition-colors ${
-                            errors[f.k] ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-blue-500'
-                          }`}
-                        />
-                        {errors[f.k] && <p className="text-xs text-red-500 mt-0.5">{errors[f.k]}</p>}
-                      </div>
-                    ))}
-                    <div className="col-span-2">
-                      <label className="block text-xs font-semibold text-gray-500 mb-1">Additional Notes</label>
-                      <textarea value={form.notes} onChange={e => ch('notes', e.target.value)} rows={2}
-                        placeholder="Custom specs, branding, packaging, delivery timeline…"
-                        className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 resize-none"/>
-                    </div>
-                  </div>
-                </div>
-
-                <button onClick={handleSend} disabled={sending}
-                  className="w-full py-4 btn-gold rounded-2xl font-bold text-base flex items-center justify-center gap-2 disabled:opacity-60">
-                  {sending
-                    ? <span className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"/>
-                    : <Send className="h-5 w-5"/>
-                  }
-                  {sending ? 'Sending…' : `Send Bulk Enquiry — ${qty} units`}
-                </button>
-
-                <div className="flex items-center justify-center gap-4 text-xs text-gray-400">
-                  <span className="flex items-center gap-1"><CheckCircle className="h-3.5 w-3.5 text-green-500"/>GST invoice</span>
-                  <span className="flex items-center gap-1"><CheckCircle className="h-3.5 w-3.5 text-green-500"/>Pan-India delivery</span>
-                  <span className="flex items-center gap-1"><CheckCircle className="h-3.5 w-3.5 text-green-500"/>2hr response</span>
-                </div>
+                {upsell && (
+                  <button type="button" onClick={() => { setDraft(null); setQty(upsell.minQty); }}
+                    className="mt-3 w-full text-left text-xs text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2 hover:bg-emerald-100/60">
+                    Add <strong>{upsell.addQty}</strong> more to pay <strong>{inr(upsell.unitPrice)}{per}</strong> — make it {upsell.minQty}
+                  </button>
+                )}
+                {beyondStock && (
+                  <p className="mt-3 text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+                    {stock > 0 ? <>We have <strong>{units(stock)}</strong> ready to ship — we'll source the rest.</> : <>Currently out of stock — we'll source it for you.</>}
+                    {' '}Your quote will confirm price and lead time.
+                  </p>
+                )}
               </div>
-            )}
+
+              <div className="space-y-2.5">
+                <button type="button" onClick={requestQuote}
+                  className="w-full py-3.5 btn-gold rounded-2xl font-bold text-base flex items-center justify-center gap-2">
+                  <FileText className="h-5 w-5" /> Request a formal quote for {units(qty)}
+                </button>
+                <a href={`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(whatsappText)}`} target="_blank" rel="noopener noreferrer"
+                  className="w-full py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border-2 border-green-200 text-green-700 hover:bg-green-50">
+                  <MessageCircle className="h-4 w-4" /> Discuss on WhatsApp
+                </a>
+                <p className="text-[11px] text-gray-400 text-center">
+                  Formal GST quotation within 1 business day · No payment now · Track it under Saved Quotes
+                </p>
+              </div>
+            </div>
           </motion.div>
         </motion.div>
       )}

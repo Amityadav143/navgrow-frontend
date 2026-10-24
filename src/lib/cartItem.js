@@ -6,6 +6,8 @@
  * Unauthorised copying or distribution is strictly prohibited.
  */
 
+import { effectiveTiers, hasOptions, lineKeyOf, optionNamesOf, variantLabel, variantMoq } from '@/lib/variants';
+
 /**
  * Builds the object we put in the cart from a product.
  *
@@ -29,8 +31,17 @@ export function toCartItem(product, extra = {}) {
 
   return {
     id:       product.id,
+    productId: product.id,
     name:     product.name,
     price:    Number(product.price ?? 0),
+    // Bulk prices: the line's unit price is worked out from these and the
+    // quantity (same rule as the server), so the cart shows what is charged.
+    basePrice: Number(product.price ?? 0),
+    priceTiers: effectiveTiers(product, null) || undefined,
+    unitLabel: product.unitLabel || undefined,
+    // A product sold in options can't go in the cart until one is chosen.
+    needsOption: hasOptions(product) || undefined,
+    optionNames: hasOptions(product) ? optionNamesOf(product) : undefined,
     mrp:      product.mrp != null ? Number(product.mrp) : undefined,
     image:    product.image || product.imageUrl,
     slug:     product.slug,
@@ -48,6 +59,39 @@ export function toCartItem(product, extra = {}) {
     deliveryRestricted: Boolean(product.deliveryRestricted),
     allowedPincodes:    product.allowedPincodes || undefined,
     deliveryAreaNote:   product.deliveryAreaNote || undefined,
+    ...extra,
+  };
+}
+
+/**
+ * Cart line for one option of a product (e.g. Cement — UltraTech · OPC 53 ·
+ * 50 kg bag). The line id is "productId::variantId", so each option is its own
+ * line; productId / variantId go to the server with the order.
+ */
+export function toVariantCartItem(product, variant, extra = {}) {
+  if (!product || !variant) return null;
+  const base = toCartItem(product);
+  const label = variantLabel(variant);
+  const price = Number(variant.price ?? 0);
+  return {
+    ...base,
+    id:           lineKeyOf(product.id, variant.id),
+    productId:    product.id,
+    variantId:    variant.id,
+    variantLabel: label,
+    productName:  product.name,
+    name:         label ? `${product.name} — ${label}` : product.name,
+    price,
+    basePrice:    price,
+    priceTiers:   effectiveTiers(product, variant) || undefined,
+    mrp:          variant.mrp != null ? Number(variant.mrp) : undefined,
+    image:        variant.imageUrl || base.image,
+    stockQty:     variant.stockQty ?? null,
+    minOrderQty:  variantMoq(variant, product),
+    sku:          variant.sku || base.sku,
+    deliveryCharge: variant.deliveryCharge ?? base.deliveryCharge ?? null,
+    needsOption:  undefined,
+    optionNames:  undefined,
     ...extra,
   };
 }

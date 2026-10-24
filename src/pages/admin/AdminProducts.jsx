@@ -9,11 +9,10 @@
  *
  * Licensed for: navgrow.org (Production Deployment Only)
  */
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Plus, Edit2, Trash2, Package, Search, CheckCircle,
-  Download, Upload, FileText, X, AlertCircle, RefreshCw,
-  Image, Tag, DollarSign, BarChart2, Eye, EyeOff, AlertTriangle,
+  Download, Upload, FileText, X, AlertTriangle,
   BellRing, Loader2, Send, ChevronDown, MapPin, RotateCcw,
 } from 'lucide-react';
 import { productsApi, catalogApi, stockNotifyApi, deliveryApi } from '@/lib/api';
@@ -22,7 +21,13 @@ import { usePaginated, useMutation } from '@/hooks/useApi';
 import { useToast } from '@/components/ui/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import ImageUploadInput from '@/components/admin/ImageUploadInput';
+import VariantEditor from '@/components/admin/VariantEditor';
+import { initOptionsState, optionsPayload, validateOptions, summarizeRows } from '@/lib/variantEditor';
 import { filesApi } from '@/lib/api';
+import { GST_RATES, gstLabel } from '@/lib/gst';
+import ProductImportPanel from '@/components/admin/ProductImportPanel';
+import { exportWorkbook, templateWorkbook, fetchAllProducts, apiErrorMessage } from '@/lib/productImport';
+import { downloadBlob, datedName, XLSX_TYPE } from '@/lib/download';
 
 const CATEGORIES = [
   'Safety Equipment','Railway Tools','Maintenance Supplies',
@@ -30,176 +35,6 @@ const CATEGORIES = [
   'Industrial Equipment','Electrical & Electronics',
   'Civil & Construction','IT & Technology','Other',
 ];
-const GST_RATES = ['0','5','12','18','28'];
-
-/* ── CSV helpers ─────────────────────────────────────────────────────────── */
-// Full column set — matches the backend ProductRequest DTO exactly.
-// Rich text/list fields are supported; in CSV, encode line-separated lists
-// (features, benefits, applications, specifications, imageUrls) using a
-// literal "\n" between items, or wrap the whole multi-line cell in quotes.
-const CSV_HEADERS = [
-  'name','sku','category','price','mrp','gstRate','hsnCode','stockQty','minOrderQty','deliveryCharge',
-  'deliveryRestricted','allowedPincodes','deliveryAreaNote',
-  'description','imageUrl','badge','featured',
-  'tagline','summary','warranty',
-  'features','benefits','applications','specifications','imageUrls',
-];
-// Only name, category and price are mandatory; everything else is optional.
-const CSV_REQUIRED = ['name','category','price'];
-
-function csvCell(v) {
-  const s = v == null ? '' : String(v);
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-function productsToCSV(products) {
-  const rows = [CSV_HEADERS.join(',')];
-  products.forEach(p => {
-    rows.push(CSV_HEADERS.map(h => csvCell(p[h] ?? '')).join(','));
-  });
-  return rows.join('\n');
-}
-
-// Full RFC-4180-style parser: handles quoted fields containing commas,
-// embedded newlines, and escaped "" quotes — so Excel / Google Sheets
-// exports (including \r\n line endings) import cleanly.
-function parseCSV(text, delimiter = ',') {
-  const rows = [];
-  let row = [], cur = '', inQ = false;
-  // normalise BOM
-  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (inQ) {
-      if (ch === '"') {
-        if (text[i + 1] === '"') { cur += '"'; i++; }
-        else inQ = false;
-      } else cur += ch;
-    } else if (ch === '"') {
-      inQ = true;
-    } else if (ch === delimiter) {
-      row.push(cur); cur = '';
-    } else if (ch === '\n' || ch === '\r') {
-      // handle \r\n as a single break; ignore lone \r before \n
-      if (ch === '\r' && text[i + 1] === '\n') i++;
-      row.push(cur); cur = '';
-      rows.push(row); row = [];
-    } else cur += ch;
-  }
-  // flush last field/row if any content remains
-  if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
-  // drop fully-empty trailing rows
-  return rows.filter(r => r.some(c => c.trim() !== ''));
-}
-
-// Canonicalise a header for matching: lowercase, strip spaces/underscores/
-// hyphens and anything non-alphanumeric — so "Product Name", "product_name"
-// and "NAME " all resolve to the same key.
-function normHeader(h) {
-  return String(h || '').replace(/^\uFEFF/, '').toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-// Common spreadsheet spellings → our canonical column names. Real-world CSVs
-// exported from Excel/Sheets capitalise or rename headers, which previously
-// failed hard with "CSV is missing required column(s): name, category, price".
-const HEADER_ALIASES = {
-  name: 'name', productname: 'name', product: 'name', title: 'name', itemname: 'name',
-  category: 'category', productcategory: 'category', cat: 'category', type: 'category',
-  price: 'price', sellingprice: 'price', saleprice: 'price', rate: 'price', amount: 'price', unitprice: 'price',
-  mrp: 'mrp', listprice: 'mrp', maximumretailprice: 'mrp',
-  gstrate: 'gstRate', gst: 'gstRate', tax: 'gstRate', taxrate: 'gstRate',
-  hsn: 'hsnCode', hsncode: 'hsnCode', sac: 'hsnCode', saccode: 'hsnCode', hsnsac: 'hsnCode',
-  stockqty: 'stockQty', stock: 'stockQty', quantity: 'stockQty', qty: 'stockQty', inventory: 'stockQty',
-  minorderqty: 'minOrderQty', moq: 'minOrderQty', minimumorderquantity: 'minOrderQty',
-  sku: 'sku', skucode: 'sku', itemcode: 'sku', productcode: 'sku', partnumber: 'sku', partno: 'sku',
-  deliverycharge: 'deliveryCharge', shipping: 'deliveryCharge', shippingcharge: 'deliveryCharge',
-  deliveryfee: 'deliveryCharge', freight: 'deliveryCharge',
-  deliveryrestricted: 'deliveryRestricted', limiteddelivery: 'deliveryRestricted', restricted: 'deliveryRestricted',
-  allowedpincodes: 'allowedPincodes', pincodes: 'allowedPincodes', deliverypincodes: 'allowedPincodes',
-  servicepincodes: 'allowedPincodes',
-  deliveryareanote: 'deliveryAreaNote', deliveryarea: 'deliveryAreaNote', areanote: 'deliveryAreaNote',
-  description: 'description', desc: 'description', details: 'description',
-  imageurl: 'imageUrl', image: 'imageUrl', photo: 'imageUrl', picture: 'imageUrl', img: 'imageUrl',
-  imageurls: 'imageUrls', images: 'imageUrls', gallery: 'imageUrls',
-  badge: 'badge', label: 'badge',
-  featured: 'featured', isfeatured: 'featured',
-  tagline: 'tagline', summary: 'summary', warranty: 'warranty',
-  features: 'features', benefits: 'benefits', applications: 'applications',
-  specifications: 'specifications', specs: 'specifications',
-};
-
-// Detect the delimiter from the header line — Excel in many locales exports
-// semicolon-separated "CSV"; tab-separated exports are also common.
-export function detectDelimiter(text) {
-  const firstLine = text.split(/\r?\n/, 1)[0] || '';
-  const counts = [[',', 0], [';', 0], ['\t', 0]].map(([d]) => {
-    let n = 0, inQ = false;
-    for (const ch of firstLine) {
-      if (ch === '"') inQ = !inQ;
-      else if (!inQ && ch === d) n++;
-    }
-    return [d, n];
-  });
-  counts.sort((a, b) => b[1] - a[1]);
-  return counts[0][1] > 0 ? counts[0][0] : ',';
-}
-
-export function csvToProducts(csvText) {
-  const delimiter = detectDelimiter(csvText);
-  const rows = parseCSV(csvText, delimiter);
-  if (rows.length < 2) throw new Error('CSV must have a header row and at least one data row');
-  const idx = {};
-  rows[0].forEach((h, i) => {
-    const canonical = HEADER_ALIASES[normHeader(h)];
-    if (canonical && !(canonical in idx)) idx[canonical] = i;
-  });
-  // make sure the mandatory columns are present
-  const missing = CSV_REQUIRED.filter(c => !(c in idx));
-  if (missing.length) {
-    throw new Error(
-      `CSV is missing required column(s): ${missing.join(', ')}. ` +
-      `Found headers: ${rows[0].map(h => `"${String(h).trim()}"`).join(', ')}. ` +
-      `Tip: headers are matched case-insensitively — "Name", "Product Name", "Price", "Selling Price", "Category" all work. ` +
-      `Use "Download Template" for a ready-made file.`
-    );
-  }
-
-  const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
-  const get = (cells, key) => (idx[key] != null ? (cells[idx[key]] ?? '').trim() : '');
-
-  const truthy = (v) => ['true', '1', 'yes', 'y'].includes(String(v || '').trim().toLowerCase());
-  return rows.slice(1).map(cells => ({
-    name:           get(cells, 'name'),
-    sku:            get(cells, 'sku') || undefined,
-    deliveryCharge: get(cells, 'deliveryCharge') !== '' ? num(get(cells, 'deliveryCharge')) : null,
-    // Limited delivery area: "yes" + a pincode list ("734001; 7340*; 734101-734105").
-    // A pincode list alone also switches the restriction on.
-    deliveryRestricted: truthy(get(cells, 'deliveryRestricted')) || (!get(cells, 'deliveryRestricted') && !!get(cells, 'allowedPincodes')),
-    allowedPincodes: get(cells, 'allowedPincodes').replace(/\\n/g, '\n'),
-    deliveryAreaNote: get(cells, 'deliveryAreaNote'),
-    category:       get(cells, 'category') || 'Safety Equipment',
-    price:          num(get(cells, 'price')) ?? 0,
-    mrp:            get(cells, 'mrp') ? num(get(cells, 'mrp')) : null,
-    gstRate:        get(cells, 'gstRate') ? (num(get(cells, 'gstRate')) ?? 18) : 18,
-    hsnCode:        get(cells, 'hsnCode') || undefined,
-    stockQty:       get(cells, 'stockQty') ? Math.trunc(num(get(cells, 'stockQty')) ?? 0) : 0,
-    minOrderQty:    get(cells, 'minOrderQty') ? Math.max(1, Math.trunc(num(get(cells, 'minOrderQty')) ?? 1)) : 1,
-    description:    get(cells, 'description'),
-    imageUrl:       get(cells, 'imageUrl'),
-    badge:          get(cells, 'badge'),
-    featured:       truthy(get(cells, 'featured')),
-    tagline:        get(cells, 'tagline'),
-    summary:        get(cells, 'summary'),
-    warranty:       get(cells, 'warranty'),
-    // list/multiline fields: allow literal "\n" in the cell as an item separator
-    features:       get(cells, 'features').replace(/\\n/g, '\n'),
-    benefits:       get(cells, 'benefits').replace(/\\n/g, '\n'),
-    applications:   get(cells, 'applications').replace(/\\n/g, '\n'),
-    specifications: get(cells, 'specifications').replace(/\\n/g, '\n'),
-    imageUrls:      get(cells, 'imageUrls').replace(/\\n/g, '\n'),
-  }));
-}
-
 
 /* ── Gallery upload — uploads one or more files, appends their URLs ───────── */
 const GalleryUploadButton = ({ onUploaded }) => {
@@ -390,15 +225,35 @@ const ProductForm = ({ initial, onSave, onCancel, saving, categories = CATEGORIE
     stockQty:'0', minOrderQty:'1', deliveryCharge:'', description:'', imageUrl:'', badge:'', featured:false, sku:'', active:true,
     tagline:'', summary:'', warranty:'', imageUrls:'', features:'', benefits:'', applications:'', specifications:'',
     deliveryRestricted:false, allowedPincodes:'', deliveryAreaNote:'',
+    // Options & price range (e.g. cement by brand / grade / pack size) and bulk prices
+    optionsEnabled:false, optionAxes:[{ name:'', values:'' }], optionRows:[], unitLabel:'', priceTiers:'',
   };
   // API nulls would turn controlled inputs uncontrolled — fall back to defaults.
   const cleanInitial = Object.fromEntries(Object.entries(initial || {}).filter(([, v]) => v !== null && v !== undefined));
-  const [form, setForm] = useState({ ...DEFAULTS, ...cleanInitial });
+  const [form, setForm] = useState(() => ({
+    ...DEFAULTS, ...cleanInitial, ...(initial ? initOptionsState(initial) : {}),
+    // The stock this form started from — the server applies only the change to
+    // the live stock, so units sold while the form is open aren't put back.
+    stockQtyBase: initial?.id != null && initial?.stockQty != null ? Number(initial.stockQty) : null,
+  }));
 
   // Stable onChange handler — won't recreate on each render
   const handleChange = useCallback((key, value) => {
-    setForm(prev => ({ ...prev, [key]: value }));
+    setForm(prev => {
+      const next = { ...prev, [key]: value };
+      // Turning options on: fixed bulk prices can't apply to every option — keep
+      // only a percentage discount (each option gets its own fixed prices).
+      if (key === 'optionsEnabled' && value && prev.priceTiers && !/^(\s*\d+\s*:\s*[\d.]+%\s*,?)+$/.test(prev.priceTiers)) {
+        next.priceTiers = '';
+      }
+      return next;
+    });
   }, []);
+  // Presets (Cement, TMT…) suggest the GST rate and HSN code; an HSN already typed is kept.
+  const suggestTax = useCallback(({ gstRate, hsnCode }) => {
+    setForm(prev => ({ ...prev, gstRate: gstRate || prev.gstRate, hsnCode: prev.hsnCode || hsnCode || '' }));
+  }, []);
+  const optionSummary = form.optionsEnabled ? summarizeRows(form.optionRows) : null;
 
   const handleCheckbox = useCallback((key, checked) => {
     setForm(prev => ({ ...prev, [key]: checked }));
@@ -421,9 +276,22 @@ const ProductForm = ({ initial, onSave, onCancel, saving, categories = CATEGORIE
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormInput label="Product Name" fieldKey="name"     required placeholder="e.g. Safety Helmet ISI" form={form} onChange={handleChange} full />
           <FormInput label="SKU"          fieldKey="sku"      placeholder="Blank = auto (NGP-…)" form={form} onChange={handleChange} />
+          {form.optionsEnabled ? (
+            <div className="col-span-2 md:col-span-1 rounded-xl border border-blue-900/60 bg-gray-900 px-3 py-2.5 text-xs text-gray-300">
+              <p className="font-bold text-white">Price, MRP &amp; stock are set per option</p>
+              <p className="text-gray-400 mt-0.5">
+                {optionSummary?.min != null
+                  ? `Range ₹${optionSummary.min.toLocaleString('en-IN')} – ₹${optionSummary.max.toLocaleString('en-IN')} · ${optionSummary.count} options · ${optionSummary.stock.toLocaleString('en-IN')} in stock`
+                  : 'Fill the price table in "Sold in options" below.'}
+              </p>
+            </div>
+          ) : (
+          <>
           <FormInput label="Price (₹)"    fieldKey="price"    required type="number" placeholder="480" form={form} onChange={handleChange} />
           <FormInput label="MRP (₹)"      fieldKey="mrp"      type="number" placeholder="650" form={form} onChange={handleChange} />
           <FormInput label="Stock Qty"    fieldKey="stockQty" type="number" placeholder="100" form={form} onChange={handleChange} />
+          </>
+          )}
           <FormInput label="Min Order Qty" fieldKey="minOrderQty" type="number" placeholder="1" form={form} onChange={handleChange} />
           <FormInput label="Delivery Charge / unit (₹)" fieldKey="deliveryCharge" type="number" placeholder="Blank = zone default" form={form} onChange={handleChange} />
           <FormInput label="Badge"        fieldKey="badge"    placeholder="Bestseller / New / 26% OFF" form={form} onChange={handleChange} />
@@ -448,7 +316,10 @@ const ProductForm = ({ initial, onSave, onCancel, saving, categories = CATEGORIE
             <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">GST Rate</label>
             <select value={form.gstRate} onChange={e => handleChange('gstRate', e.target.value)}
               className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500">
-              {GST_RATES.map(r => <option key={r} value={r}>{r}%</option>)}
+              {GST_RATES.map(r => <option key={r} value={r}>{gstLabel(r)}</option>)}
+              {form.gstRate !== '' && form.gstRate != null && !GST_RATES.includes(String(form.gstRate)) && (
+                <option value={String(form.gstRate)}>{form.gstRate}%</option>
+              )}
             </select>
           </div>
 
@@ -459,6 +330,9 @@ const ProductForm = ({ initial, onSave, onCancel, saving, categories = CATEGORIE
               className="w-full px-3 py-2.5 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500" />
             <p className="text-[11px] text-gray-500 mt-1">Printed on the GST invoice. Blank inherits this category's tax rule.</p>
           </div>
+
+          {/* Options & price range (brand / grade / size…) and bulk prices */}
+          <VariantEditor form={form} onChange={handleChange} onSuggestTax={suggestTax} />
 
           {/* Description */}
           <div className="col-span-2">
@@ -587,168 +461,6 @@ const ProductForm = ({ initial, onSave, onCancel, saving, categories = CATEGORIE
   );
 };
 
-/* ── Bulk upload panel ───────────────────────────────────────────────────── */
-const BulkUploadPanel = ({ onClose, onSuccess }) => {
-  const { toast } = useToast();
-  const [file, setFile]       = useState(null);
-  const [preview, setPreview] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [errors, setErrors]   = useState([]);
-  const fileRef = useRef();
-
-  const handleFile = (e) => {
-    const f = e.target.files[0]; if (!f) return;
-    setFile(f); setErrors([]);
-    const reader = new FileReader();
-    reader.onload = ev => {
-      try {
-        const rows = csvToProducts(ev.target.result);
-        const errs = [];
-        rows.forEach((r,i) => {
-          if (!r.name) errs.push(`Row ${i+2}: name is required`);
-          if (!r.category) errs.push(`Row ${i+2}: category is required`);
-          if (!r.price || r.price <= 0) errs.push(`Row ${i+2}: a valid price (> 0) is required`);
-          if (r.allowedPincodes) {
-            const pr = parseRules(r.allowedPincodes);
-            if (pr.invalid.length) errs.push(`Row ${i+2}: invalid pincode entr${pr.invalid.length === 1 ? 'y' : 'ies'} ${pr.invalid.slice(0, 5).join(', ')} — use 734001, 734* or 734001-734015`);
-          }
-          if (r.deliveryRestricted && !parseRules(r.allowedPincodes).valid.length)
-            errs.push(`Row ${i+2}: limited delivery is on but no pincodes are listed`);
-        });
-        setErrors(errs); setPreview(rows.slice(0,5));
-      } catch (err) { setErrors([err.message]); setPreview([]); }
-    };
-    reader.readAsText(f);
-  };
-
-  const handleUpload = async () => {
-    if (!preview.length || errors.length) return;
-    setUploading(true);
-    const reader = new FileReader();
-    reader.onload = async ev => {
-      try {
-        const rows = csvToProducts(ev.target.result);
-        // Build clean payloads matching the backend ProductRequest DTO,
-        // carrying ALL fields (including rich detail/list fields).
-        const payload = rows.map(row => ({
-          name:           row.name,
-          sku:            row.sku || undefined,
-          category:       row.category || 'Safety Equipment',
-          price:          Number(row.price),
-          mrp:            row.mrp != null ? Number(row.mrp) : null,
-          // 0% is a real GST slab — don't let `|| 18` turn exempt goods into 18%.
-          gstRate:        Number.isFinite(Number(row.gstRate)) ? Number(row.gstRate) : 18,
-          hsnCode:        row.hsnCode || undefined,
-          stockQty:       Number(row.stockQty) || 0,
-          minOrderQty:    Number(row.minOrderQty) || 1,
-          deliveryCharge: row.deliveryCharge != null && Number.isFinite(Number(row.deliveryCharge)) ? Number(row.deliveryCharge) : null,
-          deliveryRestricted: Boolean(row.deliveryRestricted),
-          allowedPincodes:    row.allowedPincodes || '',
-          deliveryAreaNote:   row.deliveryAreaNote || '',
-          description:    row.description || '',
-          imageUrl:       row.imageUrl || '',
-          badge:          row.badge || '',
-          featured:       Boolean(row.featured),
-          tagline:        row.tagline || '',
-          summary:        row.summary || '',
-          warranty:       row.warranty || '',
-          features:       row.features || '',
-          benefits:       row.benefits || '',
-          applications:   row.applications || '',
-          specifications: row.specifications || '',
-          imageUrls:      row.imageUrls || '',
-        }));
-
-        // One transactional request instead of one HTTP call per row.
-        const res = await productsApi.bulkCreate(payload);
-        const created = res?.data?.created ?? payload.length;
-        toast({ title: `Bulk upload complete: ${created} product${created === 1 ? '' : 's'} added` });
-        onSuccess(); onClose();
-      } catch (err) {
-        const msg = err.response?.data?.message
-          || err.response?.data?.error
-          || err.message
-          || 'Upload failed';
-        toast({ title: 'Bulk upload failed', description: msg, variant: 'destructive' });
-      } finally { setUploading(false); }
-    };
-    reader.readAsText(file);
-  };
-
-  return (
-    <motion.div initial={{opacity:0,y:-10}} animate={{opacity:1,y:0}}
-      className="bg-gray-800 rounded-2xl border border-amber-700/50 p-6 mb-5 shadow-xl">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-bold text-white text-lg flex items-center gap-2">
-          <Upload className="h-5 w-5 text-amber-400"/> Bulk Upload Products
-        </h3>
-        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-400"><X className="h-4 w-4"/></button>
-      </div>
-
-      {/* Format hint */}
-      <div className="bg-gray-900 rounded-xl p-4 mb-4 text-xs font-mono">
-        <p className="font-semibold mb-1.5 text-white">CSV columns <span className="text-gray-400 font-normal">(only name, category, price required)</span></p>
-        <p className="text-amber-300 break-all">{CSV_HEADERS.join(', ')}</p>
-        <p className="text-gray-500 mt-1.5">Numeric: price, mrp, gstRate, stockQty, minOrderQty. featured: true/false. For list fields (features, benefits, applications, specifications, imageUrls) put items on separate lines, or use <span className="text-gray-300">\n</span> between items. Download the template for a ready-made example.</p>
-        <p className="text-gray-500 mt-1">Best practice: <span className="text-gray-300">Export</span> your current products first to get a perfectly-formatted file to edit.</p>
-      </div>
-
-      <div className="flex gap-3 mb-4">
-        <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} className="hidden"/>
-        <button onClick={() => fileRef.current?.click()}
-          className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 text-white rounded-xl font-bold text-sm hover:bg-amber-700">
-          <FileText className="h-4 w-4"/> Choose CSV File
-        </button>
-        {file && <span className="text-sm text-gray-400 self-center">{file.name}</span>}
-      </div>
-
-      {errors.length > 0 && (
-        <div className="bg-red-900/30 border border-red-700 rounded-xl p-3 mb-3">
-          <p className="text-red-400 font-bold text-xs mb-1.5">Validation Issues ({errors.length})</p>
-          {errors.slice(0,5).map((e,i) => <p key={i} className="text-red-300 text-xs">{e}</p>)}
-          {errors.length > 5 && <p className="text-red-400 text-xs mt-1">…and {errors.length-5} more</p>}
-        </div>
-      )}
-
-      {preview.length > 0 && errors.length === 0 && (
-        <div className="mb-4">
-          <p className="text-sm font-bold text-white mb-2">Preview (first {preview.length} rows)</p>
-          <div className="overflow-x-auto rounded-xl border border-gray-700">
-            <table className="text-xs text-gray-300 min-w-full">
-              <thead>
-                <tr className="bg-gray-700">
-                  {['name','category','price','stock','featured'].map(h =>
-                    <th key={h} className="px-3 py-2 text-left font-bold text-gray-400">{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {preview.map((r,i) => (
-                  <tr key={i} className="border-t border-gray-700/50">
-                    <td className="px-3 py-1.5">{r.name}</td>
-                    <td className="px-3 py-1.5">{r.category}</td>
-                    <td className="px-3 py-1.5">₹{r.price}</td>
-                    <td className="px-3 py-1.5">{r.stockQty}</td>
-                    <td className="px-3 py-1.5">{r.featured?'Yes':'No'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      <button onClick={handleUpload}
-        disabled={!preview.length || errors.length > 0 || uploading}
-        className="flex items-center gap-2 px-5 py-2.5 brand-gradient text-white font-bold rounded-xl text-sm
-                   hover:opacity-90 disabled:opacity-50 transition-opacity">
-        {uploading ? <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"/>
-                   : <Upload className="h-4 w-4"/>}
-        {uploading ? 'Uploading…' : `Upload ${preview.length} Products`}
-      </button>
-    </motion.div>
-  );
-};
-
 /* ── Back-in-stock demand panel — pent-up demand captured from out-of-stock ── */
 const StockRequestsPanel = () => {
   const { toast } = useToast();
@@ -827,6 +539,8 @@ const AdminProducts = () => {
   const [showForm,   setShowForm]   = useState(false);
   const [editing,    setEditing]    = useState(null);
   const [showBulk,   setShowBulk]   = useState(false);
+  const [importing,  setImporting]  = useState(false);   // a bulk import is saving — keep its panel open
+  const [exporting,  setExporting]  = useState(false);
   const [search,     setSearch]     = useState('');
   const [catFilter,  setCatFilter]  = useState('');
   const [confirm,    setConfirm]    = useState(null); // { msg, onConfirm }
@@ -861,11 +575,14 @@ const AdminProducts = () => {
     name:        form.name,
     sku:         (form.sku || '').trim() || undefined,
     category:    form.category,
-    price:       Number(form.price),
+    // Sold in options: the product price is the lowest option price (the server
+    // recomputes it from the options anyway).
+    price:       form.optionsEnabled ? (summarizeRows(form.optionRows).min ?? 0) : Number(form.price),
     mrp:         form.mrp !== '' && form.mrp != null ? Number(form.mrp) : null,
     gstRate:     form.gstRate !== '' && form.gstRate != null && Number.isFinite(Number(form.gstRate)) ? Number(form.gstRate) : 18,
     hsnCode:     (form.hsnCode || '').trim() || undefined,
     stockQty:    Number(form.stockQty)||0,
+    stockQtyBase: form.stockQtyBase != null && form.stockQtyBase !== '' ? Number(form.stockQtyBase) : undefined,
     minOrderQty: Number(form.minOrderQty)||1,
     deliveryCharge: form.deliveryCharge !== '' && form.deliveryCharge != null ? Number(form.deliveryCharge) : null,
     deliveryRestricted: Boolean(form.deliveryRestricted),
@@ -884,9 +601,17 @@ const AdminProducts = () => {
     benefits:       form.benefits||'',
     applications:   form.applications||'',
     specifications: form.specifications||'',
+    // Options & bulk prices — only from the edit form (a quick "restore" sends
+    // none, so the server keeps them as they are).
+    ...(form.optionsEnabled !== undefined ? optionsPayload(form) : {}),
   });
 
   const handleSave = async (form) => {
+    const optionErrors = validateOptions(form);
+    if (optionErrors.length) {
+      toast({ title: 'Check the options & prices', description: optionErrors.slice(0, 3).join(' '), variant: 'destructive' });
+      return;
+    }
     const payload = toPayload(form);
     if (payload.deliveryRestricted) {
       const pr = parseRules(payload.allowedPincodes);
@@ -909,7 +634,8 @@ const AdminProducts = () => {
     }
     toast({ title: editing ? '✓ Product updated' : (payload.active ? '✓ Product published' : '✓ Saved as draft (hidden from the shop)') });
     // Restocked a sold-out product? Nudge the admin to tell the people waiting.
-    if (editing && Number(editing.stockQty ?? 0) <= 0 && payload.stockQty > 0) {
+    const newStock = form.optionsEnabled ? summarizeRows(form.optionRows).stock : payload.stockQty;
+    if (editing && Number(editing.stockQty ?? 0) <= 0 && newStock > 0) {
       setTimeout(() => toast({
         title: '📦 Back in stock',
         description: 'If customers asked to be notified, click "Notify all" in the Back-in-Stock Requests panel at the top of this page.',
@@ -920,7 +646,9 @@ const AdminProducts = () => {
 
   // Bring a draft / deactivated product back into the shop.
   const handleRestore = async (p) => {
-    const res = await update(p.id, toPayload({ ...p, active: true }));
+    // stockQtyBase = the listed figure, so a list loaded a while ago can't put
+    // back stock that has sold since.
+    const res = await update(p.id, toPayload({ ...p, active: true, stockQtyBase: p.stockQty }));
     if (res.error) { toast({ title: 'Failed', description: res.error, variant: 'destructive' }); return; }
     toast({ title: `✓ "${p.name}" is live in the shop again` });
     refetch();
@@ -937,39 +665,23 @@ const AdminProducts = () => {
     });
   };
 
-  const handleDownloadCSV = () => {
-    const csv = productsToCSV(items);
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    a.download = `navgrow-products-${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
-    toast({ title: `✓ Downloaded ${items.length} products` });
+  // Every product (not just this page), one row per option — the same sheet
+  // the bulk upload reads, so it can be edited in Excel and uploaded back.
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const all = await fetchAllProducts(productsApi.manage);
+      downloadBlob(exportWorkbook(all), datedName('navgrow-products', 'xlsx'), XLSX_TYPE);
+      toast({ title: `✓ Exported ${all.length} product${all.length === 1 ? '' : 's'}`, description: 'Edit it in Excel and upload it with Bulk upload to update prices, stock or details.' });
+    } catch (err) {
+      toast({ title: 'Export failed', description: apiErrorMessage(err), variant: 'destructive' });
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleDownloadTemplate = () => {
-    // Build a correctly-escaped example row that exercises the rich/list fields,
-    // so admins can see exactly how multi-line columns should look.
-    const example = {
-      name: 'Sample Safety Helmet ISI',
-      category: 'Safety Equipment',
-      price: 480, mrp: 650, gstRate: 18, stockQty: 100, minOrderQty: 1,
-      description: 'ISI-marked industrial safety helmet with adjustable harness.',
-      imageUrl: 'https://example.com/helmet.jpg',
-      badge: 'Bestseller', featured: 'false',
-      tagline: 'Certified head protection for every site',
-      summary: 'A durable, lightweight helmet built to IS 2925 for railway and construction use.',
-      warranty: '1-year manufacturer warranty against defects',
-      features: 'Corrosion-resistant shell\nAdjustable ratchet fit\nMeets IS 2925',
-      benefits: 'Reduces injury risk\nAll-day comfort\nLong service life',
-      applications: 'Railway maintenance\nConstruction sites\nIndustrial plants',
-      specifications: 'Material: HDPE\nWeight: 350 g\nColour: Yellow',
-      imageUrls: 'https://example.com/helmet-2.jpg\nhttps://example.com/helmet-3.jpg',
-    };
-    const csv = CSV_HEADERS.join(',') + '\n' + CSV_HEADERS.map(h => csvCell(example[h] ?? '')).join(',');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    a.download = 'products-template.csv';
-    a.click();
+    downloadBlob(templateWorkbook(), 'navgrow-products-template.xlsx', XLSX_TYPE);
   };
 
   // Stat cards
@@ -989,20 +701,20 @@ const AdminProducts = () => {
           <h1 className="text-2xl font-extrabold text-white">Products</h1>
           <p className="text-gray-400 text-sm mt-0.5">{total || items.length} products in catalogue (incl. drafts)</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={handleDownloadTemplate} title="Download blank CSV template"
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={handleDownloadTemplate} title="Excel template with examples (incl. a product sold in options) and a how-to sheet"
             className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 text-gray-300 rounded-xl text-xs font-semibold hover:bg-gray-600 transition-colors">
             <FileText className="h-3.5 w-3.5"/> Template
           </button>
-          <button onClick={handleDownloadCSV} title="Export all products as CSV"
-            className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 text-gray-300 rounded-xl text-xs font-semibold hover:bg-gray-600 transition-colors">
-            <Download className="h-3.5 w-3.5"/> Export CSV
+          <button onClick={handleExport} disabled={exporting} title="Export every product (one row per option) to Excel"
+            className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 text-gray-300 rounded-xl text-xs font-semibold hover:bg-gray-600 transition-colors disabled:opacity-60">
+            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin"/> : <Download className="h-3.5 w-3.5"/>} Export
           </button>
-          <button onClick={() => { setShowBulk(b=>!b); setShowForm(false); setEditing(null); }}
+          <button onClick={() => { if (!importing) setShowBulk(b=>!b); setShowForm(false); setEditing(null); }}
             className="flex items-center gap-1.5 px-3 py-2 bg-amber-600 text-white rounded-xl text-xs font-bold hover:bg-amber-700 transition-colors">
-            <Upload className="h-3.5 w-3.5"/> Bulk Upload
+            <Upload className="h-3.5 w-3.5"/> Bulk upload / update
           </button>
-          <button onClick={() => { setShowForm(f=>!f); setEditing(null); setShowBulk(false); }}
+          <button onClick={() => { setShowForm(f=>!f); setEditing(null); if (!importing) setShowBulk(false); }}
             className="flex items-center gap-2 px-4 py-2 brand-gradient text-white font-bold rounded-xl text-sm hover:opacity-90">
             <Plus className="h-4 w-4"/> Add Product
           </button>
@@ -1049,6 +761,7 @@ const AdminProducts = () => {
           <option value="outofstock">Out of stock</option>
           <option value="lowstock">Low stock (&lt;10)</option>
           <option value="restricted">Limited delivery area</option>
+          <option value="options">Sold in options</option>
         </select>
         {(search || catFilter || statusFilter) && (
           <button onClick={() => { setSearch(''); setCatFilter(''); setStatusFilter(''); setFilter('q',undefined); setFilter('category',undefined); setFilter('status',undefined); }}
@@ -1059,9 +772,15 @@ const AdminProducts = () => {
       </div>
 
       <AnimatePresence>
-        {showBulk && <BulkUploadPanel onClose={() => setShowBulk(false)} onSuccess={refetch}/>}
+        {showBulk && (
+          <ProductImportPanel key="bulk"
+            onClose={() => { if (!importing) setShowBulk(false); }}
+            onBusyChange={setImporting}
+            onDone={refetch}/>
+        )}
         {(showForm || editing) && (
           <ProductForm
+            key={editing?.id || 'new'}
             initial={editing}
             onSave={handleSave}
             onCancel={() => { setShowForm(false); setEditing(null); }}
@@ -1117,12 +836,29 @@ const AdminProducts = () => {
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-500">{p.category}</td>
                       <td className="px-4 py-3">
-                        <p className="font-bold text-gray-900 text-xs">₹{p.price?.toLocaleString('en-IN')}</p>
-                        {p.mrp && <p className="text-[10px] text-gray-400 line-through">₹{p.mrp?.toLocaleString('en-IN')}</p>}
+                        {p.hasVariants && Number(p.priceMax) > Number(p.price) ? (
+                          <p className="font-bold text-gray-900 text-xs whitespace-nowrap">₹{p.price?.toLocaleString('en-IN')} – ₹{Number(p.priceMax).toLocaleString('en-IN')}</p>
+                        ) : (
+                          <p className="font-bold text-gray-900 text-xs">₹{p.price?.toLocaleString('en-IN')}</p>
+                        )}
+                        {p.hasVariants && (
+                          <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold">
+                            {(p.variants || []).filter(v => v.active !== false).length} options
+                          </span>
+                        )}
+                        {!p.hasVariants && p.mrp && <p className="text-[10px] text-gray-400 line-through">₹{p.mrp?.toLocaleString('en-IN')}</p>}
+                        {p.priceTiers && <span className="block text-[10px] text-emerald-600 font-semibold">Bulk prices</span>}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`text-xs font-bold ${(p.stockQty??0)<10?'text-red-600':'text-green-600'}`}>{p.stockQty??0}</span>
                         {(p.stockQty??0) <= 0 && <span className="block text-[10px] text-red-500 font-semibold">Out · RFQ only</span>}
+                        {/* Sold in options: the total can look healthy while some options are sold out. */}
+                        {p.hasVariants && (() => {
+                          const act = (p.variants || []).filter(v => v.active !== false);
+                          const out = act.filter(v => Number(v.stockQty || 0) < Math.max(1, Number(v.minOrderQty || p.minOrderQty || 1))).length;
+                          return out > 0 && out < act.length
+                            ? <span className="block text-[10px] text-amber-600 font-semibold">{out} of {act.length} options out</span> : null;
+                        })()}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`text-xs ${p.featured?'text-amber-600 font-bold':'text-gray-400'}`}>{p.featured?'★ Yes':'—'}</span>
@@ -1135,7 +871,7 @@ const AdminProducts = () => {
                       <td className="px-4 py-3">
                         {/* Always visible on touch screens (there's no hover on a phone). */}
                         <div className="flex gap-1.5 sm:opacity-60 sm:group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => { setEditing(p); setShowForm(false); setShowBulk(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                          <button onClick={() => { setEditing(p); setShowForm(false); if (!importing) setShowBulk(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                             className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" title="Edit" aria-label={`Edit ${p.name}`}>
                             <Edit2 className="h-3.5 w-3.5"/>
                           </button>
@@ -1162,7 +898,7 @@ const AdminProducts = () => {
           <div className="text-center py-16 text-gray-400">
             <Package className="h-12 w-12 mx-auto mb-3 opacity-20"/>
             <p className="font-semibold">No products yet</p>
-            <p className="text-sm mt-1">Add your first product or upload a CSV file</p>
+            <p className="text-sm mt-1">Add your first product, or add many at once with Bulk upload (Excel or CSV)</p>
           </div>
         )}
       </div>

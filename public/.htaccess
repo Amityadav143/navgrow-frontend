@@ -44,21 +44,29 @@
   RewriteCond %{DOCUMENT_ROOT}/$1/index.html -f
   RewriteRule ^(.+?)/?$ /$1/index.html [L]
 
-  # ---- Social crawlers on DB-ONLY products/posts -------------------------
-  # Admin-created products/news live only in the database, so they have no
-  # prerendered file above. Social/link crawlers don't run JS, so hand THEM a
-  # PHP-rendered shell with the correct Open Graph image (the admin-uploaded
-  # one) instead of the bare SPA. Humans fall through to the normal SPA below.
-  # (og.php itself double-checks the user-agent and fails safe to the shell.)
-  RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|facebot|WhatsApp|LinkedInBot|Twitterbot|Slackbot|TelegramBot|Pinterest|redditbot|Discordbot|SkypeUriPreview|vkShare|Embedly|Googlebot|bingbot|Applebot) [NC]
+  # ---- Crawlers on DB-ONLY products/posts --------------------------------
+  # Products/news created after the last build have no prerendered file above.
+  # Search engines and link-preview bots get a PHP-rendered page instead: the
+  # live record's title, canonical, Open Graph tags, complete Product /
+  # BlogPosting JSON-LD and real body text (og.php). All Google crawlers are
+  # listed — including Google-InspectionTool, used by Search Console's URL
+  # Inspection and the Rich Results Test, which used to get the bare shell.
+  # Humans fall through to the normal SPA below. (og.php re-checks the
+  # user-agent and fails safe to the prerendered page or the shell.)
+  RewriteCond %{HTTP_USER_AGENT} (Googlebot|Google-InspectionTool|GoogleOther|Storebot-Google|AdsBot-Google|bingbot|BingPreview|DuckDuckBot|YandexBot|Baiduspider|Applebot|PetalBot|facebookexternalhit|facebot|WhatsApp|LinkedInBot|Twitterbot|Slackbot|TelegramBot|Pinterest|redditbot|Discordbot|SkypeUriPreview|vkShare|Embedly) [NC]
   RewriteRule ^shop/([^/]+)/?$ /og.php?type=product&slug=$1 [L,QSA]
-  RewriteCond %{HTTP_USER_AGENT} (facebookexternalhit|facebot|WhatsApp|LinkedInBot|Twitterbot|Slackbot|TelegramBot|Pinterest|redditbot|Discordbot|SkypeUriPreview|vkShare|Embedly|Googlebot|bingbot|Applebot) [NC]
+  RewriteCond %{HTTP_USER_AGENT} (Googlebot|Google-InspectionTool|GoogleOther|Storebot-Google|AdsBot-Google|bingbot|BingPreview|DuckDuckBot|YandexBot|Baiduspider|Applebot|PetalBot|facebookexternalhit|facebot|WhatsApp|LinkedInBot|Twitterbot|Slackbot|TelegramBot|Pinterest|redditbot|Discordbot|SkypeUriPreview|vkShare|Embedly) [NC]
   RewriteRule ^news/([^/]+)/?$ /og.php?type=news&slug=$1 [L,QSA]
 
   # Root: serve the homepage's index.html explicitly.
   RewriteRule ^/?$ index.html [L]
 
-  # SPA fallback for everything else (genuinely dynamic/unknown routes).
+  # SPA fallback for everything else (genuinely dynamic/unknown routes) —
+  # app.html, the NEUTRAL shell with no canonical. It used to be index.html,
+  # i.e. the homepage's prerendered HTML, so every such URL declared the
+  # homepage as its canonical and Google dropped it as a duplicate.
+  RewriteCond %{DOCUMENT_ROOT}/app.html -f
+  RewriteRule ^ app.html [L]
   RewriteRule ^ index.html [L]
 </IfModule>
 

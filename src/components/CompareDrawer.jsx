@@ -21,6 +21,7 @@ import { Link } from 'react-router-dom';
 import { useCart } from '@/context/CartContext';
 import { useRfq } from '@/context/RfqContext';
 import { isOutOfStock, isLiveId } from '@/lib/stock';
+import { hasOptions, priceRange, perUnit } from '@/lib/variants';
 import { toCartItem } from '@/lib/cartItem';
 
 const CompareContext = createContext(null);
@@ -160,7 +161,11 @@ const CompareDrawer = () => {
                         <td className="px-4 py-3 text-xs font-semibold text-gray-500">{row.label}</td>
                         {compareList.map(p => {
                           const rawVal = p[row.key];
-                          const formatted = row.fmt(rawVal);
+                          // Sold in options: compare the price range, not just the cheapest option.
+                          const r = row.key === 'price' && hasOptions(p) ? priceRange(p) : null;
+                          const formatted = r && r.max > r.min
+                            ? `₹${r.min.toLocaleString('en-IN')} – ₹${r.max.toLocaleString('en-IN')}${perUnit(p)}`
+                            : row.key === 'price' && p.unitLabel ? `${row.fmt(rawVal)}${perUnit(p)}` : row.fmt(rawVal);
                           const isBest = row.key === 'price' && Number(p.price) === Math.min(...compareList.map(c => Number(c.price)));
                           const isTopRated = row.key === 'rating' && Number(p.rating) === Math.max(...compareList.map(c => Number(c.rating)));
                           return (
@@ -183,7 +188,12 @@ const CompareDrawer = () => {
                       return (
                         <td key={p.id} className="px-4 py-4">
                           <div className="flex flex-col gap-2">
-                            {!isLiveId(p.id) ? null /* sample catalogue: browse only */ : isOutOfStock(p) ? (
+                            {!isLiveId(p.id) ? null /* sample catalogue: browse only */ : hasOptions(p) && !isOutOfStock(p) ? (
+                            <Link to={`/shop/${p.slug || p.id}`} onClick={() => setDrawerOpen(false)}
+                              className="flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold border-2 border-blue-300 text-blue-600 hover:bg-blue-600 hover:text-white hover:border-blue-600">
+                              <ShoppingCart className="h-3.5 w-3.5"/> Choose options
+                            </Link>
+                            ) : isOutOfStock(p) ? (
                             <button
                               onClick={() => addToRfq(p)}
                               className={`flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all border-2 ${

@@ -18,6 +18,8 @@ import { X, ShoppingCart, Minus, Plus, Trash2, Package, ArrowRight, Tag,
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart, lineIssue } from '@/context/CartContext';
 import { moqOf, stockOf } from '@/lib/stock';
+import { productIdOf, unitPlural } from '@/lib/variants';
+import { nextTier, rupees } from '@/lib/pricing';
 import { couponsApi, rfqApi } from '@/lib/api';
 import { perProductDelivery } from '@/lib/utils';
 import PincodeCheck from '@/components/PincodeCheck';
@@ -26,7 +28,8 @@ import { track } from '@/lib/analytics';
 import { useToast } from '@/components/ui/use-toast';
 
 /** Whole rupees with Indian digit grouping (1,85,000). */
-const inr = (n) => Math.round(Number(n) || 0).toLocaleString('en-IN');
+// Without the ₹ (callers add it). To the paisa — rounding hid paise the payment charges.
+const inr = (n) => rupees(n).slice(1);
 
 /* ── Professional bulk-quote email ──────────────────────────────────────── */
 const buildBulkQuoteEmail = (items, subtotal, grandTotal, discount) => {
@@ -209,6 +212,9 @@ const CartSidebar = () => {
   const payItems    = payableItems || items;
   const blockedCount = items.length - payItems.length;
   const payCount    = payItems.reduce((s, i) => s + (i.qty || 1), 0);
+  // "60 bags" when every line is sold in the same unit, else "items".
+  const payUnit     = payItems.length && payItems.every(i => i.unitLabel && i.unitLabel === payItems[0].unitLabel)
+    ? unitPlural(payItems[0].unitLabel, payCount) : (payCount === 1 ? 'item' : 'items');
   const totalAmount = payItems.reduce((s, i) => s + (i.price || 0) * (i.qty || 1), 0);
   const exceedsOnly = hasCartIssues && blockedCount === 0;
   const navigate = useNavigate();
@@ -388,7 +394,27 @@ const CartSidebar = () => {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className={`font-semibold text-sm leading-snug line-clamp-2 ${blocked ? 'text-gray-500' : 'text-gray-900'}`}>{item.name}</p>
-                          <p className={`font-bold text-sm mt-1 ${blocked ? 'text-gray-400 line-through' : 'text-blue-600'}`}>₹{(item.price||0).toLocaleString('en-IN')}</p>
+                          <p className={`font-bold text-sm mt-1 ${blocked ? 'text-gray-400 line-through' : 'text-blue-600'}`}>
+                            {rupees(item.price || 0)}
+                            {item.unitLabel && <span className="text-[11px] font-semibold text-gray-400"> / {item.unitLabel}</span>}
+                            {!blocked && Number(item.basePrice) > Number(item.price) && (
+                              <>
+                                <span className="ml-1.5 text-[11px] font-semibold text-gray-400 line-through">{rupees(item.basePrice)}</span>
+                                <span className="ml-1.5 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold align-middle">Bulk price</span>
+                              </>
+                            )}
+                          </p>
+                          {!blocked && (() => {
+                            // "Add 12 more for ₹385 each" — only when that many are in stock.
+                            const nt = Number(item.basePrice) > 0 ? nextTier(item.basePrice, item.priceTiers, item.qty) : null;
+                            if (!nt || (stock !== null && item.qty + nt.addQty > stock)) return null;
+                            return (
+                              <button onClick={() => updateQty(item.id, item.qty + nt.addQty)}
+                                className="mt-1 text-left text-[11px] font-semibold text-emerald-700 hover:underline">
+                                Add {nt.addQty} more → {rupees(nt.unitPrice)}{item.unitLabel ? `/${item.unitLabel}` : ' each'}
+                              </button>
+                            );
+                          })()}
                           {issue === 'unavailable' && (
                             <p className="text-[11px] font-bold text-gray-600 mt-1">No longer available</p>
                           )}
@@ -406,7 +432,7 @@ const CartSidebar = () => {
                           {!blocked && moq > 1 && (
                             <p className="text-[11px] text-gray-500 mt-0.5">Minimum order: {moq}</p>
                           )}
-                          {(deliveryQuote?.restrictedItems || []).some(r => String(r.productId) === String(item.id) || (r.slug && r.slug === item.slug)) ? (
+                          {(deliveryQuote?.restrictedItems || []).some(r => String(r.productId) === productIdOf(item) || (r.slug && r.slug === item.slug)) ? (
                             <p className="flex items-center gap-1 text-[11px] font-semibold text-red-600 mt-1">
                               <MapPin className="h-3 w-3 shrink-0"/> Not deliverable to {deliveryQuote.pincode}
                             </p>
@@ -509,7 +535,7 @@ const CartSidebar = () => {
                       buyer sees exactly what appears on the invoice. */}
                   <div className="space-y-1.5 text-sm">
                     <div className="flex justify-between text-gray-600">
-                      <span>Item total ({payCount} item{payCount === 1 ? '' : 's'})
+                      <span>Item total ({payCount} {payUnit})
                         <span className="block text-[11px] text-gray-400">
                           incl. GST{blockedCount > 0 ? ` · excludes ${blockedCount} unavailable item${blockedCount === 1 ? '' : 's'}` : ''}
                         </span>
@@ -541,7 +567,7 @@ const CartSidebar = () => {
                       {/* Free-delivery threshold is judged on goods before any coupon —
                           the same value checkout and the server use. */}
                       <PincodeCheck orderValue={totalAmount} compact onResolved={setDeliveryQuote}
-                        productRefs={payItems.map(i => i.id)} />
+                        productRefs={[...new Set(payItems.map(productIdOf))]} />
                     </div>
                     <div className="flex justify-between text-gray-600 pt-1">
                       <span>Delivery

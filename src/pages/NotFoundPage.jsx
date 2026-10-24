@@ -23,7 +23,7 @@ const SUGGESTIONS = [
 ];
 
 const NotFoundPage = () => {
-  useSeo({ title: "Page Not Found | 404", description: "The page you're looking for doesn't exist. Return to Navgrow Engineering homepage for railway, industrial and government engineering services.", path: "/404" });
+  useSeo({ title: "Page Not Found | 404", description: "The page you're looking for doesn't exist. Return to Navgrow Engineering homepage for railway, industrial and government engineering services.", path: "/404", noindex: true });
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
 

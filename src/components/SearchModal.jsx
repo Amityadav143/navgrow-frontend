@@ -99,7 +99,7 @@ const SearchModal = ({ open, onClose }) => {
 
   // Combined flat results for keyboard navigation
   const allResults = [
-    ...products.map(p => ({ label: p.name, path: `/shop/${p.slug || p.id}`, icon: Package, cat: 'Products', sub: `₹${Number(p.price).toLocaleString('en-IN')}`, img: p.imageUrl })),
+    ...products.map(p => ({ label: p.name, path: `/shop/${p.slug || p.id}`, icon: Package, cat: 'Products', sub: p.hasVariants && Number(p.priceMax) > Number(p.price) ? `₹${Number(p.price).toLocaleString('en-IN')} – ₹${Number(p.priceMax).toLocaleString('en-IN')}${p.unitLabel ? ` / ${p.unitLabel}` : ''}` : `₹${Number(p.price).toLocaleString('en-IN')}${p.unitLabel ? ` / ${p.unitLabel}` : ''}`, img: p.imageUrl })),
     ...news.map(n => ({ label: n.title, path: `/news/${n.slug || n.id}`, icon: FileText, cat: 'News', sub: n.category })),
     ...staticResults,
   ];

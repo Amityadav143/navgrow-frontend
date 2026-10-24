@@ -25,6 +25,8 @@ import {
   FileText, ArrowLeft, Zap, Banknote, Tag,
 } from 'lucide-react';
 import { useCart, lineIssue, isBlockedLine } from '@/context/CartContext';
+import { productIdOf } from '@/lib/variants';
+import { nextTier, rupees } from '@/lib/pricing';
 import { moqOf, stockOf } from '@/lib/stock';
 import { ordersApi, deliveryApi, couponsApi } from '@/lib/api';
 import { perProductDelivery } from '@/lib/utils';
@@ -52,7 +54,8 @@ const SELLER_STATE = 'West Bengal';
 // promised free delivery the server would still charge for.
 const SHIPPING_FEE = 150;
 
-const inr = (n) => `₹${Math.round(n).toLocaleString('en-IN')}`;
+// To the paisa: the amount charged is exact, so the page must not round it to the rupee.
+const inr = (n) => rupees(n);
 
 /* ── Small building blocks ─────────────────────────────────────────────── */
 
@@ -108,7 +111,8 @@ const CheckoutPage = () => {
   useEffect(() => { syncAvailability({ force: true, announce: true }); }, [syncAvailability]);
   const { user } = useAuth();
   // Stable key of the cart's products — re-checks delivery when the cart changes.
-  const itemIdsKey = items.map(i => i.id).filter(Boolean).join(',');
+  // Product ids for the delivery check (several options of one product count once).
+  const itemIdsKey = [...new Set(items.map(productIdOf).filter(Boolean))].join(',');
 
   const [step, setStep]       = useState(1);
   const [maxStep, setMaxStep] = useState(1);
@@ -388,7 +392,7 @@ const CheckoutPage = () => {
   // Cart lines the server says can't go to this pincode (limited delivery area).
   const restrictedItems = Array.isArray(delivery?.restrictedItems) ? delivery.restrictedItems : [];
   const restrictedIds = new Set(restrictedItems.map(r => String(r.productId)));
-  const blockedLines = items.filter(i => restrictedIds.has(String(i.id)) || restrictedItems.some(r => r.slug && r.slug === i.slug));
+  const blockedLines = items.filter(i => restrictedIds.has(productIdOf(i)) || restrictedItems.some(r => r.slug && r.slug === i.slug));
 
   // (Lines we can't ship here move to the quote list via the cart's moveToQuote.)
 
@@ -477,7 +481,7 @@ const CheckoutPage = () => {
         deliverySpeed,
         paymentMethod: payMethod,
         couponCode: coupon?.code || undefined,
-        items: items.map(i => ({ productId: i.id, quantity: i.qty || 1 })),
+        items: items.map(i => ({ productId: productIdOf(i), variantId: i.variantId || undefined, quantity: i.qty || 1 })),
       });
 
       // COD is settled on delivery: the server has already confirmed the order,
@@ -694,6 +698,24 @@ const CheckoutPage = () => {
                               <p className="text-[11px] text-gray-400 mt-0.5">
                                 {i.hsn ? `HSN ${i.hsn} · ` : ''}incl. {rate}% GST ({inr(i.tax)})
                               </p>
+                              <p className="text-[11px] text-gray-500 mt-0.5">
+                                {inr(i.price || 0)}{i.unitLabel ? ` / ${i.unitLabel}` : ' each'}
+                                {!blocked && Number(i.basePrice) > Number(i.price) && (
+                                  <span className="ml-1.5 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold">
+                                    Bulk price · save {inr((Number(i.basePrice) - Number(i.price)) * (i.qty || 1))}
+                                  </span>
+                                )}
+                              </p>
+                              {!blocked && (() => {
+                                const nt = Number(i.basePrice) > 0 ? nextTier(i.basePrice, i.priceTiers, i.qty || 1) : null;
+                                if (!nt || (stock !== null && (i.qty || 1) + nt.addQty > stock)) return null;
+                                return (
+                                  <button onClick={() => updateQty(i.id, (i.qty || 1) + nt.addQty)}
+                                    className="mt-0.5 text-left text-[11px] font-semibold text-emerald-700 hover:underline">
+                                    Add {nt.addQty} more to pay {inr(nt.unitPrice)}{i.unitLabel ? `/${i.unitLabel}` : ' each'}
+                                  </button>
+                                );
+                              })()}
                               {issue === 'out_of_stock' && (
                                 <p className="text-xs font-bold text-red-600 mt-1">
                                   {stock !== null && stock > 0 && stock < moq ? `Only ${stock} left (minimum order ${moq})` : 'Out of stock'}
@@ -921,7 +943,7 @@ const CheckoutPage = () => {
                         </p>
                         <div className="space-y-2">
                           {blockedLines.map(it => {
-                            const info = restrictedItems.find(r => String(r.productId) === String(it.id) || (r.slug && r.slug === it.slug));
+                            const info = restrictedItems.find(r => String(r.productId) === productIdOf(it) || (r.slug && r.slug === it.slug));
                             return (
                               <div key={it.id} className="flex items-center gap-3 bg-white rounded-lg border border-red-100 px-3 py-2">
                                 <div className="min-w-0 flex-1">

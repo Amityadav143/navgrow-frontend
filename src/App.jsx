@@ -62,6 +62,7 @@ const AdminProjects      = React.lazy(() => import('@/pages/admin/AdminProjects'
 const AdminTenders       = React.lazy(() => import('@/pages/admin/AdminTenders'));
 const AdminCatalog       = React.lazy(() => import('@/pages/admin/AdminCatalog'));
 const AdminCatalogueLeads = React.lazy(() => import('@/pages/admin/AdminCatalogueLeads'));
+const AdminReviews       = React.lazy(() => import('@/pages/admin/AdminReviews'));
 const CheckoutPage       = React.lazy(() => import('@/pages/CheckoutPage'));
 const AdminTaxRules      = React.lazy(() => import('@/pages/admin/AdminTaxRules'));
 const AdminDeliveryZones = React.lazy(() => import('@/pages/admin/AdminDeliveryZones'));
@@ -215,6 +216,7 @@ function App() {
           <Route index         element={<W><AdminHome /></W>} />
           <Route path="orders"  element={<P perm="ORDERS"><AdminOrders /></P>} />
           <Route path="products"element={<P perm="PRODUCTS"><AdminProducts /></P>} />
+          <Route path="reviews" element={<P perm="PRODUCTS"><AdminReviews /></P>} />
           <Route path="contacts"element={<P perm="MESSAGES"><AdminContacts /></P>} />
           <Route path="quotes"  element={<P perm="QUOTES"><AdminQuotes /></P>} />
           <Route path="rfqs"    element={<P perm="RFQS"><AdminRfqs /></P>} />

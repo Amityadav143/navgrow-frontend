@@ -17,6 +17,8 @@ import { useCart } from '@/context/CartContext';
 import { useRfq } from '@/context/RfqContext';
 import { isOutOfStock, liveStock } from '@/lib/stock';
 import { toCartItem } from '@/lib/cartItem';
+import { liveOptionFields } from '@/lib/productMap';
+import { hasOptions, priceRange, perUnit } from '@/lib/variants';
 import { productsApi } from '@/lib/api';
 import { useApi } from '@/hooks/useApi';
 import { ALL_PRODUCTS } from '@/lib/productData';
@@ -73,6 +75,7 @@ const mapProduct = (p) => ({
   deliveryRestricted: !!p.deliveryRestricted,
   allowedPincodes: p.allowedPincodes || undefined,
   deliveryAreaNote: p.deliveryAreaNote || undefined,
+  ...liveOptionFields(p),
 });
 
 /**
@@ -211,11 +214,16 @@ const ShopPreview = () => {
                   <span className="text-xs font-semibold text-blue-600 uppercase tracking-wide">{p.cat}</span>
                   <p className="font-bold text-gray-900 text-sm mt-1 mb-3 line-clamp-2 leading-snug">{p.name}</p>
                   <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-gray-900">₹{p.price.toLocaleString('en-IN')}</span>
-                    {p.sample ? (
+                    <span className="font-extrabold text-gray-900">
+                      {hasOptions(p) && priceRange(p).max > priceRange(p).min
+                        ? `₹${priceRange(p).min.toLocaleString('en-IN')} – ₹${priceRange(p).max.toLocaleString('en-IN')}`
+                        : `₹${p.price.toLocaleString('en-IN')}`}
+                      {p.unitLabel && <span className="text-[11px] font-semibold text-gray-400">{perUnit(p)}</span>}
+                    </span>
+                    {p.sample || (hasOptions(p) && !isOutOfStock(p)) ? (
                       <Link to={`/shop/${p.slug || p.id}`}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border-2 border-blue-200 text-blue-700 hover:bg-blue-50">
-                        View <ArrowRight className="h-3.5 w-3.5" />
+                        {hasOptions(p) ? 'Options' : 'View'} <ArrowRight className="h-3.5 w-3.5" />
                       </Link>
                     ) : isOutOfStock(p) ? (
                       <button onClick={() => addToRfq(p)} title="Out of stock — request a quote (backorder)"

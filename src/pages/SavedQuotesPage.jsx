@@ -55,6 +55,7 @@ const SavedQuotesPage = () => {
     description: 'Track and compare your Navgrow Engineering quotation requests side by side. View line items, totals, and status, and accept the quote that works best for you.',
     path: '/saved-quotes',
     keywords: 'compare quotes, RFQ tracking, B2B quotation comparison, engineering quote',
+    noindex: true,   // per-account page
   });
 
   const { toast } = useToast();
@@ -180,8 +181,10 @@ const SavedQuotesPage = () => {
       setQuotes((prev) => ({ ...prev, [num]: { ...prev[num], status: 'REJECTED' } }));
       try { track('rfq_reject', { label: num }); } catch {}
       toast({ title: 'Quote declined', description: 'Thanks for letting us know. Reach out anytime if your needs change.' });
-    } catch {
-      toast({ title: 'Could not decline', description: 'Please try again or contact us at +91 89270 70972.', variant: 'destructive' });
+    } catch (err) {
+      // e.g. a quote requested with a different email — the server explains.
+      const msg = err?.response?.data?.message || 'Please try again or contact us at +91 89270 70972.';
+      toast({ title: 'Could not decline', description: msg, variant: 'destructive' });
     } finally {
       setAccepting('');
     }

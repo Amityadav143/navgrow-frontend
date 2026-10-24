@@ -23,6 +23,9 @@ import { useSiteSettings } from '@/hooks/useSiteSettings';
 import { toCartItem } from '@/lib/cartItem';
 import { areaLabel } from '@/lib/pincodeRules';
 import { isOutOfStock, liveStock, moqOf, stockOf } from '@/lib/stock';
+import { liveOptionFields } from '@/lib/productMap';
+import { hasOptions, priceRange, bestDiscountPct, perUnit, optionNamesOf, activeVariants, variantLabel } from '@/lib/variants';
+import { rupees } from '@/lib/pricing';
 
 const CATS    = ['All', ...Array.from(new Set(PRODUCTS.map(p => p.cat)))];
 const SORTS   = ['Featured', 'Price: Low to High', 'Price: High to Low', 'Top Rated', 'Most Reviewed'];
@@ -39,7 +42,8 @@ const trackView = (product) => {
       { id: product.id, name: product.name, price: product.price,
         image: product.image, slug: product.slug || product.id, cat: product.cat,
         stockQty: product.stockQty ?? null, minOrderQty: product.minOrderQty ?? 1,
-        sku: product.sku || '', gstRate: product.gstRate },
+        sku: product.sku || '', gstRate: product.gstRate,
+        hasVariants: hasOptions(product) || undefined, unitLabel: product.unitLabel || undefined },
       ...(Array.isArray(prev) ? prev : []).filter(p => p.id !== product.id && p.slug !== (product.slug || product.id))
     ].slice(0, 6);
     localStorage.setItem(key, JSON.stringify(updated));
@@ -58,7 +62,11 @@ const ProductCard = ({ product, onBuyNow }) => {
   const inCart    = items.some(i => i.id === product.id);
   const wished    = inWishlist(product.id);
   const comparing = inCompare(product.id);
-  const d = disc(product);
+  // Sold in options (e.g. cement by brand and grade): show the price range;
+  // the product page does the choosing.
+  const opts  = hasOptions(product);
+  const range = opts ? priceRange(product) : null;
+  const d = opts ? bestDiscountPct(product) : disc(product);
 
   return (
     <motion.div layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
@@ -75,8 +83,11 @@ const ProductCard = ({ product, onBuyNow }) => {
           }} />
         <div className="absolute top-2.5 left-2.5 flex flex-col gap-1.5">
           {product.badge && <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-600 text-white shadow">{product.badge}</span>}
-          {d > 0 && <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-500 text-white shadow">{d}% OFF</span>}
-          {showStock && !isOutOfStock(product) && product.stockQty > 0 && product.stockQty <= 10 && (
+          {d > 0 && <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-500 text-white shadow">{opts ? `Up to ${d}% OFF` : `${d}% OFF`}</span>}
+          {opts && range?.count > 1 && (
+            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-white/95 text-blue-800 shadow border border-blue-100">{range.count} options</span>
+          )}
+          {showStock && !opts && !isOutOfStock(product) && product.stockQty > 0 && product.stockQty <= 10 && (
             <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500 text-white shadow animate-pulse">
               Only {product.stockQty} left!
             </span>
@@ -107,34 +118,60 @@ const ProductCard = ({ product, onBuyNow }) => {
           {product.name}
         </Link>
 
-        <div className="flex items-center gap-1 mb-3">
-          {[...Array(5)].map((_, i) => (
-            <Star key={i} className={`h-3.5 w-3.5 ${i < Math.floor(product.rating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'}`} />
-          ))}
-          <span className="text-[11px] text-gray-500 ml-1">{product.rating} ({product.reviews})</span>
+        <div className="flex items-center gap-1 mb-3 min-h-[14px]">
+          {product.reviews > 0 && product.rating > 0 ? (
+            <>
+              {[...Array(5)].map((_, i) => (
+                <Star key={i} className={`h-3.5 w-3.5 ${i < Math.floor(product.rating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'}`} />
+              ))}
+              <span className="text-[11px] text-gray-500 ml-1">{product.rating} ({product.reviews})</span>
+            </>
+          ) : (
+            <span className="text-[11px] text-gray-400">No reviews yet</span>
+          )}
         </div>
 
         {/* Price */}
+        {opts && range ? (
+        <div className="mb-3">
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            <span className="text-xl font-extrabold text-gray-900">
+              {rupees(range.min)}{range.max > range.min ? ` – ${rupees(range.max)}` : ''}
+            </span>
+            {product.unitLabel && <span className="text-xs font-semibold text-gray-400">{perUnit(product)}</span>}
+          </div>
+          <span className="block text-[11px] font-semibold text-blue-700 mt-0.5 line-clamp-1">
+            {optionNamesOf(product).length ? `By ${optionNamesOf(product).join(', ').toLowerCase()}` : 'Several options'}
+            {product.priceTiers || activeVariants(product).some(v => v.priceTiers) ? ' · bulk prices' : ''}
+          </span>
+          <span className="block text-[10px] text-gray-400 mt-0.5">Incl. GST · GST invoice with HSN</span>
+        </div>
+        ) : (
         <div className="mb-3">
           <div className="flex items-baseline gap-2">
-            <span className="text-xl font-extrabold text-gray-900">₹{product.price.toLocaleString('en-IN')}</span>
+            <span className="text-xl font-extrabold text-gray-900">{rupees(product.price)}</span>
             {product.mrp > product.price && (
-              <span className="text-xs text-gray-400 line-through">₹{product.mrp.toLocaleString('en-IN')}</span>
+              <span className="text-xs text-gray-400 line-through">{rupees(product.mrp)}</span>
             )}
           </div>
           {product.mrp > product.price && (
             <span className="text-[11px] font-bold text-green-600">
-              You save ₹{(product.mrp - product.price).toLocaleString('en-IN')}
+              You save {rupees(product.mrp - product.price)}
             </span>
           )}
-          <span className="block text-[10px] text-gray-400 mt-0.5">Incl. GST · GST invoice with HSN</span>
+          <span className="block text-[10px] text-gray-400 mt-0.5">Incl. GST · GST invoice with HSN{product.priceTiers ? ' · bulk prices' : ''}</span>
         </div>
+        )}
 
         {/* Stock status — honest availability at a glance. Out-of-stock is always
             shown (it affects buying); positive counts follow the admin toggle. */}
         {product.stockQty != null && (isOutOfStock(product) || showStock) && (
           <div className="mb-2 text-[11px] font-semibold">
-            {isOutOfStock(product) ? (
+            {opts ? (
+              isOutOfStock(product)
+                ? <span className="text-red-500">● All options out of stock — quote &amp; backorder available</span>
+                : <span className="text-emerald-600">● In stock{range?.count > 1 ? ' — choose brand & grade' : ''}</span>
+            ) : isOutOfStock(product) ? (
               <span className="text-red-500">
                 ● {product.stockQty > 0 ? `Only ${product.stockQty} left (min. order ${moqOf(product)})` : 'Out of stock'} — quote & backorder available
               </span>
@@ -168,7 +205,12 @@ const ProductCard = ({ product, onBuyNow }) => {
         {moqOf(product) > 1 && !isOutOfStock(product) && (
           <p className="mb-2 text-[11px] font-semibold text-gray-500">Minimum order: {moqOf(product)} units</p>
         )}
-        {isOutOfStock(product) ? (
+        {opts && !isOutOfStock(product) ? (
+          <Link to={`/shop/${product.slug || product.id}`} onClick={() => trackView(product)}
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold brand-gradient text-white shadow hover:opacity-90 transition-opacity">
+            <Zap className="h-3.5 w-3.5" /> Choose options &amp; buy
+          </Link>
+        ) : isOutOfStock(product) ? (
           <div className="space-y-1.5">
             {/* Out of stock is not a dead end: the buyer can still get a quote —
                 the team sources it and confirms lead time. */}
@@ -274,13 +316,23 @@ const RecentlyViewed = ({ liveProducts }) => {
                 <div className="p-3">
                   <p className="text-xs text-blue-600 font-bold uppercase tracking-wide mb-0.5">{p.cat}</p>
                   <Link to={`/shop/${p.slug || p.id}`} className="text-xs font-bold text-gray-900 line-clamp-2 hover:text-blue-600 block mb-2">{p.name}</Link>
-                  <p className="text-sm font-extrabold text-gray-900 mb-2">₹{p.price?.toLocaleString('en-IN')}</p>
+                  <p className="text-sm font-extrabold text-gray-900 mb-2">
+                    {hasOptions(p) && priceRange(p).max > priceRange(p).min
+                      ? `₹${priceRange(p).min.toLocaleString('en-IN')} – ₹${priceRange(p).max.toLocaleString('en-IN')}`
+                      : `₹${p.price?.toLocaleString('en-IN')}`}
+                    {p.unitLabel && <span className="text-[10px] font-semibold text-gray-400">{perUnit(p)}</span>}
+                  </p>
                   {!Array.isArray(liveProducts) ? (
                     // Live shop not confirmed (still loading / unreachable): an old
                     // snapshot is never offered for sale — open the product instead.
                     <Link to={`/shop/${p.slug || p.id}`}
                       className="block w-full py-1.5 rounded-lg text-xs font-bold text-center border-2 border-gray-200 text-gray-700 hover:border-blue-300 hover:text-blue-700 transition-colors">
                       View
+                    </Link>
+                  ) : hasOptions(p) && !isOutOfStock(p) ? (
+                    <Link to={`/shop/${p.slug || p.id}`}
+                      className="block w-full py-1.5 rounded-lg text-xs font-bold text-center brand-gradient text-white hover:opacity-90">
+                      Choose options
                     </Link>
                   ) : isOutOfStock(p) ? (
                     <button onClick={() => addToRfq(p)}
@@ -326,7 +378,8 @@ const ShopPage = () => {
     if (list) return list.map(p => ({
       id: p.id, slug: p.slug || String(p.id), cat: p.category,
       name: p.name, price: p.price, mrp: p.mrp || p.price,
-      rating: (p.rating && Number(p.rating) > 0) ? Number(p.rating) : 4.5, reviews: p.reviewCount || 0,
+      // Real ratings only — unreviewed products used to show a made-up 4.5 ★.
+      rating: Number(p.rating) > 0 && Number(p.reviewCount) > 0 ? Number(p.rating) : 0, reviews: Number(p.reviewCount) > 0 ? Number(p.reviewCount) : 0,
       badge: p.badge || '', image: p.imageUrl || '', desc: p.description || '',
       // Live stock never "unknown": a product whose stock was never set is 0.
       stockQty: liveStock(p.stockQty), minOrderQty: p.minOrderQty || 1,
@@ -335,7 +388,9 @@ const ShopPage = () => {
       tagline: p.tagline || '', deliveryCharge: p.deliveryCharge ?? null,
       deliveryRestricted: !!p.deliveryRestricted, allowedPincodes: p.allowedPincodes || '',
       deliveryAreaNote: p.deliveryAreaNote || '',
-    }));
+      // Options (brand / grade / size…) with their own prices, and bulk prices.
+      ...liveOptionFields(p),
+    })).map(p => (p.hasVariants ? { ...p, inStock: !isOutOfStock(p) } : p));
     return null;
   }, [apiData]);
   // True only when we're falling back to the built-in catalogue because the API
@@ -386,12 +441,16 @@ const ShopPage = () => {
       list = list.filter(p =>
         (p.name || '').toLowerCase().includes(q) ||
         (p.cat  || '').toLowerCase().includes(q) ||
-        (p.desc || '').toLowerCase().includes(q)
+        (p.desc || '').toLowerCase().includes(q) ||
+        (p.sku  || '').toLowerCase().includes(q) ||
+        // Options too, so "UltraTech" or "OPC 53" finds the cement.
+        activeVariants(p).some(v => variantLabel(v).toLowerCase().includes(q) || String(v.sku || '').toLowerCase().includes(q))
       );
     }
     if (inStockOnly) list = list.filter(p => !isOutOfStock(p));
     // Price range filter
-    if (priceMin !== '') list = list.filter(p => p.price >= Number(priceMin));
+    // A product sold in options matches when any of its options is in the range.
+    if (priceMin !== '') list = list.filter(p => (hasOptions(p) ? priceRange(p).max : p.price) >= Number(priceMin));
     if (priceMax !== '') list = list.filter(p => p.price <= Number(priceMax));
 
     if (sort === 'Price: Low to High')  list.sort((a, b) => a.price - b.price);

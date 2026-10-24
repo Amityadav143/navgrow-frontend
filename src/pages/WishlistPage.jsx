@@ -17,11 +17,12 @@ import { useCart } from '@/context/CartContext';
 import { useRfq } from '@/context/RfqContext';
 import useLiveAvailability, { withLive } from '@/hooks/useLiveAvailability';
 import { isOutOfStock, stockOf, moqOf, isLiveId } from '@/lib/stock';
+import { hasOptions, priceRange, perUnit } from '@/lib/variants';
 import PageHero from '@/components/PageHero';
 import useSeo from '@/hooks/useSeo';
 
 const WishlistPage = () => {
-  useSeo({ title: 'Wishlist', description: 'Your saved products from Navgrow Engineering Shop.', path: '/wishlist' });
+  useSeo({ title: 'Wishlist', description: 'Your saved products from Navgrow Engineering Shop.', path: '/wishlist', noindex: true });
   const { wishlist, toggleWishlist, moveToCart, items } = useCart();
   const { addToRfq, inRfq } = useRfq();
   // Wishlist entries are saved copies — check live stock and price before
@@ -81,7 +82,12 @@ const WishlistPage = () => {
                           ) : (
                             <p className="font-bold text-gray-900 text-sm mb-2 leading-snug flex-1">{item.name}</p>
                           )}
-                          <p className="text-xl font-extrabold text-gray-900 mb-1">₹{Number(item.price || 0).toLocaleString('en-IN')}</p>
+                          <p className="text-xl font-extrabold text-gray-900 mb-1">
+                            {hasOptions(item) && priceRange(item).max > priceRange(item).min
+                              ? `₹${priceRange(item).min.toLocaleString('en-IN')} – ₹${priceRange(item).max.toLocaleString('en-IN')}`
+                              : `₹${Number(item.price || 0).toLocaleString('en-IN')}`}
+                            {item.unitLabel && <span className="text-xs font-semibold text-gray-400">{perUnit(item)}</span>}
+                          </p>
                           <p className={`text-xs font-semibold mb-3 ${gone ? 'text-gray-500' : soldOut ? 'text-red-600' : sample ? 'text-amber-700' : stock !== null ? 'text-emerald-600' : 'text-gray-400'}`}>
                             {gone ? 'No longer available'
                               : sample ? 'Price & availability on request'
@@ -96,6 +102,11 @@ const WishlistPage = () => {
                             </button>
                             {gone ? (
                               <span className="flex items-center justify-center py-2 text-xs font-semibold text-gray-400 rounded-xl border border-gray-200">Unavailable</span>
+                            ) : hasOptions(item) && !soldOut ? (
+                              <Link to={`/shop/${item.slug || item.id}`}
+                                className="flex items-center justify-center gap-1.5 py-2 text-xs font-bold rounded-xl btn-gold shadow-sm hover:opacity-90">
+                                <ShoppingCart className="h-3.5 w-3.5" /> Choose options
+                              </Link>
                             ) : (soldOut || sample) ? (
                               <button onClick={() => addToRfq(item, moqOf(item))}
                                 className={`flex items-center justify-center gap-1.5 py-2 text-xs font-bold rounded-xl transition-all ${

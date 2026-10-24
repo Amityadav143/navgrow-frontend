@@ -1,37 +1,43 @@
 # Navgrow Engineering Service Pvt. Ltd.
 # https://navgrow.org
-# robots.txt — last updated 2026-05-01
+# robots.txt — last updated 2026-10-24
 
 User-agent: *
 Allow: /
 
-# Block admin, API, and user-specific pages from indexing
+# Private / per-user pages — nothing here to index.
 Disallow: /admin
-Disallow: /admin/
+Disallow: /editor
 Disallow: /account
-Disallow: /account/
-Disallow: /api/
 Disallow: /cart
+Disallow: /checkout
 Disallow: /wishlist
+Disallow: /saved-quotes
 Disallow: /reset-password
+Disallow: /oauth/
 
-# Allow bots to crawl sitemap-listed content
-Allow: /shop/
-Allow: /shop
-Allow: /services
-Allow: /projects
-Allow: /news
-Allow: /gallery
-Allow: /careers
-Allow: /contact
-Allow: /about
-Allow: /quote-calculator
+# The API. Crawlers MAY read the uploaded photos and the public catalogue
+# endpoints the pages load their content from — products, news, projects…
+# Blocking all of /api/ hid every admin-uploaded product photo from Google and
+# stopped it rendering product and news pages (it saw "not found" instead of
+# the product), so those pages weren't indexed. API data responses are sent
+# with "X-Robots-Tag: noindex", so they are never indexed as pages themselves.
+# (The longest matching rule wins, so these Allow lines beat "Disallow: /api/".)
+Disallow: /api/
+Allow: /api/uploads/
+Allow: /api/products
+Allow: /api/news
+Allow: /api/projects
+Allow: /api/gallery
+Allow: /api/jobs
+Allow: /api/tenders
+Allow: /api/catalog
+Allow: /api/site-settings
+Allow: /api/coupons/offers
+Allow: /api/sitemap-content.xml
 
-# Crawl delay for respectful bots
-Crawl-delay: 1
-
-# Sitemaps — the static one (core pages, built at deploy) and the live one
-# (served by the API) that also lists admin-published posts & products so new
-# content is discovered as soon as it goes live.
+# Sitemaps — the one built at deploy (every page, service, product and post at
+# that moment) and the live one served by the API, which also lists anything
+# published in the admin since the last deploy.
 Sitemap: https://navgrow.org/sitemap.xml
 Sitemap: https://navgrow.org/api/sitemap-content.xml

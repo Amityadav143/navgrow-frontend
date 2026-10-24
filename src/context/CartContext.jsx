@@ -23,6 +23,8 @@ import RfqContext from '@/context/RfqContext';
 import { toast } from '@/components/ui/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { stockOf, moqOf, isOutOfStock, clampToStock, isLiveId } from '@/lib/stock';
+import { unitPriceFor } from '@/lib/pricing';
+import { productIdOf, optionNamesOf } from '@/lib/variants';
 
 const CartContext = createContext(null);
 const STORAGE_KEY = 'navgrow_cart_v1';
@@ -45,32 +47,84 @@ const loadWishlist = () => {
   catch { return []; }
 };
 
-/** Copy live facts (stock, price, tax, delivery area) onto a saved line. */
-export const mergeLive = (item, a) => ({
-  ...item,
-  name:     a.name || item.name,
-  slug:     a.slug || item.slug,
-  price:    a.price != null ? Number(a.price) : item.price,
-  mrp:      a.mrp != null ? Number(a.mrp) : item.mrp,
-  gstRate:  a.gstRate != null ? Number(a.gstRate) : item.gstRate,
-  hsn:      a.hsnCode || item.hsn,
-  image:    item.image || a.imageUrl || '',
-  stockQty: Number(a.stockQty ?? 0),
-  minOrderQty: Number(a.minOrderQty ?? 1),
-  active:   a.active !== false,
-  deliveryCharge:     a.deliveryCharge ?? item.deliveryCharge ?? null,
-  deliveryRestricted: !!a.deliveryRestricted,
-  allowedPincodes:    a.allowedPincodes || undefined,
-  deliveryAreaNote:   a.deliveryAreaNote || undefined,
-  unavailable: a.found === false || a.active === false,
-  checkedAt: Date.now(),
-});
+/**
+ * A line's unit price for its quantity — the normal price, or the bulk price
+ * the quantity qualifies for (same rule as the server, see lib/pricing.js).
+ * Lines saved before bulk pricing existed simply keep their price.
+ */
+export const linePrice = (line, qty = line?.qty) => {
+  const base = Number(line?.basePrice);
+  if (!Number.isFinite(base) || base <= 0) return line?.price;
+  return unitPriceFor(base, line.priceTiers, Number(qty) || 1);
+};
+
+/**
+ * Copy live facts (stock, price, bulk prices, tax, delivery area) onto a saved
+ * line. A line for one option of a product takes that option's figures; if
+ * the option is gone, or the product now needs an option chosen, the line is
+ * flagged so checkout waits until it's fixed.
+ */
+export const mergeLive = (item, a) => {
+  const shared = {
+    ...item,
+    slug:     a.slug || item.slug,
+    gstRate:  a.gstRate != null ? Number(a.gstRate) : item.gstRate,
+    hsn:      a.hsnCode || item.hsn,
+    image:    item.image || a.imageUrl || '',
+    active:   a.active !== false,
+    unitLabel: a.unitLabel || item.unitLabel,
+    deliveryRestricted: !!a.deliveryRestricted,
+    allowedPincodes:    a.allowedPincodes || undefined,
+    deliveryAreaNote:   a.deliveryAreaNote || undefined,
+    checkedAt: Date.now(),
+  };
+  if (item.variantId) {
+    const v = (Array.isArray(a.variants) ? a.variants : []).find(x => String(x.id) === String(item.variantId));
+    if (!v) return { ...shared, unavailable: true };
+    const label = v.label || item.variantLabel || '';
+    const baseName = a.name || item.productName || String(item.name || '').split(' — ')[0];
+    const price = v.price != null ? Number(v.price) : item.basePrice ?? item.price;
+    return {
+      ...shared,
+      productName:  baseName,
+      variantLabel: label,
+      name:         label ? `${baseName} — ${label}` : baseName,
+      price,
+      basePrice:    price,
+      priceTiers:   v.priceTiers || undefined,
+      mrp:          v.mrp != null ? Number(v.mrp) : undefined,
+      stockQty:     Number(v.stockQty ?? 0),
+      minOrderQty:  Number(v.minOrderQty ?? 1),
+      sku:          v.sku || item.sku,
+      deliveryCharge: v.deliveryCharge ?? item.deliveryCharge ?? null,
+      active:       a.active !== false && v.active !== false,
+      unavailable:  a.found === false || a.active === false || v.active === false,
+    };
+  }
+  // A plain line for a product that is now sold in options: one must be chosen.
+  if (a.hasVariants) return { ...shared, needsOption: true, unavailable: true };
+  const price = a.price != null ? Number(a.price) : item.price;
+  return {
+    ...shared,
+    name:     a.name || item.name,
+    price,
+    basePrice: price,
+    priceTiers: a.priceTiers || undefined,
+    mrp:      a.mrp != null ? Number(a.mrp) : item.mrp,
+    stockQty: Number(a.stockQty ?? 0),
+    minOrderQty: Number(a.minOrderQty ?? 1),
+    deliveryCharge: a.deliveryCharge ?? item.deliveryCharge ?? null,
+    needsOption: undefined,
+    unavailable: a.found === false || a.active === false,
+  };
+};
 
 /** Why a cart line can't be bought right now (null when it can). */
 export const lineIssue = (i) => {
   if (!i) return null;
   // Not a live-shop product (an old sample-catalogue line): it can't be ordered.
-  if (!isLiveId(i.id)) return 'unavailable';
+  if (!isLiveId(productIdOf(i))) return 'unavailable';
+  if (i.needsOption && !i.variantId) return 'unavailable';
   if (i.unavailable || i.active === false) return 'unavailable';
   if (isOutOfStock(i)) return 'out_of_stock';
   const s = stockOf(i);
@@ -96,14 +150,16 @@ export const cartReducer = (state, action) => {
         // 'set' (Buy now): the line becomes exactly what was chosen;
         // otherwise add on top of what's already in the cart.
         const target = mode === 'set' ? (wantQty ?? ex.qty) : ex.qty + (wantQty ?? 1);
-        return state.map(i => i.id === item.id ? { ...merged, qty: clampToStock(target, merged) } : i);
+        const qty = clampToStock(target, merged);
+        return state.map(i => i.id === item.id ? { ...merged, qty, price: linePrice(merged, qty) } : i);
       }
-      return [...state, { ...item, qty: clampToStock(wantQty ?? moqOf(item), item) }];
+      const qty = clampToStock(wantQty ?? moqOf(item), item);
+      return [...state, { ...item, qty, price: linePrice(item, qty) }];
     }
     case 'SYNC': {
       const { live } = action;
       return state.map(i => {
-        const a = live[String(i.id)] || (i.slug ? live[i.slug] : null);
+        const a = live[productIdOf(i)] || (i.slug ? live[i.slug] : null);
         if (!a) return i;
         if (a.found === false) return { ...i, unavailable: true, checkedAt: Date.now() };
         const m = mergeLive(i, a);
@@ -117,13 +173,18 @@ export const cartReducer = (state, action) => {
         } else {
           m.qtyNote = undefined;
         }
+        m.price = linePrice(m, m.qty);
         return m;
       });
     }
     case 'REMOVE':     return state.filter(i => i.id !== action.id);
     case 'UPDATE_QTY': return action.qty < 1
       ? state.filter(i => i.id !== action.id)
-      : state.map(i => i.id === action.id ? { ...i, qty: clampToStock(action.qty, i), qtyNote: undefined } : i);
+      : state.map(i => {
+          if (i.id !== action.id) return i;
+          const qty = clampToStock(action.qty, i);
+          return { ...i, qty, price: linePrice(i, qty), qtyNote: undefined };
+        });
     case 'CLEAR':      return [];
     default:           return state;
   }
@@ -177,7 +238,8 @@ export const CartProvider = ({ children }) => {
   // ── Live re-check of every line (stock, price, availability) ─────────────────
   const syncAvailability = useCallback(({ force = false, announce = true } = {}) => {
     const lines = itemsRef.current;
-    const ids = lines.map(i => i.id).filter(isLiveId);
+    // One lookup per product (several options of one product share it).
+    const ids = Array.from(new Set(lines.map(productIdOf).filter(isLiveId)));
     if (!ids.length) return Promise.resolve({ ok: true, issues: [], changed: [] });
     if (!force && Date.now() - lastSyncAt.current < RESYNC_MS) return Promise.resolve({ ok: true, cached: true, issues: [], changed: [] });
     if (inflight.current) return inflight.current;
@@ -257,13 +319,23 @@ export const CartProvider = ({ children }) => {
     // Only products from the live shop can be ordered. The built-in sample
     // catalogue (shown when the shop can't be reached) is for browsing — the
     // server would reject it at checkout, after the buyer has filled everything in.
-    if (!isLiveId(item.id)) {
+    const pid = productIdOf(item);
+    if (!isLiveId(pid)) {
       toast({
         title: `${item?.name || 'This product'} can't be bought online right now`,
         description: "We couldn't confirm it with the live shop. Request a quote and our team will confirm price and availability.",
         action: quoteAction(item, item.qty),
       });
       return Promise.resolve({ ok: false, reason: 'not_live' });
+    }
+    // A product sold in options (brand / grade / size…) needs one chosen first.
+    if (item.needsOption && !item.variantId) {
+      const names = optionNamesOf(item);
+      toast({
+        title: `Choose ${names.length ? names.join(' / ').toLowerCase() : 'an option'} first`,
+        description: `${item.name || 'This product'} comes in several options with different prices — pick one on the product page.`,
+      });
+      return Promise.resolve({ ok: false, reason: 'needs_option' });
     }
     if (isOutOfStock(item)) {
       notifyNotBuyable(item, item.qty);
@@ -272,15 +344,26 @@ export const CartProvider = ({ children }) => {
     // A saved copy with no stock figure (recently viewed, wishlist, re-order):
     // ask the live shop first instead of trusting an old snapshot.
     if (stockOf(item) === null) {
-      return productsApi.availability([item.id])
+      return productsApi.availability([pid])
         .then(({ data }) => {
-          const a = (Array.isArray(data) ? data : []).find(x => String(x?.id) === String(item.id) || x?.ref === String(item.id));
+          const a = (Array.isArray(data) ? data : []).find(x => String(x?.id) === pid || x?.ref === pid);
           if (!a) return doAdd(item);
+          if (a.hasVariants && !item.variantId) {
+            toast({
+              title: 'Choose an option first',
+              description: `${a.name || item.name || 'This product'} comes in several options with different prices — pick one on the product page.`,
+            });
+            return { ok: false, reason: 'needs_option' };
+          }
           if (a.found === false || a.active === false) {
             notifyNotBuyable({ ...item, unavailable: true });
             return { ok: false, reason: 'unavailable' };
           }
           const live = mergeLive(item, a);
+          if (live.unavailable) {
+            notifyNotBuyable({ ...live, unavailable: true });
+            return { ok: false, reason: 'unavailable' };
+          }
           if (isOutOfStock(live)) {
             notifyNotBuyable(live, item.qty);
             return { ok: false, reason: 'out_of_stock' };

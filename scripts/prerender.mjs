@@ -23,7 +23,10 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ROUTES, SITE, organizationSchema, productSchema, productBreadcrumb, siteNavigationSchema, NEWS_ARTICLES, articleSchema, articleBreadcrumb, faqSchema } from '../src/lib/seo-routes.mjs';
+import { ROUTES, SITE, siteNavigationSchema, NEWS_ARTICLES, articleSchema, articleBreadcrumb, faqSchema } from '../src/lib/seo-routes.mjs';
+import { buildProductSchema, buildProductBreadcrumb, plainText } from '../src/lib/productSchema.js';
+import { SERVICES } from '../src/data/servicesData.js';
+import { loadLiveData, normalizeProduct } from './live-data.mjs';
 import { SEO_CONTENT, renderSeoContent } from '../src/lib/seo-content.mjs';
 import { readFileSync as _rf } from 'node:fs';
 
@@ -52,6 +55,35 @@ try {
   }
 } catch { /* best-effort */ }
 
+// ── Live catalogue & news (from the API, when reachable at build time) ──────
+const LIVE = await loadLiveData();
+const LIVE_PRODUCTS = Array.isArray(LIVE.products)
+  ? LIVE.products.filter(p => p && p.slug && p.active !== false) : null;
+const LIVE_NEWS = Array.isArray(LIVE.news) ? LIVE.news.filter(a => a && a.slug) : null;
+console.log(LIVE_PRODUCTS
+  ? `[prerender] Live data from ${LIVE.source}: ${LIVE_PRODUCTS.length} products, ${LIVE_NEWS ? LIVE_NEWS.length : 0} news posts.`
+  : `[prerender] Live API not reachable (${LIVE.source}) — using the built-in catalogue. DB-only pages are still served live by og.php.`);
+
+// News: published posts from the database, plus the built-in articles not in it.
+const ALL_ARTICLES = (() => {
+  const bySlug = new Map();
+  for (const a of NEWS_ARTICLES) if (a.slug) bySlug.set(a.slug, { ...a });
+  for (const a of LIVE_NEWS || []) {
+    bySlug.set(a.slug, {
+      slug: a.slug,
+      title: a.title,
+      category: a.category || 'News',
+      publishedAt: String(a.publishedAt || a.createdAt || '').slice(0, 10),
+      updatedAt: String(a.updatedAt || a.publishedAt || '').slice(0, 10),
+      image: a.imageUrl || '',
+      excerpt: a.excerpt || plainText(a.content, 300),
+      content: a.content || '',
+      authorName: a.authorName || '',
+    });
+  }
+  return [...bySlug.values()];
+})();
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST = join(__dirname, '..', 'dist');
 // Local images live in dist/ after the Vite build (public/ is copied there);
@@ -64,6 +96,13 @@ if (!existsSync(TEMPLATE_PATH)) {
   process.exit(1);
 }
 const template = readFileSync(TEMPLATE_PATH, 'utf8');
+// dist/index.html is overwritten with the prerendered HOMEPAGE below. Running
+// this script a second time without a fresh `vite build` would use that page as
+// the template and stamp the homepage's tags onto every page — refuse instead.
+if (template.includes('id="prerendered-seo-content"')) {
+  console.error('[prerender] dist/index.html is already prerendered — run `vite build` (or `npm run build`) first.');
+  process.exit(1);
+}
 
 const esc = (s) => String(s || '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -170,12 +209,12 @@ function listingSchema(route) {
   let name, items;
   if (route.path === '/shop') {
     name = 'Navgrow Engineering Shop';
-    items = _PRODUCTS_FOR_LIST
+    items = (LIVE_PRODUCTS || _PRODUCTS_FOR_LIST)
       .filter(p => (p.slug || p.id))
       .map(p => ({ name: p.name, path: `/shop/${p.slug || p.id}` }));
   } else if (route.path === '/news') {
     name = 'Navgrow News & Insights';
-    items = NEWS_ARTICLES
+    items = ALL_ARTICLES
       .filter(a => a.slug)
       .map(a => ({ name: a.title, path: `/news/${a.slug}` }));
   } else if (route.path === '/services') {
@@ -258,7 +297,7 @@ function headFor(route) {
     <script type="application/ld+json">${JSON.stringify(webPage)}</script>
     <script type="application/ld+json">${JSON.stringify(breadcrumb)}</script>${route.path === '/' ? `
     <script type="application/ld+json">${JSON.stringify(siteNavigationSchema())}</script>
-    <script type="application/ld+json">${JSON.stringify(faqSchema())}</script>` : ''}${(() => {
+    <script type="application/ld+json" id="page-jsonld">${JSON.stringify(faqSchema())}</script>` : ''}${(() => {
       const ls = listingSchema(route);
       return ls ? `\n    <script type="application/ld+json">${JSON.stringify(ls)}</script>` : '';
     })()}`;
@@ -332,7 +371,14 @@ function stripBaseTags(html) {
     .replace(/<meta\s+property="og:image(:[a-z_]+)?"[^>]*>/gi, '')
     .replace(/<meta\s+name="twitter:title"[^>]*>/gi, '')
     .replace(/<meta\s+name="twitter:description"[^>]*>/gi, '')
-    .replace(/<meta\s+name="twitter:image(:[a-z]+)?"[^>]*>/gi, '');
+    .replace(/<meta\s+name="twitter:image(:[a-z]+)?"[^>]*>/gi, '')
+    // Each page sets these itself; the base copies made them appear twice.
+    .replace(/<meta\s+property="og:type"[^>]*>/gi, '')
+    .replace(/<meta\s+property="og:site_name"[^>]*>/gi, '')
+    .replace(/<meta\s+name="twitter:card"[^>]*>/gi, '')
+    // The base hreflang links point at the HOMEPAGE — on any other page they
+    // told Google that page's alternate was the homepage.
+    .replace(/<link\s+rel="alternate"\s+hreflang="[^"]*"[^>]*>/gi, '');
 }
 
 function render(route) {
@@ -344,12 +390,12 @@ function render(route) {
   // with JS disabled) get substantive, indexable content immediately instead of
   // an empty div. This is the key fix for thin server-rendered content.
   const contentSections = SEO_CONTENT[route.path];
-  const prerenderedBody = contentSections
-    ? `<div id="prerendered-seo-content" style="max-width:900px;margin:0 auto;padding:24px;font-family:system-ui,Arial,sans-serif;line-height:1.6">
+  // Every route gets at least a heading and its description as real text (the
+  // legal pages used to ship an empty #root).
+  const prerenderedBody = `<div id="prerendered-seo-content" style="max-width:900px;margin:0 auto;padding:24px;font-family:system-ui,Arial,sans-serif;line-height:1.6">
     <h1>${esc(route.title.split(' — ')[0].split(' | ')[0])}</h1>
-    ${renderSeoContent(contentSections)}
-  </div>`
-    : '';
+    ${contentSections ? renderSeoContent(contentSections) : `<p>${esc(route.description)}</p>`}
+  </div>`;
   html = html.replace('<div id="root"></div>',
     `${noscriptFor(route)}\n  <div id="root">${prerenderedBody}</div>${crawlableFooter()}`);
   return html;
@@ -367,23 +413,34 @@ for (const route of ROUTES) {
 console.log(`[prerender] Wrote ${count} SEO HTML files.`);
 
 // ── Product detail pages ────────────────────────────────────────────────────
-// Each product page is prerendered with a COMPLETE Product JSON-LD block that
-// always includes offers + aggregateRating, fixing the Search Console error
-// "Either offers, review or aggregateRating should be specified" and making every
-// product independently indexable with rich-result eligibility.
+// Built from the LIVE catalogue when the API answered at build time (today's
+// prices, options, stock and genuine review counts); otherwise from the
+// built-in catalogue, whose placeholder ratings are never put in the markup.
+// Product JSON-LD comes from src/lib/productSchema.js — the same builder the
+// product page uses — so the prerendered and rendered markup always agree.
+const inr = (n) => '₹' + Number(n).toLocaleString('en-IN', Number.isInteger(Number(n)) ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function priceSummary(p) {
+  const opts = (p.variants || []).filter(v => v && v.active !== false && Number(v.price) > 0);
+  const per = p.unitLabel ? ` per ${p.unitLabel}` : '';
+  if (opts.length) {
+    const prices = opts.map(v => Number(v.price));
+    const lo = Math.min(...prices), hi = Math.max(...prices);
+    return { text: (lo === hi ? inr(lo) : `${inr(lo)} – ${inr(hi)}`) + per, low: lo, options: opts };
+  }
+  if (Number(p.price) > 0) return { text: inr(p.price) + per, low: Number(p.price), options: [] };
+  return { text: 'Price on request', low: 0, options: [] };
+}
+
 function headForProduct(p) {
   const slug = p.slug || p.id;
   const url = `${SITE.url}/shop/${slug}`;
-  const title = `${p.name} | ${SITE.shortName}`;
-  const desc = (p.summary || p.description || p.desc || p.name).slice(0, 300);
-  const img = p.image && /^https?:\/\//.test(p.image) ? p.image
-            : (p.image || '/og-share.jpg');
-  const schema = productSchema(p);
-  // Connect the product into the site's entity graph.
-  schema['@id'] = `${url}#product`;
-  schema.isPartOf = { '@id': `${SITE.url}/#website` };
-  if (schema.offers) schema.offers.seller = { '@id': `${SITE.url}/#organization` };
-  const crumb = productBreadcrumb(p);
+  const price = priceSummary(p);
+  const title = `${p.name} — Buy Online | ${SITE.shortName}`;
+  const desc = plainText(`${p.name}${price.low ? ` at ${price.text}` : ''} (incl. GST). ${p.summary || p.description || ''} GST invoice with HSN, bulk prices and pan-India delivery.`, 300);
+  const img = p.image && /^https?:\/\//.test(p.image) ? p.image : (p.image || '/og-share.jpg');
+  const product = buildProductSchema(p, { siteUrl: SITE.url, genuineRatings: p.genuine });
+  const crumb = buildProductBreadcrumb(p, { siteUrl: SITE.url });
   const webPage = {
     '@context': 'https://schema.org',
     '@type': 'WebPage',
@@ -391,14 +448,16 @@ function headForProduct(p) {
     url,
     name: title,
     isPartOf: { '@id': `${SITE.url}/#website` },
-    primaryImageOfPage: img ? { '@type': 'ImageObject', url: img } : undefined,
     breadcrumb: { '@id': `${url}#breadcrumb` },
+    ...(product ? { mainEntity: { '@id': `${url}#product` } } : {}),
   };
-  crumb['@id'] = `${url}#breadcrumb`;
+  // Same script id as the product page uses, so the app replaces (never
+  // duplicates) this markup once it has loaded.
+  const pageLd = [product, crumb].filter(Boolean);
   return `
     <title>${esc(title)}</title>
     <meta name="description" content="${esc(desc)}"/>
-    <meta name="keywords" content="${esc((p.name || '') + ', ' + (p.category || '') + ', buy online, GST invoice, B2B, Navgrow Engineering, India')}"/>
+    <meta name="keywords" content="${esc([p.name, p.category, ...(p.optionNames || []), 'buy online', 'price', 'GST invoice', 'Navgrow Engineering'].filter(Boolean).join(', '))}"/>
     <link rel="canonical" href="${url}"/>
     <link rel="alternate" hreflang="en-in" href="${url}"/>
     <link rel="alternate" hreflang="x-default" href="${url}"/>
@@ -407,56 +466,77 @@ function headForProduct(p) {
     <meta property="og:title" content="${esc(title)}"/>
     <meta property="og:description" content="${esc(desc)}"/>
     <meta property="og:url" content="${url}"/>
-    <meta property="og:site_name" content="${esc(SITE.name)}"/>
-    <meta property="product:price:amount" content="${Number(p.price || 0).toFixed(2)}"/>
-    <meta property="product:price:currency" content="INR"/>
+    <meta property="og:site_name" content="${esc(SITE.name)}"/>${price.low ? `
+    <meta property="product:price:amount" content="${price.low.toFixed(2)}"/>
+    <meta property="product:price:currency" content="INR"/>` : ''}
     <meta name="twitter:card" content="summary_large_image"/>
     <meta name="twitter:title" content="${esc(title)}"/>
     <meta name="twitter:description" content="${esc(desc)}"/>${ogImageTags(img, p.name)}
-    <script type="application/ld+json" id="page-jsonld">${JSON.stringify(schema)}</script>
-    <script type="application/ld+json">${JSON.stringify(webPage)}</script>
-    <script type="application/ld+json">${JSON.stringify(crumb)}</script>`;
+    <script type="application/ld+json" id="page-jsonld">${jsonLd(pageLd)}</script>
+    <script type="application/ld+json">${jsonLd(webPage)}</script>`;
+}
+
+/** JSON for a <script> block — "</" can never close the tag early. */
+function jsonLd(obj) {
+  return JSON.stringify(obj).replace(/<\//g, '<\\/');
+}
+
+/** Real, crawlable product content: name, price, options, description, features, specs. */
+function productBody(p) {
+  const price = priceSummary(p);
+  const names = (p.optionNames || []).slice(0, 3);
+  const opts = price.options.slice(0, 80);
+  const avail = (v) => {
+    const moq = Math.max(1, Number(v.minOrderQty) || Number(p.minOrderQty) || 1);
+    return Number(v.stockQty ?? v.liveStock) >= moq ? 'In stock' : 'On request';
+  };
+  const table = opts.length ? `
+      <h2>${esc(p.name)} — all options &amp; prices</h2>
+      <table>
+        <thead><tr>${names.map(n => `<th>${esc(n)}</th>`).join('')}<th>Price${p.unitLabel ? ` per ${esc(p.unitLabel)}` : ''}</th><th>Availability</th></tr></thead>
+        <tbody>${opts.map(v => `<tr>${names.map((_, i) => `<td>${esc(v[`option${i + 1}`] || '')}</td>`).join('')}<td>${esc(inr(v.price))}</td><td>${avail(v)}</td></tr>`).join('')}</tbody>
+      </table>` : '';
+  const list = (title, items) => (items.length ? `\n      <h2>${esc(title)}</h2>\n      <ul>${items.slice(0, 30).map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
+  return `<div id="prerendered-seo-content" style="max-width:900px;margin:0 auto;padding:24px;font-family:system-ui,Arial,sans-serif;line-height:1.6">
+      <p><a href="/">Home</a> › <a href="/shop">Shop</a>${p.category ? ` › ${esc(p.category)}` : ''}</p>
+      <h1>${esc(p.name)}</h1>
+      <p><strong>Price: ${esc(price.text)}</strong> (incl. GST)${p.hsnCode ? ` &middot; HSN ${esc(String(p.hsnCode))}` : ''}${p.category ? ` &middot; Category: ${esc(p.category)}` : ''}</p>
+      ${p.tagline ? `<p><em>${esc(p.tagline)}</em></p>` : ''}
+      <p>${esc(plainText(p.summary || p.description, 800))}</p>${table}
+      ${p.description && p.description !== p.summary ? `<p>${esc(plainText(p.description, 1500))}</p>` : ''}${list('Key features', p.features || [])}${list('Specifications', p.specs || [])}
+      <h2>Buy ${esc(p.name)} online from Navgrow Engineering</h2>
+      <p>GST tax invoice with HSN for input-tax credit, bulk prices for larger quantities, request-for-quote for project requirements, and pan-India delivery (free within Siliguri). Call ${esc(SITE.phone)} or email ${esc(SITE.email)}.</p>
+    </div>`;
 }
 
 function noscriptForProduct(p) {
-  const price = Number(p.price);
-  const priceStr = Number.isFinite(price) && price > 0 ? `\u20B9${price.toLocaleString('en-IN')}` : 'Request a quote';
   return `<noscript><div style="max-width:720px;margin:40px auto;padding:0 20px;font-family:system-ui,Arial,sans-serif">
-    <p><strong>Price: ${esc(priceStr)}</strong> (incl. GST)${p.hsnCode ? ` &middot; HSN ${esc(String(p.hsnCode))}` : ''}</p>
-    <p>${esc((p.summary || p.description || p.desc || '').slice(0, 500))}</p>
-    <p>Buy online from Navgrow Engineering with GST invoice and pan-India delivery. Bulk / RFQ options available.</p>
+    <p><strong>${esc(p.name)} — ${esc(priceSummary(p).text)}</strong> (incl. GST). ${esc(plainText(p.summary || p.description, 400))}</p>
     <p>Navgrow Engineering Service Pvt. Ltd., Siliguri, West Bengal, India — ${esc(SITE.phone)} — ${esc(SITE.email)}</p>
   </div></noscript>`;
 }
 
+const PRODUCT_PAGES = LIVE_PRODUCTS
+  ? LIVE_PRODUCTS.map(p => normalizeProduct(p, true))
+  : _PRODUCTS_FOR_LIST.map(p => normalizeProduct(p, false));
+
 let productCount = 0;
-try {
-  const mod = await import('../src/lib/productData.js');
-  const products = mod.ALL_PRODUCTS || mod.PRODUCTS || mod.default || [];
-  for (const p of products) {
-    const slug = p.slug || p.id;
-    if (!slug) continue;
+for (const p of PRODUCT_PAGES) {
+  const slug = p.slug || p.id;
+  if (!slug || !p.name) continue;
+  try {
     let html = stripBaseTags(template);
     html = html.replace('</head>', `${headForProduct(p)}\n</head>`);
-    const price = Number(p.price);
-    const priceStr = Number.isFinite(price) && price > 0 ? `\u20B9${price.toLocaleString('en-IN')}` : 'Request a quote';
-    const prodBody = `<div id="prerendered-seo-content" style="max-width:900px;margin:0 auto;padding:24px;font-family:system-ui,Arial,sans-serif;line-height:1.6">
-      <h1>${esc(p.name)}</h1>
-      <p><strong>Price: ${esc(priceStr)}</strong> (incl. GST)${p.hsnCode ? ` &middot; HSN ${esc(String(p.hsnCode))}` : ''}${p.category ? ` &middot; Category: ${esc(p.category)}` : ''}</p>
-      <p>${esc((p.summary || p.description || p.desc || '').slice(0, 800))}</p>
-      <h2>Buy ${esc(p.name)} online from Navgrow Engineering</h2>
-      <p>Certified product with a GST tax invoice (HSN codes) for input-tax credit, pan-India delivery (free within Siliguri), and bulk / RFQ options for B2B and institutional buyers. Contact ${esc(SITE.phone)} or ${esc(SITE.email)}.</p>
-    </div>`;
-    html = html.replace('<div id="root"></div>', `${noscriptForProduct(p)}\n  <div id="root">${prodBody}</div>${crawlableFooter()}`);
+    html = html.replace('<div id="root"></div>', `${noscriptForProduct(p)}\n  <div id="root">${productBody(p)}</div>${crawlableFooter()}`);
     const outDir = join(DIST, 'shop', String(slug));
     mkdirSync(outDir, { recursive: true });
     writeFileSync(join(outDir, 'index.html'), html, 'utf8');
     productCount++;
+  } catch (e) {
+    console.warn(`[prerender] Product "${slug}" skipped: ${e.message}`);
   }
-  console.log(`[prerender] Wrote ${productCount} product SEO HTML files.`);
-} catch (e) {
-  console.warn(`[prerender] Product prerender skipped: ${e.message}`);
 }
+console.log(`[prerender] Wrote ${productCount} product SEO HTML files (${LIVE_PRODUCTS ? 'live catalogue' : 'built-in catalogue'}).`);
 
 // ── News / blog articles ────────────────────────────────────────────────────
 // Each article is prerendered with a BlogPosting + Breadcrumb schema and full
@@ -464,9 +544,10 @@ try {
 function headForArticle(a) {
   const url = `${SITE.url}/news/${a.slug}`;
   const title = `${a.title} | Navgrow News`;
-  const desc = (a.excerpt || a.title).slice(0, 300);
+  const desc = plainText(a.excerpt || a.title, 300);
   const img = a.image && /^https?:\/\//.test(a.image) ? a.image : (a.image || '/og-share.jpg');
   const schema = articleSchema(a);
+  if (a.updatedAt) schema.dateModified = a.updatedAt;
   const crumb = articleBreadcrumb(a);
   const webPage = {
     '@context': 'https://schema.org', '@type': 'WebPage', '@id': `${url}#webpage`,
@@ -491,9 +572,9 @@ function headForArticle(a) {
     <meta name="twitter:card" content="summary_large_image"/>
     <meta name="twitter:title" content="${esc(title)}"/>
     <meta name="twitter:description" content="${esc(desc)}"/>${ogImageTags(img, a.title)}
-    <script type="application/ld+json" id="page-jsonld">${JSON.stringify(schema)}</script>
-    <script type="application/ld+json">${JSON.stringify(webPage)}</script>
-    <script type="application/ld+json">${JSON.stringify(crumb)}</script>`;
+    <script type="application/ld+json" id="page-jsonld">${jsonLd(schema)}</script>
+    <script type="application/ld+json">${jsonLd(webPage)}</script>
+    <script type="application/ld+json">${jsonLd(crumb)}</script>`;
 }
 
 function noscriptForArticle(a) {
@@ -505,16 +586,18 @@ function noscriptForArticle(a) {
 }
 
 let newsCount = 0;
-try {
-  for (const a of NEWS_ARTICLES) {
-    if (!a.slug) continue;
+for (const a of ALL_ARTICLES) {
+  if (!a.slug) continue;
+  try {
     let html = stripBaseTags(template);
     html = html.replace('</head>', `${headForArticle(a)}\n</head>`);
+    const body = plainText(a.content || '', 2500);
     const artBody = `<div id="prerendered-seo-content" style="max-width:900px;margin:0 auto;padding:24px;font-family:system-ui,Arial,sans-serif;line-height:1.6">
       <article>
+      <p><a href="/">Home</a> › <a href="/news">News</a></p>
       <h1>${esc(a.title)}</h1>
-      <p><em>${esc(a.category || 'News')} &middot; ${esc(a.publishedAt || '')} &middot; Navgrow Engineering</em></p>
-      <p>${esc(a.excerpt || '')}</p>
+      <p><em>${esc(a.category || 'News')} &middot; ${esc(a.publishedAt || '')} &middot; ${esc(a.authorName || 'Navgrow Engineering')}</em></p>
+      <p>${esc(a.excerpt || '')}</p>${body ? `\n      <p>${esc(body)}</p>` : ''}
       <p>Read more news and insights from Navgrow Engineering Service Pvt. Ltd., a DPIIT-recognised engineering firm in Siliguri, West Bengal, India, serving railways, industry and government across India.</p>
       </article>
     </div>`;
@@ -523,8 +606,137 @@ try {
     mkdirSync(outDir, { recursive: true });
     writeFileSync(join(outDir, 'index.html'), html, 'utf8');
     newsCount++;
+  } catch (e) {
+    console.warn(`[prerender] Article "${a.slug}" skipped: ${e.message}`);
   }
-  console.log(`[prerender] Wrote ${newsCount} news SEO HTML files.`);
-} catch (e) {
-  console.warn(`[prerender] News prerender skipped: ${e.message}`);
+}
+console.log(`[prerender] Wrote ${newsCount} news SEO HTML files.`);
+
+// ── Service detail pages (/services/<slug>) ─────────────────────────────────
+// These ten pages had no prerendered file, so crawlers were handed the
+// homepage's HTML — including its canonical — and Google filed every one of
+// them as a duplicate of the homepage ("Alternate page with proper canonical
+// tag"). Each now gets its own complete, indexable page.
+function headForService(sv) {
+  const url = `${SITE.url}/services/${sv.slug}`;
+  const title = `${sv.title} Services — ${sv.tagline ? sv.tagline.replace(/\.$/, '') : 'Navgrow Engineering'} | ${SITE.shortName}`.slice(0, 160);
+  const desc = plainText(sv.description, 300);
+  const service = {
+    '@context': 'https://schema.org',
+    '@type': 'Service',
+    '@id': `${url}#service`,
+    name: sv.title,
+    serviceType: sv.title,
+    description: desc,
+    url,
+    ...(sv.image ? { image: sv.image } : {}),
+    provider: { '@id': `${SITE.url}/#organization` },
+    areaServed: { '@type': 'Country', name: 'India' },
+  };
+  const crumb = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    '@id': `${url}#breadcrumb`,
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE.url}/` },
+      { '@type': 'ListItem', position: 2, name: 'Services', item: `${SITE.url}/services` },
+      { '@type': 'ListItem', position: 3, name: sv.title, item: url },
+    ],
+  };
+  const webPage = {
+    '@context': 'https://schema.org', '@type': 'WebPage', '@id': `${url}#webpage`,
+    url, name: title, isPartOf: { '@id': `${SITE.url}/#website` },
+    breadcrumb: { '@id': `${url}#breadcrumb` }, mainEntity: { '@id': `${url}#service` },
+  };
+  const faqs = (sv.faqs || []).filter(f => f && f.q && f.a);
+  const faq = faqs.length ? {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    '@id': `${url}#faq`,
+    mainEntity: faqs.map(f => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+  } : null;
+  return `
+    <title>${esc(title)}</title>
+    <meta name="description" content="${esc(desc)}"/>
+    <meta name="keywords" content="${esc([sv.title, ...(sv.standards || []).slice(0, 4), 'Siliguri', 'West Bengal', 'India', 'Navgrow Engineering'].join(', '))}"/>
+    <link rel="canonical" href="${url}"/>
+    <link rel="alternate" hreflang="en-in" href="${url}"/>
+    <link rel="alternate" hreflang="x-default" href="${url}"/>
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
+    <meta property="og:type" content="website"/>
+    <meta property="og:title" content="${esc(title)}"/>
+    <meta property="og:description" content="${esc(desc)}"/>
+    <meta property="og:url" content="${url}"/>
+    <meta property="og:site_name" content="${esc(SITE.name)}"/>
+    <meta name="twitter:card" content="summary_large_image"/>
+    <meta name="twitter:title" content="${esc(title)}"/>
+    <meta name="twitter:description" content="${esc(desc)}"/>${ogImageTags(sv.image || '/og-share.jpg', sv.imageAlt || sv.title)}
+    <script type="application/ld+json" id="page-jsonld">${jsonLd(service)}</script>
+    <script type="application/ld+json">${jsonLd(webPage)}</script>
+    <script type="application/ld+json">${jsonLd(crumb)}</script>${faq ? `
+    <script type="application/ld+json">${jsonLd(faq)}</script>` : ''}`;
+}
+
+function serviceBody(sv) {
+  const related = (sv.related || []).map(slug => SERVICES.find(x => x.slug === slug)).filter(Boolean);
+  const list = (title, items) => (items.length ? `\n      <h2>${esc(title)}</h2>\n      <ul>${items.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
+  return `<div id="prerendered-seo-content" style="max-width:900px;margin:0 auto;padding:24px;font-family:system-ui,Arial,sans-serif;line-height:1.6">
+      <p><a href="/">Home</a> › <a href="/services">Services</a></p>
+      <h1>${esc(sv.title)}</h1>
+      ${sv.tagline ? `<p><strong>${esc(sv.tagline)}</strong></p>` : ''}
+      <p>${esc(sv.description)}</p>
+      ${(sv.overview || []).map(t => `<p>${esc(t)}</p>`).join('\n      ')}${list('What we deliver', sv.deliverables || [])}${(sv.process || []).length ? `
+      <h2>How we work</h2>
+      <ol>${sv.process.map(st => `<li><strong>${esc(st.title)}</strong> — ${esc(st.text)}</li>`).join('')}</ol>` : ''}${(sv.outcomes || []).length ? `
+      <h2>Outcomes</h2>
+      <ul>${sv.outcomes.map(o => `<li><strong>${esc(o.title)}</strong> — ${esc(o.text)}</li>`).join('')}</ul>` : ''}${list('Standards & compliance', sv.standards || [])}${(sv.faqs || []).length ? `
+      <h2>Frequently asked questions</h2>
+      ${sv.faqs.map(f => `<h3>${esc(f.q)}</h3><p>${esc(f.a)}</p>`).join('\n      ')}` : ''}${related.length ? `
+      <h2>Related services</h2>
+      <ul>${related.map(r => `<li><a href="/services/${esc(r.slug)}">${esc(r.title)}</a></li>`).join('')}</ul>` : ''}
+      <p>Discuss your requirement: <a href="/quote-calculator">get a quote</a>, call ${esc(SITE.phone)} or email ${esc(SITE.email)}.</p>
+    </div>`;
+}
+
+let serviceCount = 0;
+for (const sv of SERVICES) {
+  if (!sv || !sv.slug) continue;
+  try {
+    let html = stripBaseTags(template);
+    html = html.replace('</head>', `${headForService(sv)}\n</head>`);
+    html = html.replace('<div id="root"></div>', `<noscript><p>${esc(sv.description)}</p>${crawlableNav()}</noscript>\n  <div id="root">${serviceBody(sv)}</div>${crawlableFooter()}`);
+    const outDir = join(DIST, 'services', sv.slug);
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(join(outDir, 'index.html'), html, 'utf8');
+    serviceCount++;
+  } catch (e) {
+    console.warn(`[prerender] Service "${sv.slug}" skipped: ${e.message}`);
+  }
+}
+console.log(`[prerender] Wrote ${serviceCount} service SEO HTML files.`);
+
+// ── The SPA fallback shell (dist/app.html) ──────────────────────────────────
+// Served (by .htaccess / _redirects, and by og.php) for any URL that has no
+// prerendered page: account pages, new products before the next build, etc.
+// It deliberately has NO canonical, og:url or hreflang. The old fallback was
+// the HOMEPAGE's HTML, so every such URL told Google "my canonical is the
+// homepage" and was dropped as a duplicate. The app sets the right canonical
+// for the page once it has loaded.
+{
+  let html = stripBaseTags(template);
+  const desc = 'Navgrow Engineering Service Pvt. Ltd. — DPIIT-recognised, MSME-registered engineering company in Siliguri, West Bengal: railway infrastructure, industrial & civil works, sustainability solutions and a B2B engineering shop with GST invoices.';
+  html = html.replace('</head>', `
+    <title>${esc(SITE.name)}</title>
+    <meta name="description" content="${esc(desc)}"/>
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
+    <meta property="og:type" content="website"/>
+    <meta property="og:site_name" content="${esc(SITE.name)}"/>
+    <meta property="og:title" content="${esc(SITE.name)}"/>
+    <meta property="og:description" content="${esc(desc)}"/>
+    <meta name="twitter:card" content="summary_large_image"/>
+    <meta name="twitter:title" content="${esc(SITE.name)}"/>
+    <meta name="twitter:description" content="${esc(desc)}"/>${ogImageTags('/og-share.jpg', SITE.name)}
+</head>`);
+  writeFileSync(join(DIST, 'app.html'), html, 'utf8');
+  console.log('[prerender] Wrote dist/app.html (neutral SPA fallback — no canonical).');
 }

@@ -152,9 +152,10 @@ export const productsApi = {
   categories: ()       => api.get('/products/categories'),
   reviews:    (id)     => api.get(`/products/${id}/reviews`),
   addReview:  (id, d)  => api.post(`/products/${id}/reviews`, d),
-  create:     (d)      => api.post('/products', d),
-  bulkCreate: (list)   => api.post('/products/bulk', list),
-  update:     (id, d)  => api.put(`/products/${id}`, d),
+  // cfg: e.g. { skipErrorToast: true } — the bulk import reports errors per product itself.
+  create:     (d, cfg)     => api.post('/products', d, cfg),
+  bulkCreate: (list)       => api.post('/products/bulk', list),
+  update:     (id, d, cfg) => api.put(`/products/${id}`, d, cfg),
   delete:     (id)     => api.delete(`/products/${id}`),
   updateStock:(id, q)  => api.patch(`/products/${id}/stock`, null, { params: { qty: q } }),
 };
@@ -234,6 +235,13 @@ export const catalogueApi = {
 
 
 // ── RFQ (Request for Quote) API ───────────────────────────────────────────────
+// ── Product reviews (admin moderation) ─────────────────────────────────────────
+export const reviewsApi = {
+  pending: ()   => api.get('/admin/reviews/pending'),
+  approve: (id) => api.patch(`/admin/reviews/${id}/approve`),
+  remove:  (id) => api.delete(`/admin/reviews/${id}`),
+};
+
 export const rfqApi = {
   submit:      (d)             => api.post('/rfqs', d),
   track:       (number)        => api.get(`/rfqs/track/${number}`),

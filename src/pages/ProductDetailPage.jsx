@@ -16,7 +16,7 @@ import {
   Shield, Truck, RotateCcw, Award, CheckCircle, Share2,
   MessageCircle, Phone, ZoomIn, Package, AlertCircle,
   ThumbsUp, ThumbsDown, Send, User, Clock, Tag,
-  ChevronDown, ChevronUp, ArrowLeft, Copy, Check, FileText, BellRing, Loader2, MapPin } from 'lucide-react';
+  ChevronDown, ChevronUp, ArrowLeft, Copy, Check, FileText, BellRing, Loader2, MapPin, Calculator } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useRfq } from '@/context/RfqContext';
 import { useAuth } from '@/context/AuthContext';
@@ -30,9 +30,20 @@ import { toCartItem } from '@/lib/cartItem';
 import PincodeCheck from '@/components/PincodeCheck';
 import { areaLabel } from '@/lib/pincodeRules';
 import { isOutOfStock, moqOf, isLiveId, liveStock as liveStockQty } from '@/lib/stock';
+import { toVariantCartItem } from '@/lib/cartItem';
+import { liveOptionFields } from '@/lib/productMap';
+import { OptionPicker, OptionsTable } from '@/components/ProductOptions';
+import {
+  hasOptions, anyBuyable, activeVariants, optionNamesOf, valuesOf, variantLabel, variantMoq, variantBuyable,
+  defaultVariant, findVariantByRef, valueStates, pickValue, effectiveTiers, priceRange, bestDiscountPct,
+  perMeasurePrice, perUnit, priceFreshness, lineKeyOf, unitPlural,
+} from '@/lib/variants';
+import { unitPriceFor, tierTable, nextTier, rupees } from '@/lib/pricing';
+import { buildProductSchema, buildProductBreadcrumb } from '@/lib/productSchema';
 
 /* ─── helpers ────────────────────────────────────────────────────────────── */
-const fmt     = (n) => '₹' + Number(n).toLocaleString('en-IN');
+// "₹440" / "₹411.60" — the GST split (₹400 ÷ 1.18) used to print "₹338.983".
+const fmt     = (n) => rupees(n);
 const disc    = (p) => Math.round((1 - p.price / p.mrp) * 100);
 const savings = (p) => p.mrp - p.price;
 
@@ -40,20 +51,27 @@ const savings = (p) => p.mrp - p.price;
 const Stars = ({ rating, size = 'md', interactive = false, onRate }) => {
   const [hover, setHover] = useState(0);
   const sz = size === 'sm' ? 'h-3.5 w-3.5' : size === 'lg' ? 'h-6 w-6' : 'h-4 w-4';
+  const fill = (i) => `${sz} transition-colors ${
+    i <= (hover || Math.floor(rating)) ? 'fill-amber-400 text-amber-400' : 'text-gray-200 fill-gray-200'}`;
+  if (!interactive) {
+    return (
+      <div className="flex items-center gap-0.5" role="img" aria-label={`Rated ${Number(rating) || 0} out of 5`}>
+        {[1,2,3,4,5].map(i => <Star key={i} className={fill(i)} aria-hidden="true" />)}
+      </div>
+    );
+  }
+  // Real buttons: the stars used to be bare icons with a click handler, so
+  // keyboard and screen-reader users could not give a rating (or a review).
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex items-center gap-0.5" role="group" aria-label="Your rating">
       {[1,2,3,4,5].map(i => (
-        <Star
-          key={i}
-          className={`${sz} cursor-${interactive?'pointer':'default'} transition-colors ${
-            i <= (hover || Math.floor(rating))
-              ? 'fill-amber-400 text-amber-400'
-              : 'text-gray-200 fill-gray-200'
-          }`}
-          onMouseEnter={() => interactive && setHover(i)}
-          onMouseLeave={() => interactive && setHover(0)}
-          onClick={() => interactive && onRate?.(i)}
-        />
+        <button key={i} type="button" aria-label={`Rate ${i} out of 5`} aria-pressed={Math.floor(rating) === i}
+          onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(0)}
+          onFocus={() => setHover(i)} onBlur={() => setHover(0)}
+          onClick={() => onRate?.(i)}
+          className="p-0.5 rounded-md cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">
+          <Star className={fill(i)} aria-hidden="true" />
+        </button>
       ))}
     </div>
   );
@@ -90,6 +108,10 @@ const TrustPill = ({ icon: Icon, text, sub }) => (
 );
 
 /* ─── Review card ────────────────────────────────────────────────────────── */
+// The API sends reviewerName and verified (a confirmed order for the product).
+// The name used to be read from fields the API never sent, so every review was
+// labelled "Verified Buyer" — overstating trust in reviews nobody had checked.
+const reviewerOf = (review) => String(review.reviewerName || review.authorName || review.name || '').trim() || 'Customer';
 const ReviewCard = ({ review }) => (
   <motion.div
     initial={{ opacity: 0, y: 12 }}
@@ -99,10 +121,10 @@ const ReviewCard = ({ review }) => (
     <div className="flex items-start justify-between gap-3 mb-3">
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-full brand-gradient flex items-center justify-center text-white font-bold text-sm shrink-0">
-          {(review.authorName || review.name || 'U')[0].toUpperCase()}
+          {reviewerOf(review)[0].toUpperCase()}
         </div>
         <div>
-          <p className="font-bold text-gray-900 text-sm">{review.authorName || review.name || 'Verified Buyer'}</p>
+          <p className="font-bold text-gray-900 text-sm">{reviewerOf(review)}</p>
           <p className="text-[11px] text-gray-400 flex items-center gap-1">
             <Clock className="h-3 w-3"/>
             {review.createdAt ? new Date(review.createdAt).toLocaleDateString('en-IN',{month:'short',year:'numeric'}) : 'Recent'}
@@ -114,9 +136,9 @@ const ReviewCard = ({ review }) => (
     {review.title && <p className="font-semibold text-gray-800 text-sm mb-1">{review.title}</p>}
     <p className="text-gray-600 text-sm leading-relaxed">{review.body || review.comment}</p>
     {review.verified && (
-      <div className="flex items-center gap-1 mt-2.5 text-green-600">
+      <div className="flex items-center gap-1 mt-2.5 text-green-600" title="Bought this product on navgrow.org">
         <CheckCircle className="h-3.5 w-3.5"/>
-        <span className="text-[11px] font-semibold">Verified Purchase</span>
+        <span className="text-[11px] font-semibold">Verified purchase</span>
       </div>
     )}
   </motion.div>
@@ -133,7 +155,7 @@ const ReviewForm = ({ productId, productName, onSubmit }) => {
   const [name,    setName]    = useState('');
   const [email,   setEmail]   = useState('');
   const [loading, setLoading] = useState(false);
-  const [done,    setDone]    = useState(false);
+  const [done,    setDone]    = useState('');
   const [error,   setError]   = useState('');
 
   const submit = async () => {
@@ -142,11 +164,22 @@ const ReviewForm = ({ productId, productName, onSubmit }) => {
     if (!isLoggedIn && !name.trim()) { setError('Please enter your name.'); return; }
     setLoading(true); setError('');
     try {
-      await productsApi.addReview(productId, { rating, title, body, name, email });
-      setDone(true);
+      // The API reads reviewerName / reviewerEmail. This form used to send
+      // name / email, so every review was rejected and none could ever appear.
+      // Signed in, the server uses the account's own name and email.
+      const { data } = await productsApi.addReview(productId, {
+        rating,
+        title: title.trim() || undefined,
+        body: body.trim(),
+        reviewerName: isLoggedIn ? undefined : name.trim(),
+        reviewerEmail: isLoggedIn ? undefined : (email.trim() || undefined),
+      });
+      setDone(data?.message || 'Your review will appear once our team has checked it.');
       onSubmit?.();
-    } catch {
-      setError('Unable to submit. Please try again.');
+    } catch (err) {
+      const d = err?.response?.data;
+      const field = d?.fieldErrors && Object.values(d.fieldErrors)[0];
+      setError(field || (err?.response?.status === 429 ? 'Too many reviews from this connection — please try again in a minute.' : d?.message) || 'Unable to submit. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -157,7 +190,7 @@ const ReviewForm = ({ productId, productName, onSubmit }) => {
       className="p-6 bg-green-50 border border-green-200 rounded-2xl text-center">
       <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-2"/>
       <p className="font-bold text-green-800 text-lg">Thank you for your review!</p>
-      <p className="text-green-600 text-sm mt-1">It helps other buyers choose the right product.</p>
+      <p className="text-green-600 text-sm mt-1">{done}</p>
     </motion.div>
   );
 
@@ -184,7 +217,7 @@ const ReviewForm = ({ productId, productName, onSubmit }) => {
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">Name *</label>
-            <input value={name} onChange={e=>setName(e.target.value)} placeholder="Your name"
+            <input value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" maxLength={80}
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"/>
           </div>
           <div>
@@ -198,7 +231,7 @@ const ReviewForm = ({ productId, productName, onSubmit }) => {
       {/* Title */}
       <div className="mb-3">
         <label className="text-xs font-semibold text-gray-600 mb-1 block">Review Title (optional)</label>
-        <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. Excellent quality, exactly what I needed"
+        <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. Excellent quality, exactly what I needed" maxLength={150}
           className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"/>
       </div>
 
@@ -239,7 +272,10 @@ const RelatedCard = ({ product }) => {
   const soldOut = isOutOfStock(product);
   // Sample-catalogue products (live shop unreachable) are browse-only.
   const sample = !isLiveId(product.id);
-  const d = disc(product);
+  // Sold in options: show the price range and let the product page do the choosing.
+  const opts = hasOptions(product);
+  const r = opts ? priceRange(product) : null;
+  const d = opts ? bestDiscountPct(product) : disc(product);
   return (
     <Link to={`/shop/${product.slug || product.id}`}
       className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 overflow-hidden flex flex-col">
@@ -261,12 +297,18 @@ const RelatedCard = ({ product }) => {
         )}
         <div className="flex items-center justify-between">
           <div>
+            {opts && r && r.max > r.min ? (
+              <span className="font-extrabold text-gray-900 text-sm">{fmt(r.min)}–{fmt(r.max).replace('₹', '')}</span>
+            ) : (
+            <>
             <span className="font-extrabold text-gray-900 text-sm">{fmt(product.price)}</span>
             {product.mrp > product.price && <span className="text-[10px] text-gray-400 line-through ml-1">{fmt(product.mrp)}</span>}
+            </>
+            )}
           </div>
-          {sample ? (
+          {sample || (opts && !soldOut) ? (
             <span className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-600 group-hover:bg-blue-50 group-hover:text-blue-700 transition-colors">
-              View
+              {opts ? 'Options' : 'View'}
             </span>
           ) : soldOut ? (
             <button onClick={(e) => { e.preventDefault(); addToRfq(product); }} title="Out of stock — request a quote"
@@ -427,6 +469,8 @@ const ProductDetailPage = () => {
             deliveryRestricted: !!data.deliveryRestricted,
             allowedPincodes: data.allowedPincodes || '',
             deliveryAreaNote: data.deliveryAreaNote || '',
+            // Options (e.g. Brand × Grade × Pack size) and bulk prices.
+            ...liveOptionFields(data),
           });
         })
         .catch((err) => { if (err?.response?.status === 404) setApiNotFound(true); })
@@ -444,6 +488,8 @@ const ProductDetailPage = () => {
     // so the Add/Buy buttons and the quantity stepper always agree.
     const withStock = (p) => {
       if (!p) return p;
+      // Sold in options: in stock when at least one option can be bought.
+      if (hasOptions(p)) return { ...p, inStock: p.active !== false && anyBuyable(p) };
       // In stock = at least the minimum order quantity is available.
       if (Number.isFinite(Number(p.stockQty))) return { ...p, inStock: p.active !== false && Number(p.stockQty) >= moqOf(p) };
       return p;
@@ -452,7 +498,8 @@ const ProductDetailPage = () => {
     if (!staticProduct) return withStock(apiProduct);
     // The built-in catalogue's stock figures are fixtures, not live stock — until
     // the live shop answers, availability is UNKNOWN (never "120 in stock").
-    if (!apiProduct)    return { ...staticProduct, stockQty: undefined, inStock: undefined };
+    // Its star ratings are placeholders too — never shown as if customers gave them.
+    if (!apiProduct)    return { ...staticProduct, stockQty: undefined, inStock: undefined, rating: 0, reviews: 0 };
     const merged = { ...staticProduct };
     Object.entries(apiProduct).forEach(([k, v]) => {
       const empty = v === null || v === undefined || v === ''
@@ -482,6 +529,7 @@ const ProductDetailPage = () => {
           image: p.imageUrl, cat: p.category,
           price: Number(p.price), mrp: p.mrp != null ? Number(p.mrp) : null,
           badge: p.badge, stockQty: liveStockQty(p.stockQty), minOrderQty: p.minOrderQty || 1, gstRate: p.gstRate,
+          ...liveOptionFields(p),
         })));
       })
       .catch(() => {});
@@ -504,17 +552,62 @@ const ProductDetailPage = () => {
   const [addedAnim,   setAddedAnim] = useState(false);
   const [pinchZoom,   setPinchZoom] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [qtyDraft, setQtyDraft] = useState(null);   // the quantity box while typing
   // Latest delivery answer from the pincode box — tells us if THIS product can
   // go to the buyer's pincode (limited-delivery-area products).
   const [pinQuote, setPinQuote] = useState(null);
   const stickyRef = useRef(null);
 
+  /* ── Options (e.g. Cement: Brand × Grade × Pack size) ──────────────────────
+     The buyer picks one option; every price, stock and minimum-order figure
+     below then describes THAT option. A ?variant=<sku> link opens it directly. */
+  const options     = hasOptions(product);
+  const optionNames = optionNamesOf(product);
+  const [variantId, setVariantId] = useState(null);
+  const variantsKey = options ? activeVariants(product).map(v => `${v.id}:${v.stockQty}`).join('|') : '';
+  useEffect(() => {
+    if (!product || !options) { setVariantId(null); return; }
+    setVariantId(prev => {
+      if (prev && activeVariants(product).some(v => String(v.id) === String(prev))) return prev;
+      let ref = null;
+      try { ref = new URLSearchParams(window.location.search).get('variant'); } catch { /* no URL */ }
+      return (findVariantByRef(product, ref) || defaultVariant(product))?.id ?? null;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.id, variantsKey]);
+  const variant = options ? (activeVariants(product).find(v => String(v.id) === String(variantId)) || null) : null;
+  const chooseVariant = useCallback((v) => {
+    if (!v) return;
+    setVariantId(v.id);
+    // Shareable link to exactly this option (replace: no history entry per click).
+    try {
+      const params = new URLSearchParams(window.location.search);
+      params.set('variant', v.sku || String(v.id));
+      navigate({ search: `?${params.toString()}` }, { replace: true });
+    } catch { /* ignore */ }
+  }, [navigate]);
+  // What the buyer is looking at: the chosen option's figures, or the product's.
+  const pv = React.useMemo(() => {
+    if (!product || !variant) return product;
+    const price = Number(variant.price);
+    return {
+      ...product,
+      price,
+      mrp: Number(variant.mrp) > price ? Number(variant.mrp) : price,
+      stockQty: variant.stockQty,
+      minOrderQty: variantMoq(variant, product),
+      inStock: variantBuyable(variant, product),
+      sku: variant.sku || product.sku,
+      deliveryCharge: variant.deliveryCharge ?? product.deliveryCharge,
+    };
+  }, [product, variant]);
+
   // Available stock caps how much can be added here. Stock is authoritative only
   // when the API answered (see the merge above); if the shop API is unreachable
   // we fall back to a sane ceiling and let the cart/server do the final clamp
   // rather than silently promising unlimited units.
-  const moq        = moqOf(product);           // minimum order quantity (admin-set)
-  const stockNum   = Number(product?.stockQty);
+  const moq        = moqOf(pv);                // minimum order quantity (admin-set)
+  const stockNum   = Number(pv?.stockQty);
   const liveStock  = stockKnown && Number.isFinite(stockNum);
   const soldOut    = liveStock && stockNum < moq;
   const knownStock = liveStock && stockNum >= moq;
@@ -550,80 +643,17 @@ const ProductDetailPage = () => {
   }, [location.hash, product?.id, product?.inStock]);
 
   /* ── SEO ── */
+  // One builder for the browser, the build-time prerender and (mirrored) og.php:
+  // Offer / AggregateOffer always present when there's a price, ratings only from
+  // real approved reviews — Google's "offers, review or aggregateRating" rule.
   const productSchema = product ? (() => {
-    const priceNum = Number(product.price);
-    const hasValidPrice = Number.isFinite(priceNum) && priceNum > 0;
-    const schema = {
-      "@context": "https://schema.org",
-      "@type": "Product",
-      "name": product.name,
-      "description": product.summary || product.desc || product.name,
-      "sku": String(product.sku || product.id || product.slug || ''),
-      "brand": { "@type": "Brand", "name": "Navgrow Engineering" },
-    };
-    if (product.image || product.imageUrl) {
-      schema.image = product.image || product.imageUrl;
-    }
-    // An Offer is only valid (and only satisfies Google) when it has a real price.
-    if (hasValidPrice) {
-      const validUntil = new Date();
-      validUntil.setFullYear(validUntil.getFullYear() + 1);
-      schema.offers = {
-        "@type": "Offer",
-        "url": `https://navgrow.org/shop/${product.slug || product.id}`,
-        "priceCurrency": "INR",
-        "price": priceNum.toFixed(2),
-        "priceValidUntil": validUntil.toISOString().slice(0, 10),
-        ...(apiProduct ? { "availability": product.inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock" } : {}),
-        "itemCondition": "https://schema.org/NewCondition",
-        "seller": { "@type": "Organization", "name": "Navgrow Engineering Service Pvt. Ltd." },
-        "shippingDetails": {
-          "@type": "OfferShippingDetails",
-          "shippingRate": { "@type": "MonetaryAmount", "currency": "INR", "value": "150" },
-          "shippingDestination": { "@type": "DefinedRegion", "addressCountry": "IN" }
-        },
-        "hasMerchantReturnPolicy": {
-          "@type": "MerchantReturnPolicy",
-          "applicableCountry": "IN",
-          "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
-          "merchantReturnDays": 7,
-          "returnMethod": "https://schema.org/ReturnByMail",
-          "returnFees": "https://schema.org/FreeReturn"
-        }
-      };
-    }
-    // Add aggregateRating ONLY when GENUINE reviews exist (real count > 0 and a
-    // real rating). Never fabricate a count — that violates Google's policy and
-    // risks a structured-data penalty. `offers` alone keeps the rich result valid.
-    const ratingVal   = Number(product.rating);
-    const realReviews = Number(product.reviews) || Number(product.reviewCount) || Number(product.numReviews) || 0;
-    if (realReviews > 0 && Number.isFinite(ratingVal) && ratingVal > 0) {
-      schema.aggregateRating = {
-        "@type": "AggregateRating",
-        "ratingValue": ratingVal.toFixed(1),
-        "reviewCount": realReviews,
-        "bestRating": "5",
-        "worstRating": "1"
-      };
-    }
-    // Guarantee the "offers/review/aggregateRating" requirement is always met:
-    // if we somehow have neither a price nor a rating, provide a minimal valid Offer.
-    if (!schema.offers && !schema.aggregateRating) {
-      schema.offers = {
-        "@type": "Offer",
-        "url": `https://navgrow.org/shop/${product.slug || product.id}`,
-        "priceCurrency": "INR",
-        "price": hasValidPrice ? priceNum.toFixed(2) : "0.00",
-        "availability": "https://schema.org/InStock",
-        "seller": { "@type": "Organization", "name": "Navgrow Engineering Service Pvt. Ltd." }
-      };
-    }
-    return schema;
+    const p = buildProductSchema(product, { genuineRatings: !!apiProduct });
+    return [p, buildProductBreadcrumb(product)].filter(Boolean);
   })() : null;
 
   useSeo({
     title: product ? `${product.name} — Buy Online | Navgrow Engineering Shop` : 'Product — Navgrow',
-    description: product ? `Buy ${product.name} online at ₹${product.price?.toLocaleString('en-IN')}. ${product.summary || product.desc || ''}. ISI-certified. GST invoice with HSN. Pan-India delivery.` : '',
+    description: product ? `Buy ${product.name} online ${hasOptions(product) ? 'from' : 'at'} ₹${Number(product.price || 0).toLocaleString('en-IN')}${perUnit(product)}. ${product.summary || product.desc || ''}. GST invoice with HSN. Bulk prices & pan-India delivery.` : '',
     path: product ? `/shop/${product.slug || product.id}` : '/shop',
     keywords: product ? `buy ${product.name}, ${product.cat}, engineering products India, ${product.name} price` : '',
     image: product?.image || product?.imageUrl || '/og-share.jpg',
@@ -648,7 +678,10 @@ const ProductDetailPage = () => {
         { id: product.id, name: product.name, price: product.price,
           image: product.image, slug: product.slug || product.id, cat: product.cat,
           stockQty: stockKnown ? Number(product.stockQty) : null, minOrderQty: moqOf(product),
-          sku: product.sku || '', gstRate: product.gstRate },
+          sku: product.sku || '', gstRate: product.gstRate,
+          // Sold in options: Recently Viewed sends the buyer here to choose one.
+          hasVariants: hasOptions(product) || undefined, priceMax: hasOptions(product) ? priceRange(product).max : undefined,
+          unitLabel: product.unitLabel || undefined },
         // Drop older copies — by id AND slug (the static and live copies of a
         // product have different ids but the same slug).
         ...(Array.isArray(prev) ? prev : []).filter(p => p.id !== product.id && p.slug !== (product.slug || product.id))
@@ -676,23 +709,29 @@ const ProductDetailPage = () => {
       })
       .catch(() => setReviews([]))
       .finally(() => setRevLoad(false));
-  }, [product]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.id]);
 
   /* ── handlers ── */
   // Both go through the cart's stock gate — nothing is added (and checkout
   // isn't opened) if the item turns out to be unavailable.
+  // A product sold in options goes in the cart as the chosen option.
+  const cartLine = useCallback(() => (
+    variant ? toVariantCartItem(product, variant, { qty }) : toCartItem(product, { qty })
+  ), [product, variant, qty]);
+
   const handleAdd = useCallback(async () => {
-    const r = await addItem(toCartItem(product, { qty }));
+    const r = await addItem(cartLine());
     if (!r?.ok) return;
     setAddedAnim(true);
     setTimeout(() => setAddedAnim(false), 1800);
-  }, [product, qty, addItem]);
+  }, [cartLine, addItem]);
 
   const handleBuyNow = useCallback(async () => {
     // 'set': the cart line becomes exactly the quantity chosen here.
-    const r = await addItem(toCartItem(product, { qty }), { mode: 'set' });
+    const r = await addItem(cartLine(), { mode: 'set' });
     if (r?.ok) navigate('/checkout');
-  }, [product, qty, addItem, navigate]);
+  }, [cartLine, addItem, navigate]);
 
   const handleShare = useCallback(async () => {
     const url = window.location.href;
@@ -732,17 +771,32 @@ const ProductDetailPage = () => {
   const PLACEHOLDER = '/placeholder.jpg';
   const imageList = (product.images && product.images.length) ? product.images : (product.image ? [product.image] : []);
   const images    = imageList.length ? imageList : [PLACEHOLDER];
-  const shownImage = images[Math.min(imgIdx, images.length - 1)] || PLACEHOLDER;
-  const inCart    = items.some(i => i.id === product.id);
+  // The chosen option's own photo (packaging differs by brand) leads the gallery.
+  const shownImage = (imgIdx === 0 && variant?.imageUrl) ? variant.imageUrl
+    : (images[Math.min(imgIdx, images.length - 1)] || PLACEHOLDER);
+  const lineKey   = variant ? lineKeyOf(product.id, variant.id) : product.id;
+  const inCart    = items.some(i => i.id === lineKey);
+  const quoted    = inRfq(variant ? lineKey : product.id);
   const wished    = typeof inWishlist === 'function' ? inWishlist(product.id) : false;
-  const d         = disc(product);
-  const saved     = savings(product);
+  const d         = disc(pv);
+  const saved     = savings(pv);
+  // Bulk prices: the unit price for the quantity chosen, and the tier table.
+  const tiersText = effectiveTiers(product, variant);
+  const unitNow   = unitPriceFor(Number(pv.price), tiersText, qty);
+  const tiers     = tierTable(Number(pv.price), tiersText, moq);
+  const upsell    = nextTier(Number(pv.price), tiersText, qty);
+  const unitText  = perUnit(product);
+  const perKg     = perMeasurePrice(unitNow, product, variant);
+  const range     = options ? priceRange(product) : null;
+  const freshness = priceFreshness(product.priceUpdatedAt);
   // Limited delivery area: the buyer's pincode is outside it → offer a quote, not checkout.
   const blockedHere = Array.isArray(pinQuote?.restrictedItems) && pinQuote.restrictedItems.length > 0;
   // Three states: known in stock, known sold out, or not yet confirmed by the live shop.
   const stockUnknown = !apiProduct;
-  const outOfStock  = !stockUnknown && !product.inStock;
-  const handleQuote = () => addToRfq(product, qty);
+  const outOfStock  = !stockUnknown && !pv.inStock;
+  // Every option sold out (vs. just the chosen one) — then "notify me" makes sense.
+  const allSoldOut  = !stockUnknown && !product.inStock;
+  const handleQuote = () => addToRfq(product, qty, variant);
   const totalRevs = reviews.length || product.reviews || 0;
 
   // Rating breakdown for display (mix backend + product data)
@@ -877,7 +931,7 @@ const ProductDetailPage = () => {
                 {product.cat}
               </Link>
               <span className="text-gray-300">·</span>
-              <span className="text-xs text-gray-400 font-mono">{product.sku}</span>
+              <span className="text-xs text-gray-400 font-mono">{pv.sku}</span>
               {/* B2B buyers reconcile input credit against the HSN code, so it belongs
                   on the product page rather than only on the invoice. */}
               {(product.hsn || product.hsnCode) && (
@@ -906,23 +960,47 @@ const ProductDetailPage = () => {
               <p className="text-amber-700 font-semibold text-base mb-4 italic">"{product.tagline}"</p>
             )}
 
+            {/* Price range across options — visible before the buyer scrolls */}
+            {options && range && Number.isFinite(range.min) && (
+              <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 mb-4 text-sm text-gray-600">
+                <span className="text-lg font-extrabold text-gray-900">
+                  {range.min === range.max ? fmt(range.min) : `${fmt(range.min)} – ${fmt(range.max)}`}
+                </span>
+                <span className="text-gray-500">{unitText ? unitText.replace(' / ', 'per ') : 'per unit'}</span>
+                <span className="text-gray-300">·</span>
+                <span>{range.count} option{range.count === 1 ? '' : 's'}{optionNames.length ? ` by ${optionNames.join(', ').toLowerCase()}` : ''}</span>
+                {bestDiscountPct(product) > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-xs font-bold">Up to {bestDiscountPct(product)}% off</span>
+                )}
+              </p>
+            )}
+
             {/* Rating row */}
             <div className="flex items-center gap-3 mb-5 flex-wrap">
-              <Stars rating={displayRating} size="md"/>
-              <span className="text-sm font-bold text-gray-700">{displayRating}</span>
-              <button onClick={() => setTab('reviews')}
-                className="text-sm text-blue-600 hover:text-amber-600 font-semibold underline decoration-dotted transition-colors">
-                {totalRevs} {totalRevs === 1 ? 'review' : 'reviews'}
-              </button>
+              {totalRevs > 0 && displayRating > 0 ? (
+                <>
+                  <Stars rating={displayRating} size="md"/>
+                  <span className="text-sm font-bold text-gray-700">{displayRating}</span>
+                  <button onClick={() => setTab('reviews')}
+                    className="text-sm text-blue-600 hover:text-amber-600 font-semibold underline decoration-dotted transition-colors">
+                    {totalRevs} {totalRevs === 1 ? 'review' : 'reviews'}
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => setTab('reviews')}
+                  className="text-sm text-blue-600 hover:text-amber-600 font-semibold underline decoration-dotted transition-colors">
+                  Be the first to review
+                </button>
+              )}
               {stockUnknown
                 ? <span className="flex items-center gap-1 text-gray-400 text-sm font-semibold">{apiLoading ? <><Loader2 className="h-4 w-4 animate-spin"/>Checking stock…</> : 'Stock not confirmed'}</span>
-                : product.inStock
+                : pv.inStock
                 ? <span className="flex items-center gap-1 text-green-600 text-sm font-bold"><CheckCircle className="h-4 w-4"/>In Stock</span>
-                : <span className="flex items-center gap-1 text-red-500 text-sm font-bold"><AlertCircle className="h-4 w-4"/>Out of Stock</span>
+                : <span className="flex items-center gap-1 text-red-500 text-sm font-bold"><AlertCircle className="h-4 w-4"/>{options && product.inStock ? 'This option is out of stock' : 'Out of Stock'}</span>
               }
-              {product.inStock !== false && product.stockQty > 0 && product.stockQty <= 10 && (
+              {pv.inStock !== false && pv.stockQty > 0 && pv.stockQty <= 10 && (
                 <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full animate-pulse">
-                  ⚡ Only {product.stockQty} left!
+                  ⚡ Only {pv.stockQty} left!
                 </span>
               )}
             </div>
@@ -954,26 +1032,51 @@ const ProductDetailPage = () => {
               </ul>
             </div>
 
+            {/* Option picker — brand / grade / pack size… */}
+            {options && (
+              <OptionPicker product={product} optionNames={optionNames} variant={variant}
+                onPick={chooseVariant} unitText={unitText} />
+            )}
+
             {/* Pricing */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-5">
-              <div className="flex items-baseline gap-3 mb-1">
-                <span className="text-4xl font-black text-gray-900">{fmt(product.price)}</span>
-                {product.mrp > product.price && (
-                  <span className="text-lg text-gray-400 line-through">{fmt(product.mrp)}</span>
+              {options && !variant ? (
+                <p className="text-sm font-semibold text-gray-600">
+                  {activeVariants(product).length ? 'Choose an option above to see its exact price.' : 'No option is available to buy right now — request a quote below.'}
+                </p>
+              ) : (
+              <>
+              {options && variant && (
+                <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-1">{variantLabel(variant)}</p>
+              )}
+              <div className="flex items-baseline gap-3 mb-1 flex-wrap">
+                <span className="text-4xl font-black text-gray-900">{fmt(unitNow)}</span>
+                {unitText && <span className="text-base font-semibold text-gray-500 -ml-1.5">{unitText}</span>}
+                {unitNow < pv.price ? (
+                  <span className="text-lg text-gray-400 line-through">{fmt(pv.price)}</span>
+                ) : pv.mrp > pv.price && (
+                  <span className="text-lg text-gray-400 line-through">{fmt(pv.mrp)}</span>
                 )}
               </div>
-              {d > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="badge-gold">{d}% OFF</span>
-                  <span className="text-green-600 text-sm font-bold">You save {fmt(saved)}</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                {unitNow < pv.price ? (
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold">
+                    Bulk price for {qty} {unitPlural(product.unitLabel, qty)} · you save {fmt((pv.price - unitNow) * qty)}
+                  </span>
+                ) : d > 0 && (
+                  <>
+                    <span className="badge-gold">{d}% OFF</span>
+                    <span className="text-green-600 text-sm font-bold">You save {fmt(saved)}</span>
+                  </>
+                )}
+                {perKg && <span className="text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5">≈ {perKg.text}</span>}
+              </div>
               {/* Price is GST-inclusive; show the split so the buyer sees the base
                   price and the tax that make up the amount, as on the invoice. */}
               {product.gstRate != null && (() => {
                 const rate = Number(product.gstRate) || 0;
-                const gstAmt = product.price - product.price * 100 / (100 + rate);
-                const base = product.price - gstAmt;
+                const gstAmt = unitNow - unitNow * 100 / (100 + rate);
+                const base = unitNow - gstAmt;
                 return (
                   <div className="mt-3 pt-3 border-t border-dashed border-gray-100 text-[13px] space-y-1">
                     <div className="flex justify-between text-gray-500">
@@ -983,13 +1086,61 @@ const ProductDetailPage = () => {
                       <span>GST @ {rate}%</span><span>{fmt(gstAmt)}</span>
                     </div>
                     <div className="flex justify-between text-gray-700 font-semibold">
-                      <span>Total (incl. GST)</span><span>{fmt(product.price)}</span>
+                      <span>Total (incl. GST){unitText ? unitText.replace(' / ', ' per ') : ''}</span><span>{fmt(unitNow)}</span>
                     </div>
                   </div>
                 );
               })()}
-              <p className="text-[11px] text-gray-400 mt-2">Inclusive of GST · GST invoice with HSN · Delivery charged separately by pincode</p>
+              </>
+              )}
+              <p className="text-[11px] text-gray-400 mt-2">
+                Inclusive of GST · GST invoice with HSN · Delivery charged separately by pincode
+                {freshness && <> · <span className="text-emerald-700 font-semibold">{freshness}</span></>}
+              </p>
             </div>
+
+            {/* Bulk prices — buy more, pay less per unit */}
+            {tiers.length > 0 && (!options || variant) && (
+              <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-5">
+                <p className="font-bold text-gray-900 text-sm flex items-center gap-2 mb-3">
+                  <Tag className="h-4 w-4 text-emerald-600" /> Bulk prices{options && variant ? ` — ${variantLabel(variant)}` : ''}
+                </p>
+                <div className="grid gap-1.5" role="list">
+                  {tiers.map(t => {
+                    const active = qty >= t.minQty && (t.maxQty == null || qty <= t.maxQty);
+                    const reachable = !knownStock || t.minQty <= maxQty;
+                    return (
+                      <button key={t.minQty} type="button" role="listitem" disabled={!reachable}
+                        onClick={() => setQty(Math.min(Math.max(moq, t.minQty), maxQty))}
+                        className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm transition-colors text-left ${
+                          active ? 'bg-emerald-50 border-2 border-emerald-400' : 'border border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/40'
+                        } disabled:opacity-40 disabled:cursor-not-allowed`}>
+                        <span className="font-semibold text-gray-700">
+                          {t.maxQty == null ? `${t.minQty}+` : `${t.minQty}–${t.maxQty}`} {unitPlural(product.unitLabel, 2)}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <span className="font-extrabold text-gray-900">{fmt(t.unitPrice)}{unitText ? <span className="text-xs font-semibold text-gray-400">{unitText}</span> : ' each'}</span>
+                          {t.savePct > 0 && <span className="text-[11px] font-bold text-emerald-700">−{t.savePct}%</span>}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {upsell && (!knownStock || qty + upsell.addQty <= maxQty) && (
+                  <p className="text-xs text-emerald-800 mt-2.5">
+                    Add <strong>{upsell.addQty}</strong> more to pay <strong>{fmt(upsell.unitPrice)}</strong>{unitText || ' each'} —{' '}
+                    <button type="button" onClick={() => setQty(Math.min(qty + upsell.addQty, maxQty))} className="font-bold underline">
+                      make it {qty + upsell.addQty}
+                    </button>
+                  </p>
+                )}
+                {/* Larger requirement than the shelf holds, or site deliveries over weeks — price it and ask for a formal quote. */}
+                <button type="button" onClick={() => setBulkOpen(true)}
+                  className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-blue-700 hover:text-amber-600">
+                  <Calculator className="h-3.5 w-3.5" /> Bulk calculator &amp; formal quote →
+                </button>
+              </div>
+            )}
 
             {/* Serviceability — answered before the buyer commits, not after */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-5">
@@ -1000,7 +1151,7 @@ const ProductDetailPage = () => {
                 </div>
               )}
               <PincodeCheck
-                orderValue={(product.price || 0) * qty}
+                orderValue={(unitNow || 0) * qty}
                 compact
                 productRefs={product.id != null ? String(product.id) : product.slug}
                 onResolved={setPinQuote}
@@ -1019,11 +1170,22 @@ const ProductDetailPage = () => {
               <div className="flex items-center gap-3 flex-wrap">
                 <label className="text-sm font-semibold text-gray-600">Qty:</label>
                 <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden">
-                  <button onClick={() => setQty(q => Math.max(moq, q-1))} disabled={qty <= moq}
+                  <button onClick={() => { setQtyDraft(null); setQty(q => Math.max(moq, q-1)); }} disabled={qty <= moq}
                     aria-label="Decrease quantity"
                     className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 text-gray-600 font-bold text-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed">−</button>
-                  <span className="w-12 text-center font-bold text-gray-900">{qty}</span>
-                  <button onClick={() => setQty(q => Math.min(maxQty,q+1))} disabled={atMax}
+                  {/* Typeable: bulk buyers order 200 bags, not 200 clicks. */}
+                  <input type="number" inputMode="numeric" aria-label="Quantity"
+                    min={moq} max={knownStock ? maxQty : undefined}
+                    value={qtyDraft ?? qty}
+                    onChange={e => setQtyDraft(e.target.value)}
+                    onBlur={() => {
+                      const n = parseInt(qtyDraft, 10);
+                      if (qtyDraft != null) setQty(Math.min(Math.max(moq, Number.isFinite(n) ? n : moq), maxQty));
+                      setQtyDraft(null);
+                    }}
+                    onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                    className="w-16 h-10 text-center font-bold text-gray-900 border-x border-gray-200 focus:outline-none focus:bg-blue-50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />
+                  <button onClick={() => { setQtyDraft(null); setQty(q => Math.min(maxQty,q+1)); }} disabled={atMax}
                     aria-label="Increase quantity"
                     className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 text-gray-600 font-bold text-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed">+</button>
                 </div>
@@ -1040,19 +1202,19 @@ const ProductDetailPage = () => {
                   </span>
                 )}
                 {moq > 1 && !soldOut && (
-                  <span className="text-xs font-semibold text-gray-500 bg-gray-100 rounded-full px-2.5 py-1">Minimum order: {moq} units</span>
+                  <span className="text-xs font-semibold text-gray-500 bg-gray-100 rounded-full px-2.5 py-1">Minimum order: {moq} {unitPlural(product.unitLabel, moq)}</span>
                 )}
                 {!liveStock && (
                   <span className="text-sm text-gray-400">{apiLoading ? 'Checking live stock…' : "Live stock couldn't be checked"}</span>
                 )}
-                <span className="text-sm text-gray-400 ml-auto">Total: <strong className="text-gray-900">{fmt(product.price * qty)}</strong></span>
+                <span className="text-sm text-gray-400 ml-auto">Total: <strong className="text-gray-900">{fmt(unitNow * qty)}</strong></span>
               </div>
 
               {/* Reached the available stock — steer larger requirements to a bulk quote */}
               {atMax && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
                   <p className="font-semibold text-amber-800">
-                    That's all we have in stock ({maxQty} unit{maxQty === 1 ? '' : 's'}).
+                    That's all we have in stock ({maxQty} {unitPlural(product.unitLabel, maxQty)}).
                   </p>
                   <p className="text-amber-700 mt-0.5">
                     Need more? Raise a bulk order enquiry or request a quote and our team will confirm
@@ -1063,7 +1225,7 @@ const ProductDetailPage = () => {
                       className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-blue-900 text-white hover:bg-blue-800 transition-colors">
                       <Package className="h-3.5 w-3.5" /> Bulk order enquiry
                     </button>
-                    <button onClick={() => addToRfq(product, maxQty)}
+                    <button onClick={() => addToRfq(product, maxQty, variant || null)}
                       className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold border-2 border-blue-200 text-blue-700 hover:bg-blue-50 transition-colors">
                       <FileText className="h-3.5 w-3.5" /> Request a quote
                     </button>
@@ -1081,22 +1243,25 @@ const ProductDetailPage = () => {
                         <Clock className="h-5 w-5 text-amber-700" />
                       </div>
                       <div className="min-w-0">
-                        <p className="font-extrabold text-gray-900">Out of stock — still need it?</p>
+                        <p className="font-extrabold text-gray-900">
+                          {options && !allSoldOut ? `${variant ? variantLabel(variant) : 'This option'} is out of stock` : 'Out of stock — still need it?'}
+                        </p>
                         <p className="text-sm text-gray-600 mt-0.5">
-                          Request a quote for <strong>{qty} unit{qty === 1 ? '' : 's'}</strong>. We'll source it and send price,
+                          {options && !allSoldOut && <>Pick another option above — or </>}
+                          Request a quote for <strong>{qty} {unitPlural(product.unitLabel, qty)}</strong>. We'll source it and send price,
                           availability and lead time within <strong>1 business day</strong>. No payment now.
                         </p>
                       </div>
                     </div>
                     <button onClick={handleQuote}
                       className={`mt-3 w-full py-3.5 rounded-xl font-bold text-base flex items-center justify-center gap-2 transition-all ${
-                        inRfq(product.id) ? 'bg-green-600 text-white hover:bg-green-700' : 'btn-gold'
+                        quoted ? 'bg-green-600 text-white hover:bg-green-700' : 'btn-gold'
                       }`}>
                       <FileText className="h-5 w-5" />
-                      {inRfq(product.id) ? `In your quote list · add ${qty} more` : `Request Quote — ${qty} unit${qty === 1 ? '' : 's'}`}
+                      {quoted ? `In your quote list · add ${qty} more` : `Request Quote — ${qty} ${unitPlural(product.unitLabel, qty)}`}
                     </button>
                   </div>
-                  <BackInStockForm product={product} />
+                  {allSoldOut && <BackInStockForm product={product} />}
                 </div>
               ) : blockedHere ? (
                 <div className="rounded-2xl border-2 border-red-100 bg-red-50/60 p-4">
@@ -1134,7 +1299,7 @@ const ProductDetailPage = () => {
               {/* Add to cart */}
               <motion.button
                 onClick={handleAdd}
-                disabled={!product.inStock}
+                disabled={!pv.inStock}
                 whileTap={{ scale: 0.98 }}
                 className={`w-full py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-2.5 transition-all shadow-md ${
                   inCart
@@ -1156,7 +1321,7 @@ const ProductDetailPage = () => {
               </motion.button>
 
               {/* Buy Now */}
-              <button onClick={handleBuyNow} disabled={!product.inStock}
+              <button onClick={handleBuyNow} disabled={!pv.inStock}
                 className="w-full py-4 rounded-2xl font-bold text-base btn-gold flex items-center justify-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed">
                 <Zap className="h-5 w-5"/>
                 Buy Now — Instant Checkout
@@ -1166,19 +1331,19 @@ const ProductDetailPage = () => {
 
               {/* B2B — Request for Quote (the out-of-stock / restricted panels above already lead with it) */}
               {!outOfStock && !blockedHere && (
-              <button onClick={() => addToRfq(product, qty)}
+              <button onClick={handleQuote}
                 className={`w-full py-3.5 rounded-2xl font-bold text-base border-2 transition-colors flex items-center justify-center gap-2.5 ${
-                  inRfq(product.id)
+                  quoted
                     ? 'border-green-400 bg-green-50 text-green-700'
                     : 'border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-400'
                 }`}>
                 <FileText className="h-5 w-5"/>
-                {inRfq(product.id) ? 'Added to Quote List ✓' : 'Request for Quote (Bulk / B2B)'}
+                {quoted ? 'Added to Quote List ✓' : 'Request for Quote (Bulk / B2B)'}
               </button>
               )}
 
               {/* WhatsApp quick enquiry */}
-              <a href={`https://wa.me/918927070972?text=${encodeURIComponent(`Hi Navgrow! I want to order: ${product.name}${product.sku ? ` (SKU: ${product.sku})` : ''} — ₹${Number(product.price || 0).toLocaleString('en-IN')} × ${qty}.${outOfStock ? ' It shows out of stock — please share lead time.' : ' Please confirm availability.'}`)}`}
+              <a href={`https://wa.me/918927070972?text=${encodeURIComponent(`Hi Navgrow! I want to order: ${product.name}${variant ? ` — ${variantLabel(variant)}` : ''}${pv.sku ? ` (SKU: ${pv.sku})` : ''} — ₹${Number(unitNow || 0).toLocaleString('en-IN')}${unitText} × ${qty}.${outOfStock ? ' It shows out of stock — please share lead time.' : ' Please confirm availability.'}`)}`}
                 target="_blank" rel="noopener noreferrer"
                 className="w-full py-3.5 rounded-2xl font-bold text-base border-2 border-[#25D366] text-[#1a9c4d] hover:bg-[#f0fff4] transition-colors flex items-center justify-center gap-2.5">
                 <MessageCircle className="h-5 w-5"/>
@@ -1201,11 +1366,17 @@ const ProductDetailPage = () => {
               </a>
               <span className="text-gray-200">·</span>
               <span className="flex items-center gap-1 text-sm text-gray-400">
-                <Tag className="h-3.5 w-3.5"/>{product.sku}
+                <Tag className="h-3.5 w-3.5"/>{pv.sku}
               </span>
             </div>
           </motion.div>
         </div>
+
+        {/* Every option side by side — brands, grades and sizes at a glance */}
+        {options && (
+          <OptionsTable product={product} optionNames={optionNames} variant={variant}
+            onPick={chooseVariant} unitText={unitText} />
+        )}
 
         {/* ══════════════════════════════════════════════════════════════════
             DETAIL TABS
@@ -1339,9 +1510,18 @@ const ProductDetailPage = () => {
                     {/* Left: aggregate */}
                     <div className="lg:col-span-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                       <div className="text-center mb-5">
-                        <div className="text-6xl font-black text-gray-900 leading-none">{displayRating}</div>
-                        <Stars rating={displayRating} size="md"/>
-                        <p className="text-sm text-gray-400 mt-1">out of 5 · {totalRevs} ratings</p>
+                        {totalRevs > 0 && displayRating > 0 ? (
+                          <>
+                            <div className="text-6xl font-black text-gray-900 leading-none">{displayRating}</div>
+                            <Stars rating={displayRating} size="md"/>
+                            <p className="text-sm text-gray-400 mt-1">out of 5 · {totalRevs} {totalRevs === 1 ? 'rating' : 'ratings'}</p>
+                          </>
+                        ) : (
+                          <>
+                            <div className="text-2xl font-black text-gray-900 leading-tight">No ratings yet</div>
+                            <p className="text-sm text-gray-400 mt-1">Bought this? Your review helps other buyers.</p>
+                          </>
+                        )}
                       </div>
                       <div className="space-y-1.5">
                         {[5,4,3,2,1].map(star => (
@@ -1357,15 +1537,21 @@ const ProductDetailPage = () => {
 
                     {/* Right: review form */}
                     <div className="lg:col-span-2">
-                      <ReviewForm
-                        productId={product.id}
-                        productName={product.name}
-                        onSubmit={() => {
-                          productsApi.reviews(product.id)
-                            .then(({data}) => setReviews(Array.isArray(data)?data:(data?.content||[])))
-                            .catch(()=>{});
-                        }}
-                      />
+                      {isLiveId(product.id) ? (
+                        <ReviewForm
+                          productId={product.id}
+                          productName={product.name}
+                          onSubmit={() => {
+                            productsApi.reviews(product.id)
+                              .then(({data}) => setReviews(Array.isArray(data)?data:(data?.content||[])))
+                              .catch(()=>{});
+                          }}
+                        />
+                      ) : (
+                        <div className="rounded-2xl border border-gray-100 bg-white p-5 text-sm text-gray-500">
+                          Reviews open when the live shop is reachable — please try again shortly.
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -1461,8 +1647,10 @@ const ProductDetailPage = () => {
       >
         <div className="flex items-center gap-3 max-w-lg mx-auto">
           <div className="flex-1 min-w-0">
-            <p className="font-extrabold text-gray-900 text-base leading-none">{fmt(product.price * qty)}</p>
-            {d > 0 && <p className="text-xs text-green-600 font-semibold">{d}% OFF · Save {fmt(saved * qty)}</p>}
+            <p className="font-extrabold text-gray-900 text-base leading-none">{fmt(unitNow * qty)}{unitText && qty === 1 ? <span className="text-xs font-semibold text-gray-400">{unitText}</span> : null}</p>
+            {unitNow < pv.price ? <p className="text-xs text-emerald-700 font-semibold">Bulk price · Save {fmt((pv.price - unitNow) * qty)}</p>
+              : d > 0 ? <p className="text-xs text-green-600 font-semibold">{d}% OFF · Save {fmt(saved * qty)}</p>
+              : options && variant ? <p className="text-xs text-gray-500 font-semibold truncate">{variantLabel(variant)}</p> : null}
           </div>
           {outOfStock ? (
             <>
@@ -1473,7 +1661,7 @@ const ProductDetailPage = () => {
             </button>
             <button onClick={handleQuote}
               className="flex-[2] py-3 rounded-2xl font-bold text-sm btn-gold flex items-center justify-center gap-2">
-              <FileText className="h-4 w-4"/>{inRfq(product.id) ? 'In Quote List ✓' : 'Request Quote'}
+              <FileText className="h-4 w-4"/>{quoted ? 'In Quote List ✓' : 'Request Quote'}
             </button>
             </>
           ) : blockedHere ? (
@@ -1488,12 +1676,12 @@ const ProductDetailPage = () => {
             </button>
           ) : (
           <>
-          <button aria-label="Add to cart" onClick={handleAdd} disabled={!product.inStock}
+          <button aria-label="Add to cart" onClick={handleAdd} disabled={!pv.inStock}
             className={`flex-1 py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${inCart?'bg-green-600 text-white':'bg-blue-900 text-white hover:bg-blue-800'} disabled:opacity-50`}>
             <ShoppingCart className="h-4 w-4"/>
             {inCart ? 'In Cart' : 'Add to Cart'}
           </button>
-          <button onClick={handleBuyNow} disabled={!product.inStock}
+          <button onClick={handleBuyNow} disabled={!pv.inStock}
             className="flex-1 py-3 rounded-2xl font-bold text-sm btn-gold flex items-center justify-center gap-2 disabled:opacity-50">
             <Zap className="h-4 w-4"/>Buy Now
           </button>
@@ -1504,7 +1692,7 @@ const ProductDetailPage = () => {
 
       {/* Bottom spacing for sticky bar */}
       <div className="h-20 lg:h-0"/>
-      <BulkOrderForm product={product} open={bulkOpen} onClose={() => setBulkOpen(false)} />
+      <BulkOrderForm product={product} variant={variant || null} initialQty={qty} open={bulkOpen} onClose={() => setBulkOpen(false)} />
 
     </div>
   );
