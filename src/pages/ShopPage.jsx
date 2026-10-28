@@ -363,7 +363,7 @@ const RecentlyViewed = ({ liveProducts }) => {
 const ShopPage = () => {
   useSeo({
     title: 'B2B Engineering Shop | Safety Equipment, Railway Tools & PPE – Buy Online',
-    description: 'Buy ISI-certified safety equipment, railway tools, maintenance supplies, and PPE online. Industrial helmets, torque wrenches, rail gauges, FR coveralls. Free shipping ₹5K+. GST invoice. Pan-India delivery.',
+    description: 'Buy ISI-certified safety equipment, railway tools, maintenance supplies, and PPE online. Industrial helmets, torque wrenches, rail gauges, FR coveralls. GST invoice. Bulk prices. Free delivery in Siliguri, pan-India shipping.',
     path: '/shop',
     keywords: 'buy safety equipment India, railway tools online, ISI certified safety helmet, torque wrench India, rail flaw detector, FR coverall buy, PPE supplier India, B2B engineering products, safety equipment Siliguri',
   });

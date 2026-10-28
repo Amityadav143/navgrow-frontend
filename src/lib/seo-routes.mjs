@@ -131,6 +131,15 @@ export const ROUTES = [
     keywords: 'refund policy, return policy, cancellation, Navgrow store',
     priority: 0.3, changefreq: 'yearly',
   },
+  {
+    // An HTML map of the whole site — links to every service, product and post
+    // (built at deploy time), so crawlers can reach all of them from one page.
+    path: '/sitemap',
+    title: 'Sitemap — All Pages, Services, Products & News',
+    description: 'Every page on navgrow.org in one place: engineering and sustainability services, all products in the B2B shop, news and company pages.',
+    keywords: 'Navgrow sitemap, all pages, all products, engineering services list',
+    priority: 0.3, changefreq: 'weekly',
+  },
 ];
 
 /** Organization + LocalBusiness JSON-LD, embedded on every prerendered page. */

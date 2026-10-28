@@ -644,8 +644,9 @@ const ProductDetailPage = () => {
 
   /* ── SEO ── */
   // One builder for the browser, the build-time prerender and (mirrored) og.php:
-  // Offer / AggregateOffer always present when there's a price, ratings only from
-  // real approved reviews — Google's "offers, review or aggregateRating" rule.
+  // an Offer (or, sold in options, a ProductGroup with one Offer per option) when
+  // there's a price, ratings only from real approved reviews — Google's "offers,
+  // review or aggregateRating" rule.
   const productSchema = product ? (() => {
     const p = buildProductSchema(product, { genuineRatings: !!apiProduct });
     return [p, buildProductBreadcrumb(product)].filter(Boolean);
@@ -659,6 +660,9 @@ const ProductDetailPage = () => {
     image: product?.image || product?.imageUrl || '/og-share.jpg',
     type: 'product',
     schema: productSchema,
+    // Removed / unknown product: tell search engines to drop the URL (it used to
+    // stay "indexable" while showing "no longer available" — a soft 404).
+    noindex: !product && !apiLoading,
   });
 
   /* ── scroll to top (and back to the first photo) when the product changes ── */

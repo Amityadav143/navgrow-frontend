@@ -31,16 +31,30 @@
   # Short-circuit the crawler files so nothing can shadow them.
   RewriteRule ^(sitemap\.xml|sitemap-index\.xml|robots\.txt|llms\.txt)$ - [L]
 
+  # The per-build page folders (/_p/<build>/…) are served only through the rules
+  # below, never by their own address (that would be duplicate content).
+  RewriteCond %{THE_REQUEST} \s/+_p/ [NC]
+  RewriteRule ^ - [R=404,L]
+
   # Serve real static files (hashed JS/CSS, images, fonts, manifest) as-is.
   RewriteCond %{REQUEST_FILENAME} -f
   RewriteRule ^ - [L]
 
-  # ---- Serve PRERENDERED HTML for extensionless routes -------------------
-  # Every marketing + product route is prerendered to <route>/index.html so
-  # crawlers receive real HTML with JSON-LD (never the empty SPA shell). If a
-  # prerendered index.html exists for the requested path, serve it directly and
-  # deterministically -- serving the file (not the directory) avoids any
-  # trailing-slash redirect, so crawlers get a clean 200 with the schema.
+  # ---- Product, news and service pages of THIS build ----------------------
+  # The build writes them to /_p/<build>/ and scripts/prerender.mjs writes its
+  # id into these rules (and the X-Navgrow-Build header). Pages left on the
+  # server by older uploads — e.g. /shop/<old-product>/index.html, with the old
+  # markup Google kept reporting — are never served: products that are gone get
+  # og.php's 404 instead.
+  RewriteCond %{DOCUMENT_ROOT}/_p/__NAVGROW_BUILD__/$1/index.html -f
+  RewriteRule ^((?:shop|news|services)/[^/]+?)/?$ /_p/__NAVGROW_BUILD__/$1/index.html [L]
+
+  # ---- Serve PRERENDERED HTML for the other routes ------------------------
+  # /about, /shop, /news, /services, … are prerendered to <route>/index.html so
+  # crawlers receive real HTML with JSON-LD (never the empty SPA shell). Serving
+  # the file (not the directory) avoids a trailing-slash redirect. Single
+  # product/news/service URLs are excluded: only this build's copies (above).
+  RewriteCond $1 !^(shop|news|services)/[^/]+$
   RewriteCond %{DOCUMENT_ROOT}/$1/index.html -f
   RewriteRule ^(.+?)/?$ /$1/index.html [L]
 
@@ -80,6 +94,9 @@
 
 <IfModule mod_headers.c>
   Header set X-Powered-By "Navgrow"
+  # Which build answered — npm run verify:seo compares it with each page's
+  # <meta name="navgrow-build"> to spot pages left over from older uploads.
+  Header set X-Navgrow-Build "__NAVGROW_BUILD__"
 
   # --- Hashed build assets (immutable): cache hard for a year --------------
   <FilesMatch "\.(js|css|woff2?|ttf|eot|otf)$">

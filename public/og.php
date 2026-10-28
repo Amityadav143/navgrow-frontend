@@ -11,9 +11,10 @@
  * prerendered file, .htaccess routes here. This fetches the record from the
  * API and returns the SPA shell with, baked in:
  *   · the page's own title, description, canonical and Open Graph tags;
- *   · complete JSON-LD — Product with Offer / AggregateOffer (price range for
- *     products sold in options), real review ratings only; BlogPosting for
- *     news — plus a breadcrumb;
+ *   · complete JSON-LD — Product with an Offer, or for a product sold in
+ *     options a ProductGroup with one Product + Offer per option (each with its
+ *     own ?variant= URL), real review ratings only; BlogPosting for news — plus
+ *     a breadcrumb;
  *   · real, crawlable body text (name, price, every option, description).
  * The app still loads on top and replaces it, so the page is the same for
  * everyone once rendered. Mirrors src/lib/productSchema.js.
@@ -138,17 +139,66 @@ function social_image($img, $SITE, $FALLBACK) {
 }
 
 function json_ld($data) {
-    $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-    return str_replace('</', '<\/', (string)$json);   // a stray "</script>" can't close the tag
+    // Invalid UTF-8 in a database field used to make json_encode return false —
+    // an EMPTY <script> block, reported by Google as "Unparsable structured data".
+    $flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
+    if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+    if (defined('JSON_PARTIAL_OUTPUT_ON_ERROR')) $flags |= JSON_PARTIAL_OUTPUT_ON_ERROR;
+    $json = json_encode($data, $flags);
+    if ($json === false || $json === '' || $json === 'null') return null;
+    return str_replace('</', '<\/', $json);   // a stray "</script>" can't close the tag
+}
+
+/** Absolute URL for an image path; '' when there is none (never a placeholder). */
+function abs_url($u, $SITE) {
+    $u = trim((string)$u);
+    if ($u === '') return '';
+    if (preg_match('#^https?://#i', $u)) return $u;
+    return $SITE . ($u[0] === '/' ? '' : '/') . $u;
+}
+
+function money2($n) { return number_format(round((float)$n, 2), 2, '.', ''); }
+
+/** The value of a "Label: value" line in the specifications text whose label matches $re. */
+function spec_value($text, $re) {
+    foreach (lines_of($text) as $line) {
+        $i = strpos($line, ':');
+        if ($i === false || $i === 0) continue;
+        $label = trim(substr($line, 0, $i));
+        $value = trim(substr($line, $i + 1));
+        if ($value !== '' && preg_match($re, $label)) return $value;
+    }
+    return '';
+}
+
+/** What an option name means to Google: brand, size, color, material, pattern — or null. */
+function option_kind($name) {
+    $n = trim((string)$name);
+    if (preg_match('/^(brand|make|manufacturer|company)$/i', $n)) return 'brand';
+    if (preg_match('/^(size|pack(ing|aging)?( size)?|pack|weight|net weight|diameter|dia|length|width|height|thickness|capacity|volume|gauge|bag size)$/i', $n)) return 'size';
+    if (preg_match('/^(colou?r|shade)$/i', $n)) return 'color';
+    if (preg_match('/^material$/i', $n)) return 'material';
+    if (preg_match('/^(pattern|design)$/i', $n)) return 'pattern';
+    return null;
+}
+
+/** The current build's prerendered page for a slug (pages from older uploads are ignored). */
+function prerendered_page($type, $slug) {
+    $build = @file_get_contents(__DIR__ . '/build-id.txt');
+    $build = $build === false ? '' : preg_replace('/[^0-9A-Za-z_-]/', '', trim($build));
+    if ($build === '') return null;
+    $dir = $type === 'product' ? 'shop' : 'news';
+    $p = __DIR__ . '/_p/' . $build . '/' . $dir . '/' . basename($slug) . '/index.html';
+    return is_readable($p) ? $p : null;
 }
 
 function serve_shell($SHELL, $type = '', $slug = '', $status = 200) {
-    // Prefer the PRERENDERED page for this slug if one exists — it already has
-    // complete tags. Only if there's none do we serve the bare SPA shell.
-    if ($type && $slug) {
-        $dir = $type === 'product' ? 'shop' : 'news';
-        $pre = __DIR__ . '/' . $dir . '/' . basename($slug) . '/index.html';
-        if (is_readable($pre)) {
+    // API unreachable: prefer THIS build's prerendered page for the slug — it has
+    // complete tags. Never when the API said the record doesn't exist (a page
+    // for a removed product must not stay indexed).
+    if ($type && $slug && $status === 200) {
+        $pre = prerendered_page($type, $slug);
+        if ($pre) {
             header('Content-Type: text/html; charset=UTF-8');
             readfile($pre);
             exit;
@@ -193,7 +243,14 @@ foreach ($API_CANDIDATES as $base) {
 }
 if (!$data) serve_shell($SHELL, $type, $slug, $notFound ? 404 : 200);
 
-$seller = array('@type' => 'Organization', 'name' => 'Navgrow Engineering Service Pvt. Ltd.', 'url' => $SITE);
+$seller = array('@type' => 'Organization', '@id' => $SITE . '/#organization', 'name' => 'Navgrow Engineering Service Pvt. Ltd.', 'url' => $SITE);
+// The refund page's policy, written out in every Offer as in Google's examples
+// (same as src/lib/productSchema.js; the Organization in index.html has it too).
+$returnPolicy = array(
+    '@type' => 'MerchantReturnPolicy', 'applicableCountry' => 'IN',
+    'returnPolicyCategory' => 'https://schema.org/MerchantReturnFiniteReturnWindow',
+    'merchantReturnDays' => 7, 'returnMethod' => 'https://schema.org/ReturnByMail',
+);
 $jsonld = array();
 $bodyHtml = '';
 
@@ -201,7 +258,8 @@ if ($type === 'product') {
     $ogType = 'product';
     $name   = isset($data['name']) ? (string)$data['name'] : 'Product';
     $url    = $SITE . '/shop/' . rawurlencode($slug);
-    $image  = social_image(isset($data['imageUrl']) ? $data['imageUrl'] : '', $SITE, $FALLBACK_IMAGE);
+    $photo  = abs_url(isset($data['imageUrl']) ? $data['imageUrl'] : '', $SITE);   // the product's real photo, or none
+    $image  = social_image(isset($data['imageUrl']) ? $data['imageUrl'] : '', $SITE, $FALLBACK_IMAGE);   // link previews only
     $unit   = isset($data['unitLabel']) ? trim((string)$data['unitLabel']) : '';
     $per    = $unit !== '' ? ' per ' . $unit : '';
 
@@ -217,93 +275,147 @@ if ($type === 'product') {
     }
     $optionNames = array();
     if (!empty($data['optionNames']) && is_array($data['optionNames'])) {
-        foreach ($data['optionNames'] as $n) { if (trim((string)$n) !== '') $optionNames[] = (string)$n; }
+        foreach ($data['optionNames'] as $n) { if (trim((string)$n) !== '') $optionNames[] = trim((string)$n); }
     } else {
         foreach (array('option1Name', 'option2Name', 'option3Name') as $k) {
-            if (!empty($data[$k])) $optionNames[] = (string)$data[$k];
+            if (!empty($data[$k])) $optionNames[] = trim((string)$data[$k]);
         }
     }
     $moqProduct = max(1, (int)(isset($data['minOrderQty']) ? $data['minOrderQty'] : 1));
     $active = !isset($data['active']) || $data['active'] !== false;
+    $optionInStock = function ($v) use ($moqProduct, $active) {
+        if (!$active) return false;
+        if (isset($v['inStock']) && $v['inStock'] === true) return true;
+        if (isset($v['inStock']) && $v['inStock'] === false) return false;
+        $m = (int)(isset($v['minOrderQty']) ? $v['minOrderQty'] : 0);
+        return (int)(isset($v['stockQty']) ? $v['stockQty'] : 0) >= max(1, $m > 0 ? $m : $moqProduct);
+    };
     $available = false;
     if ($variants) {
-        foreach ($variants as $v) {
-            $m = (int)(isset($v['minOrderQty']) ? $v['minOrderQty'] : 0);
-            $moq = max(1, $m > 0 ? $m : $moqProduct);
-            if ((int)(isset($v['stockQty']) ? $v['stockQty'] : 0) >= $moq) { $available = true; break; }
-        }
+        foreach ($variants as $v) { if ($optionInStock($v)) { $available = true; break; } }
     } else {
-        $available = (int)(isset($data['stockQty']) ? $data['stockQty'] : 0) >= $moqProduct;
+        $available = $active && (int)(isset($data['stockQty']) ? $data['stockQty'] : 0) >= $moqProduct;
     }
-    $available = $available && $active;
-    $availUrl = $available ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
+    $IN = 'https://schema.org/InStock'; $OUT = 'https://schema.org/OutOfStock'; $NEW = 'https://schema.org/NewCondition';
+    $validUntil = date('Y-m-d', strtotime('+1 year'));
 
     $price = isset($data['price']) ? (float)$data['price'] : 0;
     $low = $price;
     $priceText = 'Price on request';
-    $offers = null;
     if ($variants) {
         $prices = array();
         foreach ($variants as $v) $prices[] = (float)$v['price'];
         $low = min($prices); $high = max($prices);
         $priceText = ($low == $high ? inr($low) : inr($low) . ' – ' . inr($high)) . $per;
-        $offers = array(
-            '@type' => 'AggregateOffer', 'url' => $url, 'priceCurrency' => 'INR',
-            'lowPrice' => number_format($low, 2, '.', ''), 'highPrice' => number_format($high, 2, '.', ''),
-            'offerCount' => count($variants), 'availability' => $availUrl,
-            'itemCondition' => 'https://schema.org/NewCondition', 'seller' => $seller,
-        );
     } elseif ($price > 0) {
         $priceText = inr($price) . $per;
-        $offers = array(
-            '@type' => 'Offer', 'url' => $url, 'priceCurrency' => 'INR',
-            'price' => number_format($price, 2, '.', ''),
-            'priceValidUntil' => date('Y-m-d', strtotime('+1 year')),
-            'availability' => $availUrl, 'itemCondition' => 'https://schema.org/NewCondition', 'seller' => $seller,
-            'hasMerchantReturnPolicy' => array(
-                '@type' => 'MerchantReturnPolicy', 'applicableCountry' => 'IN',
-                'returnPolicyCategory' => 'https://schema.org/MerchantReturnFiniteReturnWindow',
-                'merchantReturnDays' => 7, 'returnMethod' => 'https://schema.org/ReturnByMail',
-            ),
-        );
     }
 
     $summary = plain(isset($data['summary']) && $data['summary'] ? $data['summary'] : (isset($data['description']) ? $data['description'] : ''), 800);
     $title = $name . ' — Buy Online | Navgrow Engineering';
     $desc  = plain($name . ($low > 0 ? ' at ' . $priceText : '') . ' (incl. GST). ' . $summary
         . ' GST invoice with HSN, bulk prices and pan-India delivery.', 300);
+    $description = plain(isset($data['summary']) && $data['summary'] ? $data['summary'] : (isset($data['description']) ? $data['description'] : $name), 5000);
+    $specText = isset($data['specifications']) ? $data['specifications'] : '';
+    $brandName = !empty($data['brand']) ? (string)$data['brand'] : spec_value($specText, '/^(brand|make|manufacturer|company)$/i');
+    if ($brandName === '') $brandName = 'Navgrow Engineering';   // own label / unbranded goods
 
-    $product = array(
-        '@context' => 'https://schema.org', '@type' => 'Product', '@id' => $url . '#product',
-        'name' => $name, 'url' => $url,
-        'description' => plain(isset($data['summary']) && $data['summary'] ? $data['summary'] : (isset($data['description']) ? $data['description'] : $name), 5000),
-        'sku' => (string)(isset($data['sku']) && $data['sku'] ? $data['sku'] : $slug),
-        'image' => $image,
-    );
-    $byBrand = false;
-    foreach ($optionNames as $n) { if (preg_match('/brand|make|manufacturer/i', $n)) $byBrand = true; }
-    if (!$byBrand) $product['brand'] = array('@type' => 'Brand', 'name' => 'Navgrow Engineering');
-    if (!empty($data['category'])) $product['category'] = (string)$data['category'];
-    if ($offers) $product['offers'] = $offers;
     // Genuine, approved reviews only — never a made-up rating.
+    $rating = null;
     $rc = (int)(isset($data['reviewCount']) ? $data['reviewCount'] : 0);
     $rv = (float)(isset($data['rating']) ? $data['rating'] : 0);
     if ($rc > 0 && $rv > 0) {
-        $product['aggregateRating'] = array(
-            '@type' => 'AggregateRating', 'ratingValue' => number_format($rv, 1, '.', ''),
-            'reviewCount' => $rc, 'bestRating' => '5', 'worstRating' => '1',
-        );
+        $rating = array('@type' => 'AggregateRating', 'ratingValue' => number_format(round($rv, 1), 1, '.', ''),
+            'reviewCount' => $rc, 'bestRating' => '5', 'worstRating' => '1');
     }
     $props = array();
     if (!empty($data['hsnCode'])) $props[] = array('@type' => 'PropertyValue', 'name' => 'HSN Code', 'value' => (string)$data['hsnCode']);
     if (isset($data['gstRate']) && $data['gstRate'] !== null && $data['gstRate'] !== '') $props[] = array('@type' => 'PropertyValue', 'name' => 'GST Rate', 'value' => ((float)$data['gstRate'] + 0) . '%');
     if ($unit !== '') $props[] = array('@type' => 'PropertyValue', 'name' => 'Sold per', 'value' => $unit);
-    foreach ($optionNames as $i => $n) {
-        $vals = array();
-        foreach ($variants as $v) { $k = 'option' . ($i + 1); if (!empty($v[$k]) && !in_array($v[$k], $vals, true)) $vals[] = $v[$k]; }
-        if ($vals) $props[] = array('@type' => 'PropertyValue', 'name' => $n, 'value' => implode(', ', $vals));
+
+    $product = null;
+    if ($variants) {
+        // Sold in options → ProductGroup with one Product + Offer per option (Google's
+        // product-variant markup; an AggregateOffer price range isn't accepted for
+        // merchant listings). Each option has its own URL that preselects it.
+        $shown = array_slice($variants, 0, 100);
+        $kinds = array(); $usedKinds = array(); $distinct = array();
+        foreach ($optionNames as $i => $n) {
+            $k = option_kind($n);
+            $kinds[$i] = ($k && !in_array($k, $usedKinds, true)) ? $k : null;
+            if ($k && !in_array($k, $usedKinds, true)) $usedKinds[] = $k;
+            $vals = array();
+            foreach ($shown as $v) { $x = strtolower(trim((string)(isset($v['option' . ($i + 1)]) ? $v['option' . ($i + 1)] : ''))); if ($x !== '') $vals[$x] = true; }
+            $distinct[$i] = count($vals);
+        }
+        // variesBy: only what really differs between the options, and only properties Google supports there.
+        $variesBy = array(); $oneBrand = '';
+        foreach ($kinds as $i => $k) {
+            if ($k && $k !== 'brand' && $distinct[$i] > 1 && !in_array('https://schema.org/' . $k, $variesBy, true)) $variesBy[] = 'https://schema.org/' . $k;
+            if ($k === 'brand' && $distinct[$i] === 1) $oneBrand = trim((string)$shown[0]['option' . ($i + 1)]);
+        }
+        $groupId = (string)(isset($data['sku']) && $data['sku'] ? $data['sku'] : $slug);
+        $product = array(
+            '@context' => 'https://schema.org', '@type' => 'ProductGroup', '@id' => $url . '#product',
+            'name' => $name, 'url' => $url, 'description' => $description, 'productGroupID' => $groupId,
+        );
+        if ($variesBy) $product['variesBy'] = $variesBy;
+        if ($photo !== '') $product['image'] = $photo;
+        if (!empty($data['category'])) $product['category'] = (string)$data['category'];
+        if (!in_array('brand', $usedKinds, true)) $product['brand'] = array('@type' => 'Brand', 'name' => $brandName);
+        elseif ($oneBrand !== '') $product['brand'] = array('@type' => 'Brand', 'name' => $oneBrand);
+        if ($rating) $product['aggregateRating'] = $rating;
+        if ($props) $product['additionalProperty'] = $props;
+        $hasVariant = array();
+        foreach ($shown as $idx => $v) {
+            $values = array();
+            foreach ($optionNames as $i => $n) { $k = 'option' . ($i + 1); $values[$i] = isset($v[$k]) ? trim((string)$v[$k]) : ''; }
+            $label = implode(' · ', array_values(array_filter($values, 'strlen')));
+            $ref = !empty($v['sku']) ? (string)$v['sku'] : (!empty($v['id']) ? (string)$v['id'] : 'option-' . ($idx + 1));
+            $vp = array('@type' => 'Product', 'name' => $label !== '' ? $name . ' — ' . $label : $name,
+                'sku' => $ref, 'inProductGroupWithID' => $groupId);
+            $vImage = abs_url(isset($v['imageUrl']) ? $v['imageUrl'] : '', $SITE);
+            if ($vImage === '') $vImage = $photo;
+            if ($vImage !== '') $vp['image'] = $vImage;
+            $other = array();
+            foreach ($values as $i => $val) {
+                if ($val === '') continue;
+                $k = isset($kinds[$i]) ? $kinds[$i] : null;
+                if ($k === 'brand') $vp['brand'] = array('@type' => 'Brand', 'name' => $val);
+                elseif ($k) $vp[$k] = $val;
+                else $other[] = array('@type' => 'PropertyValue', 'name' => $optionNames[$i], 'value' => $val);
+            }
+            if ($other) $vp['additionalProperty'] = $other;
+            $vp['offers'] = array(
+                '@type' => 'Offer', 'url' => $url . '?variant=' . rawurlencode($ref), 'priceCurrency' => 'INR',
+                'price' => money2($v['price']), 'priceValidUntil' => $validUntil,
+                'availability' => $optionInStock($v) ? $IN : $OUT, 'itemCondition' => $NEW,
+                'seller' => $seller, 'hasMerchantReturnPolicy' => $returnPolicy,
+            );
+            $hasVariant[] = $vp;
+        }
+        $product['hasVariant'] = $hasVariant;
+    } else {
+        $product = array(
+            '@context' => 'https://schema.org', '@type' => 'Product', '@id' => $url . '#product',
+            'name' => $name, 'url' => $url, 'description' => $description,
+            'sku' => (string)(isset($data['sku']) && $data['sku'] ? $data['sku'] : $slug),
+            'brand' => array('@type' => 'Brand', 'name' => $brandName),
+        );
+        if ($photo !== '') $product['image'] = $photo;
+        if (!empty($data['category'])) $product['category'] = (string)$data['category'];
+        if ($price > 0) {
+            $product['offers'] = array(
+                '@type' => 'Offer', 'url' => $url, 'priceCurrency' => 'INR', 'price' => money2($price),
+                'priceValidUntil' => $validUntil, 'availability' => $available ? $IN : $OUT,
+                'itemCondition' => $NEW, 'seller' => $seller, 'hasMerchantReturnPolicy' => $returnPolicy,
+            );
+        }
+        if ($rating) $product['aggregateRating'] = $rating;
+        if ($props) $product['additionalProperty'] = $props;
+        // Google needs offers, review or aggregateRating — without any, no Product markup.
+        if (!isset($product['offers']) && !isset($product['aggregateRating'])) $product = null;
     }
-    if ($props) $product['additionalProperty'] = $props;
     $crumb = array(
         '@context' => 'https://schema.org', '@type' => 'BreadcrumbList', '@id' => $url . '#breadcrumb',
         'itemListElement' => array(
@@ -312,8 +424,7 @@ if ($type === 'product') {
             array('@type' => 'ListItem', 'position' => 3, 'name' => $name, 'item' => $url),
         ),
     );
-    // Product markup only when it is valid (offers or a real rating).
-    $jsonld[] = ($offers || isset($product['aggregateRating'])) ? array($product, $crumb) : array($crumb);
+    $jsonld[] = $product ? array($product, $crumb) : array($crumb);
 
     // Crawlable body: name, price, every option, description, features, specs.
     $b  = '<div id="prerendered-seo-content" style="max-width:900px;margin:0 auto;padding:24px;font-family:system-ui,Arial,sans-serif;line-height:1.6">';
@@ -328,7 +439,12 @@ if ($type === 'product') {
         $b .= '<th>Price' . e($per) . '</th><th>Availability</th></tr></thead><tbody>';
         foreach (array_slice($variants, 0, 80) as $v) {
             $b .= '<tr>';
-            foreach ($optionNames as $i => $n) { $k = 'option' . ($i + 1); $b .= '<td>' . e(isset($v[$k]) ? $v[$k] : '') . '</td>'; }
+            $ref = !empty($v['sku']) ? (string)$v['sku'] : (!empty($v['id']) ? (string)$v['id'] : '');
+            foreach ($optionNames as $i => $n) {
+                $k = 'option' . ($i + 1);
+                $cell = e(isset($v[$k]) ? $v[$k] : '');
+                $b .= '<td>' . ($i === 0 && $ref !== '' ? '<a href="/shop/' . e(rawurlencode($slug)) . '?variant=' . e(rawurlencode($ref)) . '">' . $cell . '</a>' : $cell) . '</td>';
+            }
             $m = (int)(isset($v['minOrderQty']) ? $v['minOrderQty'] : 0);
             $ok = (int)(isset($v['stockQty']) ? $v['stockQty'] : 0) >= max(1, $m > 0 ? $m : $moqProduct);
             $b .= '<td>' . e(inr($v['price'])) . '</td><td>' . ($ok ? 'In stock' : 'On request') . '</td></tr>';
@@ -345,7 +461,7 @@ if ($type === 'product') {
             $b .= '</ul>';
         }
     }
-    $b .= '<h2>Buy ' . e($name) . ' online from Navgrow Engineering</h2><p>GST tax invoice with HSN for input-tax credit, bulk prices for larger quantities, request-for-quote for project requirements, and pan-India delivery (free within Siliguri). Call +91 89270 70972 or email info@navgrow.org.</p>';
+    $b .= '<h2>Buy ' . e($name) . ' online from Navgrow Engineering</h2><p>GST tax invoice with HSN for input-tax credit, bulk prices for larger quantities, request-for-quote for project requirements, and pan-India delivery (free within Siliguri; elsewhere charged by pincode at checkout). Call +91 89270 70972 or email info@navgrow.org.</p>';
     $b .= '</div>';
     $bodyHtml = $b;
 } else {
@@ -423,7 +539,9 @@ $tags .= '<meta name="twitter:description" content="' . e($desc) . "\"/>\n";
 $tags .= '<meta name="twitter:image" content="' . e($image) . "\"/>\n";
 // Same script id the app uses, so it replaces (never duplicates) this markup.
 foreach ($jsonld as $i => $block) {
-    $tags .= '<script type="application/ld+json"' . ($i === 0 ? ' id="page-jsonld"' : '') . '>' . json_ld($block) . "</script>\n";
+    $json = json_ld($block);
+    if ($json === null) continue;   // never an empty / unparsable block
+    $tags .= '<script type="application/ld+json"' . ($i === 0 ? ' id="page-jsonld"' : '') . '>' . $json . "</script>\n";
 }
 
 $html = preg_replace('#</head>#i', $tags . '</head>', $html, 1);

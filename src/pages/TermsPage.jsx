@@ -52,7 +52,7 @@ We reserve the right to refuse or cancel any order, including after payment, if 
 
 Navgrow is not liable for delays caused by courier partners, natural disasters, strikes, government action, or other circumstances beyond our control.
 
-Shipping charges are calculated at checkout based on order weight and destination. Free shipping may apply on orders above a specified threshold, as displayed on the shop page.
+Shipping charges are calculated at checkout from the delivery pincode, the products and the quantity. Delivery within Siliguri is free.
 
 Customers are responsible for providing accurate delivery addresses. Navgrow is not liable for non-delivery due to incorrect information provided by the customer.`
   },

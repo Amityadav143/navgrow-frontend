@@ -42,11 +42,13 @@ npm run build
 1. Log in to Hostinger hPanel
 2. Go to **Files → File Manager**
 3. Navigate to `public_html/`
-4. Delete existing files (keep `.htaccess` if present)
-5. Upload all contents of `/dist` (not the folder itself)
-6. Verify `/dist/index.html` is at `public_html/index.html`
+4. Upload all contents of `/dist` (not the folder itself), **including the hidden `.htaccess`**.
+   It must replace the old one: it changes with every build. Nothing needs deleting first.
+5. Verify `/dist/index.html` is at `public_html/index.html`
 
-The `public/.htaccess` is already included for SPA routing.
+`dist/.htaccess` does the routing: the SPA fallback and the pre-built SEO pages, including the
+product, news and service pages in `dist/_p/<build>/`. `SEO_DEPLOYMENT_FIX.md` (repository root)
+has the full deploy-and-verify steps.
 
 ### Step 3 — Verify
 

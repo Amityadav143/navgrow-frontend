@@ -84,7 +84,7 @@ const RefundPolicyPage = () => {
           <div className="space-y-4 text-sm text-gray-600 leading-relaxed">
             {[
               ['Standard Delivery', '3–5 business days across India. North-East India remote areas may take 7–10 business days.'],
-              ['Shipping Charges', 'Calculated at checkout based on weight and destination. Free shipping on orders above ₹5,000.'],
+              ['Shipping Charges', 'Free within Siliguri. Elsewhere in India they are calculated at checkout from your delivery pincode, the products and the quantity.'],
               ['Order Processing', 'Orders placed before 2 PM IST on business days are processed the same day. Orders placed after 2 PM or on weekends are processed the next business day.'],
               ['Tracking', 'A tracking number is sent via email and SMS once your order is dispatched. You can track your order through our courier partner\'s website.'],
               ['Failed Delivery', 'Our courier partner will attempt delivery 3 times. After 3 failed attempts, the order is returned to our warehouse and a refund is issued (minus shipping charges).'],

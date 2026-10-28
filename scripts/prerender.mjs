@@ -24,7 +24,8 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ROUTES, SITE, siteNavigationSchema, NEWS_ARTICLES, articleSchema, articleBreadcrumb, faqSchema } from '../src/lib/seo-routes.mjs';
-import { buildProductSchema, buildProductBreadcrumb, plainText } from '../src/lib/productSchema.js';
+import { buildProductSchema, buildProductBreadcrumb, plainText, liveOptions, variantRef } from '../src/lib/productSchema.js';
+import { buildServiceSchemas, serviceTitle, serviceDescription } from '../src/lib/serviceSchema.js';
 import { SERVICES } from '../src/data/servicesData.js';
 import { loadLiveData, normalizeProduct } from './live-data.mjs';
 import { SEO_CONTENT, renderSeoContent } from '../src/lib/seo-content.mjs';
@@ -90,6 +91,32 @@ const DIST = join(__dirname, '..', 'dist');
 // fall back to the source public/ folder just in case.
 const PUBLIC_DIR = existsSync(join(DIST, 'favicon.png')) ? DIST : join(__dirname, '..', 'public');
 const TEMPLATE_PATH = join(DIST, 'index.html');
+
+// ── One folder of pages per build ───────────────────────────────────────────
+// Product, news and service pages are written to dist/_p/<build>/… and
+// .htaccess (stamped below with this build's id) serves ONLY that folder.
+// Uploading a build never deletes the files of older uploads; those old pages
+// — with the old markup Google kept reporting — used to go on being served.
+// Every page also carries <meta name="navgrow-build">, and .htaccess sends the
+// same id as an X-Navgrow-Build header, so `npm run verify:seo` can tell a page
+// from this build from a leftover one.
+const BUILD_ID = String(process.env.NAVGROW_BUILD_ID || new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14))
+  .replace(/[^0-9A-Za-z_-]/g, '') || 'build';
+const PAGES_ROOT = join(DIST, '_p', BUILD_ID);
+const BUILD_META = `<meta name="navgrow-build" content="${BUILD_ID}"/>`;
+
+// News posts and service pages are ALSO written to their old address
+// (dist/news/<slug>/, dist/services/<slug>/). The new .htaccess never serves
+// these copies. They keep those pages working if the server still has an older
+// .htaccess — it's a hidden file, easily left out of an upload — where crawlers
+// would otherwise get the empty app (services) or a 404 (articles that exist
+// only in the code). Products need no copy: there og.php serves them to
+// crawlers from the live catalogue.
+function writeFallbackCopy(kind, slug, html) {
+  const dir = join(DIST, kind, String(slug));
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'index.html'), html, 'utf8');
+}
 
 if (!existsSync(TEMPLATE_PATH)) {
   console.error('[prerender] dist/index.html not found — run `vite build` first.');
@@ -209,9 +236,7 @@ function listingSchema(route) {
   let name, items;
   if (route.path === '/shop') {
     name = 'Navgrow Engineering Shop';
-    items = (LIVE_PRODUCTS || _PRODUCTS_FOR_LIST)
-      .filter(p => (p.slug || p.id))
-      .map(p => ({ name: p.name, path: `/shop/${p.slug || p.id}` }));
+    items = PRODUCT_PAGES.map(p => ({ name: p.name, path: `/shop/${p.slug || p.id}` }));
   } else if (route.path === '/news') {
     name = 'Navgrow News & Insights';
     items = ALL_ARTICLES
@@ -219,7 +244,8 @@ function listingSchema(route) {
       .map(a => ({ name: a.title, path: `/news/${a.slug}` }));
   } else if (route.path === '/services') {
     name = 'Navgrow Engineering & Sustainability Services';
-    items = _SERVICES_FOR_LIST.map(s => ({ name: s.title, path: `/services/${s.id}` }));
+    items = (SERVICES.length ? SERVICES.map(s => ({ name: s.title, path: `/services/${s.slug}` }))
+      : _SERVICES_FOR_LIST.map(s => ({ name: s.title, path: `/services/${s.id}` })));
   } else {
     return null;
   }
@@ -378,7 +404,71 @@ function stripBaseTags(html) {
     .replace(/<meta\s+name="twitter:card"[^>]*>/gi, '')
     // The base hreflang links point at the HOMEPAGE — on any other page they
     // told Google that page's alternate was the homepage.
-    .replace(/<link\s+rel="alternate"\s+hreflang="[^"]*"[^>]*>/gi, '');
+    .replace(/<link\s+rel="alternate"\s+hreflang="[^"]*"[^>]*>/gi, '')
+    .replace('</head>', `    ${BUILD_META}\n</head>`);
+}
+
+// ── Data every page can link to ─────────────────────────────────────────────
+const inr = (n) => '₹' + Number(n).toLocaleString('en-IN', Number.isInteger(Number(n)) ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function priceSummary(p) {
+  const opts = liveOptions(p);
+  const per = p.unitLabel ? ` per ${p.unitLabel}` : '';
+  if (opts.length) {
+    const prices = opts.map(v => Number(v.price));
+    const lo = Math.min(...prices), hi = Math.max(...prices);
+    return { text: (lo === hi ? inr(lo) : `${inr(lo)} – ${inr(hi)}`) + per, low: lo, options: opts };
+  }
+  if (Number(p.price) > 0) return { text: inr(p.price) + per, low: Number(p.price), options: [] };
+  return { text: 'Price on request', low: 0, options: [] };
+}
+
+const PRODUCT_PAGES = (LIVE_PRODUCTS
+  ? LIVE_PRODUCTS.map(p => normalizeProduct(p, true))
+  : _PRODUCTS_FOR_LIST.map(p => normalizeProduct(p, false))).filter(p => (p.slug || p.id) && p.name);
+
+const byCategory = (products) => {
+  const groups = new Map();
+  for (const p of products) {
+    const c = p.category || 'Other';
+    if (!groups.has(c)) groups.set(c, []);
+    groups.get(c).push(p);
+  }
+  return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+};
+const productLink = (p) => `<a href="/shop/${esc(String(p.slug || p.id))}">${esc(p.name)}</a>`;
+const articleDate = (a) => String(a.publishedAt || '').slice(0, 10);
+
+/**
+ * Crawlable links to the pages a listing page lists — every product on /shop,
+ * every post on /news, every service on /services, highlights on the homepage
+ * and everything on /sitemap. They used to carry only the menu, so products were
+ * found only through the sitemap file: a weak signal ("Discovered – currently
+ * not indexed").
+ */
+function listingLinks(route) {
+  const productsBlock = (products, heading) => (products.length ? `
+    <h2>${esc(heading)}</h2>${byCategory(products).map(([cat, list]) => `
+    <h3>${esc(cat)}</h3>
+    <ul>${list.map(p => `<li>${productLink(p)} — ${esc(priceSummary(p).text)}</li>`).join('')}</ul>`).join('')}` : '');
+  const servicesBlock = (heading) => `
+    <h2>${esc(heading)}</h2>
+    <ul>${SERVICES.filter(sv => sv && sv.slug).map(sv => `<li><a href="/services/${esc(sv.slug)}">${esc(sv.title)}</a>${sv.tagline ? ` — ${esc(sv.tagline)}` : ''}</li>`).join('')}</ul>`;
+  const newsBlock = (articles, heading) => (articles.length ? `
+    <h2>${esc(heading)}</h2>
+    <ul>${articles.map(a => `<li><a href="/news/${esc(a.slug)}">${esc(a.title)}</a>${articleDate(a) ? ` — ${esc(articleDate(a))}` : ''}</li>`).join('')}</ul>` : '');
+  const newest = [...ALL_ARTICLES].filter(a => a.slug).sort((a, b) => articleDate(b).localeCompare(articleDate(a)));
+  switch (route.path) {
+    case '/shop': return productsBlock(PRODUCT_PAGES, `All products (${PRODUCT_PAGES.length})`);
+    case '/news': return newsBlock(newest, 'All news & insights');
+    case '/services': return servicesBlock('All services');
+    case '/': return `${servicesBlock('Engineering & sustainability services')}${productsBlock(PRODUCT_PAGES.slice(0, 12), 'From the shop')}${PRODUCT_PAGES.length > 12 ? `
+    <p><a href="/shop">See all ${PRODUCT_PAGES.length} products</a></p>` : ''}${newsBlock(newest.slice(0, 5), 'Latest news')}`;
+    case '/sitemap': return `
+    <h2>Pages</h2>
+    <ul>${ROUTES.filter(r => r.path !== '/sitemap').map(r => `<li><a href="${esc(r.path)}">${esc(r.title.split(' — ')[0].split(' | ')[0])}</a></li>`).join('')}</ul>${servicesBlock('Services')}${productsBlock(PRODUCT_PAGES, 'Products')}${newsBlock(newest, 'News')}`;
+    default: return '';
+  }
 }
 
 function render(route) {
@@ -394,7 +484,7 @@ function render(route) {
   // legal pages used to ship an empty #root).
   const prerenderedBody = `<div id="prerendered-seo-content" style="max-width:900px;margin:0 auto;padding:24px;font-family:system-ui,Arial,sans-serif;line-height:1.6">
     <h1>${esc(route.title.split(' — ')[0].split(' | ')[0])}</h1>
-    ${contentSections ? renderSeoContent(contentSections) : `<p>${esc(route.description)}</p>`}
+    ${contentSections ? renderSeoContent(contentSections) : `<p>${esc(route.description)}</p>`}${listingLinks(route)}
   </div>`;
   html = html.replace('<div id="root"></div>',
     `${noscriptFor(route)}\n  <div id="root">${prerenderedBody}</div>${crawlableFooter()}`);
@@ -418,20 +508,6 @@ console.log(`[prerender] Wrote ${count} SEO HTML files.`);
 // built-in catalogue, whose placeholder ratings are never put in the markup.
 // Product JSON-LD comes from src/lib/productSchema.js — the same builder the
 // product page uses — so the prerendered and rendered markup always agree.
-const inr = (n) => '₹' + Number(n).toLocaleString('en-IN', Number.isInteger(Number(n)) ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-function priceSummary(p) {
-  const opts = (p.variants || []).filter(v => v && v.active !== false && Number(v.price) > 0);
-  const per = p.unitLabel ? ` per ${p.unitLabel}` : '';
-  if (opts.length) {
-    const prices = opts.map(v => Number(v.price));
-    const lo = Math.min(...prices), hi = Math.max(...prices);
-    return { text: (lo === hi ? inr(lo) : `${inr(lo)} – ${inr(hi)}`) + per, low: lo, options: opts };
-  }
-  if (Number(p.price) > 0) return { text: inr(p.price) + per, low: Number(p.price), options: [] };
-  return { text: 'Price on request', low: 0, options: [] };
-}
-
 function headForProduct(p) {
   const slug = p.slug || p.id;
   const url = `${SITE.url}/shop/${slug}`;
@@ -494,7 +570,9 @@ function productBody(p) {
       <h2>${esc(p.name)} — all options &amp; prices</h2>
       <table>
         <thead><tr>${names.map(n => `<th>${esc(n)}</th>`).join('')}<th>Price${p.unitLabel ? ` per ${esc(p.unitLabel)}` : ''}</th><th>Availability</th></tr></thead>
-        <tbody>${opts.map(v => `<tr>${names.map((_, i) => `<td>${esc(v[`option${i + 1}`] || '')}</td>`).join('')}<td>${esc(inr(v.price))}</td><td>${avail(v)}</td></tr>`).join('')}</tbody>
+        <tbody>${opts.map((v, idx) => `<tr>${names.map((_, i) => `<td>${i === 0
+          ? `<a href="/shop/${esc(String(p.slug || p.id))}?variant=${esc(encodeURIComponent(variantRef(v, idx)))}">${esc(v[`option${i + 1}`] || '')}</a>`
+          : esc(v[`option${i + 1}`] || '')}</td>`).join('')}<td>${esc(inr(v.price))}</td><td>${avail(v)}</td></tr>`).join('')}</tbody>
       </table>` : '';
   const list = (title, items) => (items.length ? `\n      <h2>${esc(title)}</h2>\n      <ul>${items.slice(0, 30).map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
   return `<div id="prerendered-seo-content" style="max-width:900px;margin:0 auto;padding:24px;font-family:system-ui,Arial,sans-serif;line-height:1.6">
@@ -505,7 +583,13 @@ function productBody(p) {
       <p>${esc(plainText(p.summary || p.description, 800))}</p>${table}
       ${p.description && p.description !== p.summary ? `<p>${esc(plainText(p.description, 1500))}</p>` : ''}${list('Key features', p.features || [])}${list('Specifications', p.specs || [])}
       <h2>Buy ${esc(p.name)} online from Navgrow Engineering</h2>
-      <p>GST tax invoice with HSN for input-tax credit, bulk prices for larger quantities, request-for-quote for project requirements, and pan-India delivery (free within Siliguri). Call ${esc(SITE.phone)} or email ${esc(SITE.email)}.</p>
+      <p>GST tax invoice with HSN for input-tax credit, bulk prices for larger quantities, request-for-quote for project requirements, and pan-India delivery (free within Siliguri; elsewhere charged by pincode at checkout). Call ${esc(SITE.phone)} or email ${esc(SITE.email)}.</p>${(() => {
+        const related = PRODUCT_PAGES.filter(x => x !== p && (x.category || '') === (p.category || '')).slice(0, 8);
+        return related.length ? `
+      <h2>More in ${esc(p.category || 'the shop')}</h2>
+      <ul>${related.map(r => `<li>${productLink(r)} — ${esc(priceSummary(r).text)}</li>`).join('')}</ul>` : '';
+      })()}
+      <p><a href="/shop">Browse all products</a></p>
     </div>`;
 }
 
@@ -516,10 +600,6 @@ function noscriptForProduct(p) {
   </div></noscript>`;
 }
 
-const PRODUCT_PAGES = LIVE_PRODUCTS
-  ? LIVE_PRODUCTS.map(p => normalizeProduct(p, true))
-  : _PRODUCTS_FOR_LIST.map(p => normalizeProduct(p, false));
-
 let productCount = 0;
 for (const p of PRODUCT_PAGES) {
   const slug = p.slug || p.id;
@@ -528,7 +608,7 @@ for (const p of PRODUCT_PAGES) {
     let html = stripBaseTags(template);
     html = html.replace('</head>', `${headForProduct(p)}\n</head>`);
     html = html.replace('<div id="root"></div>', `${noscriptForProduct(p)}\n  <div id="root">${productBody(p)}</div>${crawlableFooter()}`);
-    const outDir = join(DIST, 'shop', String(slug));
+    const outDir = join(PAGES_ROOT, 'shop', String(slug));
     mkdirSync(outDir, { recursive: true });
     writeFileSync(join(outDir, 'index.html'), html, 'utf8');
     productCount++;
@@ -602,9 +682,10 @@ for (const a of ALL_ARTICLES) {
       </article>
     </div>`;
     html = html.replace('<div id="root"></div>', `${noscriptForArticle(a)}\n  <div id="root">${artBody}</div>${crawlableFooter()}`);
-    const outDir = join(DIST, 'news', a.slug);
+    const outDir = join(PAGES_ROOT, 'news', a.slug);
     mkdirSync(outDir, { recursive: true });
     writeFileSync(join(outDir, 'index.html'), html, 'utf8');
+    writeFallbackCopy('news', a.slug, html);
     newsCount++;
   } catch (e) {
     console.warn(`[prerender] Article "${a.slug}" skipped: ${e.message}`);
@@ -619,42 +700,10 @@ console.log(`[prerender] Wrote ${newsCount} news SEO HTML files.`);
 // tag"). Each now gets its own complete, indexable page.
 function headForService(sv) {
   const url = `${SITE.url}/services/${sv.slug}`;
-  const title = `${sv.title} Services — ${sv.tagline ? sv.tagline.replace(/\.$/, '') : 'Navgrow Engineering'} | ${SITE.shortName}`.slice(0, 160);
-  const desc = plainText(sv.description, 300);
-  const service = {
-    '@context': 'https://schema.org',
-    '@type': 'Service',
-    '@id': `${url}#service`,
-    name: sv.title,
-    serviceType: sv.title,
-    description: desc,
-    url,
-    ...(sv.image ? { image: sv.image } : {}),
-    provider: { '@id': `${SITE.url}/#organization` },
-    areaServed: { '@type': 'Country', name: 'India' },
-  };
-  const crumb = {
-    '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
-    '@id': `${url}#breadcrumb`,
-    itemListElement: [
-      { '@type': 'ListItem', position: 1, name: 'Home', item: `${SITE.url}/` },
-      { '@type': 'ListItem', position: 2, name: 'Services', item: `${SITE.url}/services` },
-      { '@type': 'ListItem', position: 3, name: sv.title, item: url },
-    ],
-  };
-  const webPage = {
-    '@context': 'https://schema.org', '@type': 'WebPage', '@id': `${url}#webpage`,
-    url, name: title, isPartOf: { '@id': `${SITE.url}/#website` },
-    breadcrumb: { '@id': `${url}#breadcrumb` }, mainEntity: { '@id': `${url}#service` },
-  };
-  const faqs = (sv.faqs || []).filter(f => f && f.q && f.a);
-  const faq = faqs.length ? {
-    '@context': 'https://schema.org',
-    '@type': 'FAQPage',
-    '@id': `${url}#faq`,
-    mainEntity: faqs.map(f => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
-  } : null;
+  const title = serviceTitle(sv);
+  const desc = serviceDescription(sv);
+  // The same array the service page publishes once it has loaded (src/lib/serviceSchema.js).
+  const pageLd = buildServiceSchemas(sv, { siteUrl: SITE.url });
   return `
     <title>${esc(title)}</title>
     <meta name="description" content="${esc(desc)}"/>
@@ -671,10 +720,7 @@ function headForService(sv) {
     <meta name="twitter:card" content="summary_large_image"/>
     <meta name="twitter:title" content="${esc(title)}"/>
     <meta name="twitter:description" content="${esc(desc)}"/>${ogImageTags(sv.image || '/og-share.jpg', sv.imageAlt || sv.title)}
-    <script type="application/ld+json" id="page-jsonld">${jsonLd(service)}</script>
-    <script type="application/ld+json">${jsonLd(webPage)}</script>
-    <script type="application/ld+json">${jsonLd(crumb)}</script>${faq ? `
-    <script type="application/ld+json">${jsonLd(faq)}</script>` : ''}`;
+    <script type="application/ld+json" id="page-jsonld">${jsonLd(pageLd)}</script>`;
 }
 
 function serviceBody(sv) {
@@ -705,9 +751,10 @@ for (const sv of SERVICES) {
     let html = stripBaseTags(template);
     html = html.replace('</head>', `${headForService(sv)}\n</head>`);
     html = html.replace('<div id="root"></div>', `<noscript><p>${esc(sv.description)}</p>${crawlableNav()}</noscript>\n  <div id="root">${serviceBody(sv)}</div>${crawlableFooter()}`);
-    const outDir = join(DIST, 'services', sv.slug);
+    const outDir = join(PAGES_ROOT, 'services', sv.slug);
     mkdirSync(outDir, { recursive: true });
     writeFileSync(join(outDir, 'index.html'), html, 'utf8');
+    writeFallbackCopy('services', sv.slug, html);
     serviceCount++;
   } catch (e) {
     console.warn(`[prerender] Service "${sv.slug}" skipped: ${e.message}`);
@@ -739,4 +786,20 @@ console.log(`[prerender] Wrote ${serviceCount} service SEO HTML files.`);
 </head>`);
   writeFileSync(join(DIST, 'app.html'), html, 'utf8');
   console.log('[prerender] Wrote dist/app.html (neutral SPA fallback — no canonical).');
+}
+
+// ── Stamp this build's id into .htaccess and build-id.txt (read by og.php) ───
+{
+  writeFileSync(join(DIST, 'build-id.txt'), `${BUILD_ID}\n`, 'utf8');
+  const htaccess = join(DIST, '.htaccess');
+  if (existsSync(htaccess)) {
+    const t = readFileSync(htaccess, 'utf8');
+    if (!t.includes('__NAVGROW_BUILD__')) {
+      console.warn('[prerender] dist/.htaccess has no __NAVGROW_BUILD__ placeholder — product, news and service pages will not be served from this build.');
+    }
+    writeFileSync(htaccess, t.split('__NAVGROW_BUILD__').join(BUILD_ID), 'utf8');
+  } else {
+    console.warn('[prerender] dist/.htaccess not found — copy public/.htaccess, or the prerendered product pages will not be served.');
+  }
+  console.log(`[prerender] Build ${BUILD_ID}: product, news and service pages are in dist/_p/${BUILD_ID}/ (.htaccess serves only this build's pages).`);
 }

@@ -25,6 +25,7 @@ import VariantEditor from '@/components/admin/VariantEditor';
 import { initOptionsState, optionsPayload, validateOptions, summarizeRows } from '@/lib/variantEditor';
 import { filesApi } from '@/lib/api';
 import { GST_RATES, gstLabel } from '@/lib/gst';
+import { googleListingProblems } from '@/lib/productSchema';
 import ProductImportPanel from '@/components/admin/ProductImportPanel';
 import { exportWorkbook, templateWorkbook, fetchAllProducts, apiErrorMessage } from '@/lib/productImport';
 import { downloadBlob, datedName, XLSX_TYPE } from '@/lib/download';
@@ -825,6 +826,13 @@ const AdminProducts = () => {
                           <div className="min-w-0">
                             <p className="font-semibold text-gray-900 text-xs">{p.name}</p>
                             <p className="text-[10px] text-gray-400">{p.sku || '—'}</p>
+                            {/* What keeps this product out of Google's product results (photo, price). */}
+                            {p.active !== false && googleListingProblems(p).map(msg => (
+                              <span key={msg} title="Google shows products with a price and a photo in its product results and Shopping tab."
+                                className="inline-flex items-center gap-1 mt-0.5 mr-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 text-[10px] font-bold">
+                                <AlertTriangle className="h-2.5 w-2.5"/> {msg}
+                              </span>
+                            ))}
                             {p.deliveryRestricted && (
                               <span title={p.allowedPincodes || ''}
                                 className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-bold">

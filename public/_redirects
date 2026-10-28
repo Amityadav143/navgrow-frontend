@@ -8,7 +8,9 @@
 # SPA fallback — all remaining routes to app.html (the neutral shell with no
 # canonical; index.html is the HOMEPAGE and would mark every other page as a
 # copy of it).
-# NOTE: prerendered routes (e.g. /about/index.html, /shop/<slug>/index.html)
-# are real files and are served before this fallback is reached, so crawlers
-# get the SEO HTML while unknown/dynamic routes still load the SPA.
+# NOTE: prerendered routes (e.g. /about/index.html) are real files and are
+# served before this fallback is reached, so crawlers get the SEO HTML while
+# unknown/dynamic routes still load the SPA. navgrow.org runs on Hostinger,
+# where .htaccess does the routing instead of this file — including the
+# product, news and service pages, which the build puts in /_p/<build>/.
 /*    /app.html   200

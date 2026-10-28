@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { getService, SERVICES } from '@/data/servicesData';
 import useSeo from '@/hooks/useSeo';
+import { buildServiceSchemas } from '@/lib/serviceSchema';
 
 const ICONS = { Train, Factory, Building2, Landmark, Wrench, CloudRain, Sun, Recycle, Gauge, Leaf };
 
@@ -61,15 +62,9 @@ const ServiceDetailPage = () => {
     description: service ? `${service.tagline} ${service.description}` : '',
     path: service ? `/services/${service.slug}` : '/services',
     keywords: service ? `${service.title}, ${service.standards.slice(0, 3).join(', ')}, Siliguri, West Bengal, Navgrow` : undefined,
-    schema: service ? {
-      '@context': 'https://schema.org',
-      '@type': 'Service',
-      name: service.title,
-      description: service.description,
-      provider: { '@type': 'Organization', name: 'Navgrow Engineering Service Pvt. Ltd.', url: 'https://navgrow.org' },
-      areaServed: 'IN',
-      serviceType: service.title,
-    } : undefined,
+    // The same Service + WebPage + breadcrumb + FAQ the prerendered page carries
+    // (one builder, one script id) — it used to be replaced by a bare Service.
+    schema: service ? buildServiceSchemas(service) : undefined,
   });
 
   if (!service) return <Navigate to="/services" replace />;
